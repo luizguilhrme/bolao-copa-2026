@@ -20,27 +20,33 @@ C:\bolao\
   assets/
     dados/
       jogos.json              ← 104 jogos da Copa 2026 (não declarado no pubspec.yaml;
-                                 mantido em disco como referência, pois os dados já
-                                 foram populados no Firestore via WriteBatch)
+                                 mantido em disco como referência — dados já populados
+                                 no Firestore via WriteBatch. Declarar temporariamente
+                                 no pubspec.yaml quando precisar rodar popularJogosNoFirestore)
   lib/
     main.dart                 ← configuração + inicialização Firebase + StreamBuilder de auth
     firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
     models/
       jogo.dart               ← model com fromJson, fromMap, toMap e getter dataHora
       usuario.dart            ← model com fromMap, toMap e copyWith
+      palpite.dart            ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
     screens/
-      menu_principal.dart     ← shell: AppBar + IndexedStack + NavigationBar
+      menu_principal.dart     ← shell com drawer lateral, AppBar, IndexedStack, NavigationBar
       tela_home.dart          ← jogos de hoje (Firestore) + bento grid de navegação
       tela_login.dart         ← login e cadastro com design do Stitch
-      tela_palpites.dart      ← placeholder
-      tela_ranking.dart       ← placeholder
-      tela_tabela.dart        ← implementada: lista os 104 jogos com seções e tabs
+      tela_palpites.dart      ← duas abas: Próximos (com palpites) e Resultados
+      tela_ranking.dart       ← ranking em tempo real com pódio e lista
+      tela_tabela.dart        ← lista os 104 jogos com seções e tabs
+      tela_admin.dart         ← tela exclusiva do admin para inserir placares
     services/
       jogo_service.dart       ← popularJogosNoFirestore, buscarTodos, buscarPorData
       usuario_service.dart    ← criarPerfil, buscarPorUid, observarUsuario
+      palpite_service.dart    ← salvar, buscarPorJogo, buscarTodosPorUsuario,
+                                 buscarPorUsuario, buscarTodosPorJogo
     utils/
       cores.dart              ← constantes de cores (Cores.verdePrincipal etc)
-      biblioteca.dart         ← funções utilitárias top-level (sem classe wrapper)
+      biblioteca.dart         ← funções utilitárias top-level (flagDe, siglaDe,
+                                 formatarData, mostrarMensagem)
   pubspec.yaml
 ```
 
@@ -54,7 +60,9 @@ C:\bolao\
 - Padrão Service como camada de abstração entre telas e Firestore (equivalente ao Repository pattern do Android)
 - IDs dos documentos Firestore sempre iguais ao identificador da entidade (UID do usuário, id do jogo) — garante idempotência e busca O(1)
 - Funções utilitárias compartilhadas são declaradas como funções top-level em `biblioteca.dart`, não como métodos `static` de uma classe wrapper — padrão idiomático em Dart
-- Comunicação de filho para pai via callback (`void Function(int)`) — o `MenuPrincipal` passa `onNavegar` para a `TelaHome`, que o chama nos cards do bento grid
+- Comunicação de filho para pai via callback (`void Function(int)`) — o `MenuPrincipal` passa `onNavegar` para a `TelaHome`
+- Cálculo de pontuação feito no cliente (app), não em Cloud Functions — placares inseridos manualmente pelo admin via `tela_admin.dart`
+- Palpites precarregados em lote (`buscarTodosPorUsuario`) ao abrir a tela, sem query individual por card
 
 ---
 
@@ -91,80 +99,57 @@ Cores.outline                 = Color(0xFF6C7B6C)
 
 ---
 
-## Arquitetura de navegação implementada
+## Arquitetura de navegação
 
 `MenuPrincipal` é um **shell** — só gerencia a navegação. Contém:
 
-- `AppBar` com título dinâmico (`AnimatedSwitcher` faz crossfade ao trocar de aba)
-- `IndexedStack` com as 4 telas como filhos
+- `Drawer` lateral com perfil do usuário, menu e seção admin (condicional)
+- `AppBar` com ícone da bola (abre drawer) + título dinâmico + botão de regras
+- `IndexedStack` com as 4 telas como filhos (scroll preservado entre abas)
 - `NavigationBar` (Material 3) com 4 destinos
 
 ```dart
-// A lista de telas é construída dentro do build(), não como campo da classe.
-// Isso é necessário porque o callback onNavegar referencia setState,
-// que só está disponível dentro de métodos — não em campos de instância.
-
-@override
-Widget build(BuildContext context) {
-  final telas = [
-    TelaHome(
-      onNavegar: (indice) => setState(() => _indiceNav = indice),
-    ),
-    TelaPalpites(),
-    TelaRanking(),
-    TelaTabela(),
-  ];
-
-  return Scaffold(
-    body: IndexedStack(
-      index: _indiceNav,   // só esta tela fica visível
-      children: telas,     // todas ficam vivas na memória (scroll preservado)
-    ),
-    ...
-  );
-}
+// O leading usa Builder para acessar o Scaffold correto
+leading: Builder(
+  builder: (ctx) => IconButton(
+    icon: const Icon(Icons.sports_soccer),
+    onPressed: () => Scaffold.of(ctx).openDrawer(),
+  ),
+),
 ```
 
-### Navegação via callback (filho → pai)
+### Drawer lateral
+- Cabeçalho verde com avatar (inicial do nome), nome e pontuação via `StreamBuilder<Usuario?>`
+- Seção "CONTA": Meu Perfil, Notificações, Configurações
+- Seção "ADMIN" (só para `isAdmin == true`): Atualizar Placares → navega para `TelaAdmin`
+- Seção "SUPORTE": Ajuda & FAQ
+- Rodapé: botão Sair que chama `FirebaseAuth.instance.signOut()`
 
-A `TelaHome` recebe um parâmetro `onNavegar` do tipo `void Function(int)`. Quando o usuário toca em um card do bento grid, o filho chama esse callback com o índice desejado — o pai (`MenuPrincipal`) executa o `setState` e troca a aba. O filho não precisa saber nada sobre o pai, só que tem uma função para chamar.
-
+### Verificação de admin
 ```dart
-// Em TelaHome:
-class TelaHome extends StatefulWidget {
-  const TelaHome({super.key, required this.onNavegar});
-  final void Function(int) onNavegar;
-  ...
-}
-
-// Nos cards do bento grid (dentro de _TelaHomeState):
-onTap: () => widget.onNavegar(1), // Palpites
-onTap: () => widget.onNavegar(2), // Ranking
-onTap: () => widget.onNavegar(3), // Tabela
-
-// widget.X é como o State acessa propriedades do StatefulWidget que o criou.
+// Lido do Firestore uma única vez no initState
+// Campo isAdmin adicionado manualmente no Console para o usuário admin
+final doc = await FirebaseFirestore.instance.collection('usuarios').doc(_uid).get();
+if (doc.data()?['isAdmin'] == true) setState(() => _isAdmin = true);
 ```
 
 ---
 
 ## Arquitetura de autenticação
 
-O `main.dart` usa um `StreamBuilder` que ouve o `authStateChanges()` do Firebase Auth. Esse Stream emite um novo evento toda vez que o estado de login muda — usuário logou, deslogou, ou a sessão foi restaurada ao abrir o app. Com base no valor emitido, o app decide qual tela mostrar:
+O `main.dart` usa um `StreamBuilder` que ouve o `authStateChanges()` do Firebase Auth:
 
 ```dart
 StreamBuilder<User?>(
   stream: FirebaseAuth.instance.authStateChanges(),
   builder: (context, snapshot) {
-    if (snapshot.connectionState == ConnectionState.waiting) {
+    if (snapshot.connectionState == ConnectionState.waiting)
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
     if (snapshot.hasData) return const MenuPrincipal(); // logado
     return const TelaLogin();                           // deslogado
   },
 )
 ```
-
-Isso elimina qualquer lógica manual de redirecionamento — o Stream cuida de tudo reativamente.
 
 ---
 
@@ -178,18 +163,16 @@ Isso elimina qualquer lógica manual de redirecionamento — o Stream cuida de t
 
 ### Projeto Firebase
 - Nome: `bolaodasoci2026`
-- Região do Firestore: `southamerica-east1` (São Paulo) — melhor latência para usuários brasileiros
+- Região do Firestore: `southamerica-east1` (São Paulo)
 - App Android registrado com package name: `com.luizdeveloper.bolao.bolao`
 - Arquivo `firebase_options.dart` gerado automaticamente pelo `flutterfire configure`
 
-### Configurações do Android
-No arquivo `C:\bolao\android\app\build.gradle.kts` foram feitas duas alterações em relação ao padrão:
-
+### Configurações do Android (`build.gradle.kts`)
 ```kotlin
 android {
-    ndkVersion = "27.0.12077973"   // era flutter.ndkVersion — Firebase exige a 27
+    ndkVersion = "27.0.12077973"   // Firebase exige a 27
     defaultConfig {
-        minSdk = 23                // era flutter.minSdkVersion — firebase_auth exige mínimo 23
+        minSdk = 23                // firebase_auth exige mínimo 23
     }
 }
 ```
@@ -204,7 +187,7 @@ intl: ^0.19.0
 ```
 
 ### Serviços ativados no Firebase Console
-- **Firestore Database** — modo de teste (expira em 30 dias; regras de produção a definir antes do lançamento)
+- **Firestore Database** — modo de teste (substituir por regras reais antes do lançamento)
 - **Authentication** — provedor E-mail/senha ativado
 
 ---
@@ -212,138 +195,193 @@ intl: ^0.19.0
 ## Coleções do Firestore
 
 ### `usuarios`
-Cada documento tem o UID do Firebase Auth como ID. Campos:
+ID do documento = UID do Firebase Auth.
 
 ```
-uid         : String   — mesmo UID do Auth, repetido dentro do documento para facilitar queries
+uid         : String
 email       : String
-nome        : String   — inicialmente extraído do e-mail (parte antes do @)
-pontuacao   : Number   — começa em 0
-criadoEm    : Timestamp — gerado pelo servidor (FieldValue.serverTimestamp())
+nome        : String   — parte antes do @ no cadastro
+pontuacao   : Number   — começa em 0; atualizado via FieldValue.increment()
+criadoEm    : Timestamp
+isAdmin     : Boolean  — campo opcional; adicionado manualmente no Console
 ```
-
-O perfil é criado automaticamente no Firestore logo após o `createUserWithEmailAndPassword` ter sucesso na tela de login.
 
 ### `jogos`
-104 documentos, cada um com o id do jogo (1 a 104) como ID do documento. Campos:
+104 documentos. ID do documento = id do jogo (string "1" a "104").
 
 ```
 id          : Number
 round       : String   — "Fase de Grupos", "Oitavas de Final", etc.
-matchday    : String?  — "Rodada 1", "Rodada 2", "Rodada 3" (null nas fases eliminatórias)
-date        : String   — "2026-06-11" (string original preservada)
-time        : String   — "13:00 UTC-6" (string original preservada)
-dataHora    : Timestamp — date + time convertidos para UTC; usado para queries e ordenação
+matchday    : String?  — "Rodada 1/2/3" (null nas fases eliminatórias)
+date        : String   — "2026-06-11"
+time        : String   — "13:00 UTC-6"
+dataHora    : Timestamp — convertido para UTC; usado para queries e ordenação
 team1       : String
 team2       : String
-group       : String?  — "Grupo A" ... "Grupo L" (null nas fases eliminatórias)
-ground      : String   — cidade/estádio
-placar1     : Number?  — null enquanto o jogo não aconteceu
-placar2     : Number?  — null enquanto o jogo não aconteceu
+group       : String?  — "Grupo A"..."Grupo L" (null nas fases eliminatórias)
+ground      : String
+placar1     : Number?  — null até o admin inserir o resultado
+placar2     : Number?  — null até o admin inserir o resultado
 ```
 
-Os jogos foram populados via `WriteBatch` — uma operação que agrupa todas as 104 escritas em uma única chamada de rede, atômica e idempotente. O `jogos.json` que serviu como fonte permanece em disco em `assets/dados/` mas não está declarado no `pubspec.yaml` e não é compilado no APK.
+**Conversão de fuso:** `"13:00 UTC-6"` → `DateTime.utc(ano, mes, dia, 13, 0).subtract(Duration(hours: -6))` → `19:00 UTC`. O bug original usava `DateTime(...)` local em vez de `DateTime.utc(...)`, causando dupla conversão de fuso.
 
-A conversão de fuso funciona assim: `"13:00 UTC-6"` → extrai offset `-6` → `DateTime.subtract(Duration(hours: -6))` → resultado em UTC (`19:00 UTC`) → salvo como Timestamp. O Firebase Console exibe no fuso do navegador (UTC-3 = 16:00, que é o horário correto de Brasília).
+**Exibição:** `.toLocal()` antes de formatar com `DateFormat` ou manualmente.
 
-**Pendência futura:** traduzir os nomes dos países para português no Firestore.
+### `palpites`
+ID do documento = `"{uid}_{jogoId}"` — garante idempotência (salvar duas vezes sobrescreve).
+
+```
+uid         : String
+jogoId      : Number
+palpite1    : Number
+palpite2    : Number
+criadoEm    : Timestamp  — serverTimestamp(); atualizado a cada save
+```
+
+`criadoEm` chega como `null` no cache local antes de o servidor responder → model usa `DateTime?`.
+
+---
+
+## Regras de pontuação
+
+```dart
+int calcularPontos(int p1, int p2, int r1, int r2) {
+  if (p1 == r1 && p2 == r2) return 10;           // placar exato
+  final sP = p1 - p2, sR = r1 - r2;
+  final vP = p1.compareTo(p2), vR = r1.compareTo(r2);
+  if (sP == sR && vP == vR) return 7;            // vencedor + saldo
+  if (vP == vR && vR != 0) return 5;             // só o vencedor
+  if (vP == 0 && vR == 0) return 4;              // empate (sem exato)
+  return 0;                                       // errou tudo
+}
+```
+
+Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de resultado):
+- 10 pts → `Color(0xFF006D32)` verde escuro
+- 7 pts → `Color(0xFF1B7F3A)` verde médio
+- 5 pts → `Color(0xFF4CAF50)` verde claro
+- 4 pts → `Color(0xFFFCD400)` amarelo (texto: `Cores.onSecondaryContainer`)
+- 0 pts → `Color(0xFFBBCBB9)` cinza
 
 ---
 
 ## O que cada tela contém hoje
 
 ### `tela_login.dart` — implementada
-- Design fiel ao mockup do Stitch (card centralizado, fontes Anybody + Hanken Grotesk via `google_fonts`)
-- Campos de e-mail e senha com ícones e borda que muda para azul no foco
-- Alterna entre modo login e modo cadastro com `AnimatedSwitcher`
+- Card centralizado, fontes Anybody + Hanken Grotesk
+- Alterna entre login e cadastro com `AnimatedSwitcher`
 - Erros do Firebase Auth traduzidos para português
-- No cadastro: cria conta no Auth e em seguida cria o perfil no Firestore via `UsuarioService`
-- Após login bem-sucedido, o `StreamBuilder` do `main.dart` redireciona automaticamente
+- Cadastro: cria conta no Auth + perfil no Firestore via `UsuarioService`
 
 ### `tela_home.dart` — implementada
-- `StatefulWidget` com `initState` que dispara `JogoService().buscarPorData(DateTime.now())`
-- `FutureBuilder` gerencia os estados: carregando → sem jogos → com jogos → erro
-- Carrossel horizontal de cards com bandeira emoji, sigla, horário local e chip "AO VIVO"
-- Detecção de jogo ao vivo: `placar1 == null && dataHora.toLocal().isBefore(DateTime.now())`
-- Horário exibido convertido de UTC para o fuso local via `DateFormat('HH:mm').format(dataHora.toLocal())`
-- Bento grid com cards de navegação para Palpites (índice 1), Classificação (índice 2) e Todos os Jogos (índice 3)
-- Aceita callback `onNavegar` do `MenuPrincipal` e o chama via `widget.onNavegar(indice)` nos cards
-- Botão "VER TODOS" no cabeçalho da seção também chama `widget.onNavegar(3)`
+- Carrossel de jogos do dia (Firestore) com chip AO VIVO
+- Bento grid de navegação para Palpites, Ranking e Tabela
+- Callback `onNavegar` recebido do `MenuPrincipal`
 
 ### `tela_tabela.dart` — implementada
-- Tabs "Próximos" / "Resultados" com `AnimatedContainer` para transição suave
-- Filtragem: Próximos = `placar1 == null`; Resultados = `placar1 != null`
-- Jogos ordenados por `dataHora` e agrupados por seção usando `Map` com ordem de inserção preservada
-- Seções: "Fase de Grupos — Rodada 1", "Oitavas de Final", etc.
-- `CustomScrollView` com slivers intercalando cabeçalhos de seção e listas de cards
-- Cards mostram: chip de grupo/fase, horário local ou "AO VIVO", bandeiras, placar (ou `—`)
-- Chip "AO VIVO" com ponto pulsante animado via `AnimationController`
+- Tabs "Próximos" / "Resultados" com `AnimatedContainer`
+- `CustomScrollView` com slivers agrupados por seção
+- Chip AO VIVO com ponto pulsante via `AnimationController`
 
-### `tela_palpites.dart` — placeholder
-### `tela_ranking.dart` — placeholder
+### `tela_palpites.dart` — implementada
+- Duas abas: **Próximos** e **Resultados**
+- `Future.wait` carrega jogos + palpites em paralelo — sem N queries por card
+- `Timer.periodic(30s)` reclassifica jogos entre abas automaticamente
+- **Aba Próximos:** jogos disponíveis para palpite (mais de 5 min antes do início); "Ver mais" carrega próxima data; trava impede salvar após o cutoff
+- **Aba Resultados:** chip "PRESTES A COMEÇAR" (amarelo, <5 min), "AO VIVO" (pulsante), ou horário; cards encerrados coloridos pela pontuação; badge de pontos; "Registrado em DD/MM às HHhMM"
+- Palpite precarregado pelo pai — `_CardPalpite` não faz query individual
+
+### `tela_ranking.dart` — implementada
+- `StreamBuilder` direto no Firestore → ranking atualiza em tempo real
+- Pódio visual para top 3 (1º = amarelo/troféu, 2º = prata, 3º = bronze)
+- Lista para 4º em diante; usuário logado destacado com borda verde
+
+### `tela_admin.dart` — implementada (acesso exclusivo via drawer)
+- Filtra jogos elegíveis: 105 min após o início (ou IDs de teste configurados em `_jogosTesteIds`)
+- Card com pré-preenchimento se já tiver placar (modo correção)
+- Ao salvar: `buscarTodosPorJogo` → calcula delta de pontos para cada palpite → `WriteBatch` atômico atualiza placar + pontuações de todos os participantes
+- Correção de placar: subtrai pontos antigos antes de adicionar os novos (evita dupla contagem)
+- Busca o documento do jogo por `where('id', isEqualTo: jogoId)` em vez de `.doc(id.toString())` — evita `not-found` quando o ID do documento não bate com o campo
 
 ---
 
-## biblioteca.dart — funções utilitárias
-
-Todas as funções são **top-level** (sem classe wrapper) — padrão idiomático em Dart, onde funções top-level são cidadãs de primeira classe, como `runApp()` e `showDialog()` do próprio Flutter. Usar `static` numa classe seria um hábito de Java/C# desnecessário em Dart.
+## PalpiteService — métodos
 
 ```dart
-// Uso em qualquer arquivo após import '../utils/biblioteca.dart':
-flagDe('Brazil')         // → '🇧🇷'
-siglaDe('Germany')       // → 'GER'
-formatarData(agora)      // → '12/06/2026 às 20h00'
-mostrarMensagem(ctx, msg) // exibe SnackBar padronizado
+salvar(Palpite)                          // set() com docId fixo — idempotente
+buscarPorJogo(String uid, int jogoId)    // get() por docId — O(1)
+buscarTodosPorUsuario(String uid)        // where(uid) sem orderBy — sem índice composto
+buscarPorUsuario(String uid)             // where(uid) + orderBy(jogoId) — requer índice composto
+buscarTodosPorJogo(int jogoId)           // where(jogoId) — usado pelo admin
 ```
 
-Os mapas internos de `flagDe` e `siglaDe` são `const` — compilados como literais em tempo de compilação, alocados uma única vez na memória independente de quantas vezes as funções forem chamadas.
+**Nota sobre índices:** `buscarPorUsuario` usa `where + orderBy` em campos diferentes → Firestore exige índice composto. Na primeira execução, o log mostra um link para criar o índice automaticamente. Os demais métodos usam apenas um `where()` e não precisam de índice.
 
 ---
 
-## Conceitos Flutter já vistos
+## Bugs corrigidos e decisões técnicas relevantes
+
+### Bug de fuso horário nos timestamps
+O getter `dataHora` no `Jogo` usava `DateTime(...)` (local) antes de subtrair o offset UTC, causando dupla conversão. Corrigido com `DateTime.utc(...)`.
+
+### Bug de exibição de horário
+`formatarData()` em `biblioteca.dart` formatava sem converter para local. Corrigido adicionando `final local = data.toLocal()` no início da função — todos os pontos de uso se beneficiam automaticamente.
+
+### setState com Future
+`onSalvo: () => setState(() => _futureJogos = _carregarElegiveis())` retornava um `Future` para o `setState`. Corrigido com chaves: `setState(() { _futureJogos = _carregarElegiveis(); })`.
+
+### not-found ao atualizar placar
+O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Firestore bate com o campo `id`. Corrigido com `.where('id', isEqualTo: jogoId).limit(1).get()` + `.docs.first.reference`.
+
+### criadoEm null no cache local
+`FieldValue.serverTimestamp()` chega como `null` no cache local antes de o servidor responder. Corrigido tornando `criadoEm` nullable (`DateTime?`) no model `Palpite`.
+
+---
+
+## Conceitos Flutter aprendidos
 
 - `StatelessWidget` vs `StatefulWidget`
-- `setState()` como equivalente ao `notifyDataSetChanged()`
-- `build()` como equivalente ao `onCreateView()`
-- `initState()` como equivalente ao `onCreate()`
-- Hot reload com `r` no terminal
-- `Scaffold`, `AppBar`, `MaterialApp`
-- `factory fromJson` como alternativa ao Gson
-- `factory fromMap` / `toMap` para serialização com o Firestore
+- `setState()`, `build()`, `initState()`, `dispose()`
+- `Scaffold`, `AppBar`, `Drawer`, `MaterialApp`
+- `factory fromJson` / `fromMap` / `toMap` para serialização
 - `Material` + `InkWell` para áreas clicáveis com ripple
-- `Stack` + `Positioned` para sobreposição (equivalente a `position: absolute`)
+- `Stack` + `Positioned` para sobreposição
 - `NavigationBar` (Material 3) com `selectedIndex`
 - `IndexedStack` para preservar estado entre abas
 - `AnimatedSwitcher` + `ValueKey` para animação de troca de widget
-- `AnimatedContainer` para animar mudanças de propriedades (cor, sombra, tamanho)
-- `const` em widgets para otimização de recriação
-- `ListView` com `scrollDirection: Axis.horizontal` para carrossel
-- `IntrinsicHeight` para forçar altura igual em widgets irmãos numa `Row`
-- `StreamBuilder` para reagir a Streams em tempo real (usado com `authStateChanges()`)
-- `FutureBuilder` para reagir a operações assíncronas (usado para carregar jogos do Firestore)
-- Getter computado em Dart (`DateTime get dataHora`) como alternativa a campo calculado
-- `WriteBatch` do Firestore para operações em lote atômicas e idempotentes
-- `FieldValue.serverTimestamp()` para timestamps gerados pelo servidor
-- `Timestamp.fromDate()` e `.toDate()` para converter entre `DateTime` do Dart e `Timestamp` do Firestore
+- `AnimatedContainer` para animar mudanças de propriedades
+- `CustomScrollView` + Slivers (`SliverToBoxAdapter`, `SliverPadding`, `SliverList`)
+- `AnimationController` + `SingleTickerProviderStateMixin` para animações imperativas
+- `AnimatedBuilder` para reconstruir só o trecho animado
+- `StreamBuilder` — authStateChanges, ranking em tempo real, dados do usuário no drawer
+- `FutureBuilder` — carregamento assíncrono com estados de loading/erro/dado
+- `Future.wait` — executa múltiplas Futures em paralelo
+- `Timer.periodic` — reclassificação automática de jogos por horário
+- `WriteBatch` do Firestore — operações atômicas em lote
+- `FieldValue.serverTimestamp()` e `FieldValue.increment()`
+- `Timestamp.fromDate()` / `.toDate()` — conversão DateTime ↔ Timestamp
+- `DateTime.utc(...)` vs `DateTime(...)` — importância do fuso na construção
+- `.toLocal()` antes de exibir horários
 - `DateFormat` do pacote `intl` para formatar datas
-- `rootBundle.loadString()` para ler arquivos de assets em tempo de execução
-- `CustomScrollView` + Slivers (`SliverToBoxAdapter`, `SliverPadding`, `SliverList`) para listas com cabeçalhos intercalados de forma eficiente
-- `AnimationController` + `SingleTickerProviderStateMixin` para animações imperativas (ponto pulsante do chip AO VIVO)
-- `AnimatedBuilder` para reconstruir apenas o trecho animado da árvore a cada frame, sem chamar `setState`
-- Callback `void Function(int)` como padrão de comunicação filho → pai (substituindo EventBus ou similar do Android)
-- `widget.X` dentro de um `State` para acessar propriedades do `StatefulWidget` que o criou
-- Funções top-level em Dart como alternativa idiomática a métodos `static` em classes utilitárias
-- `const` em mapas literais dentro de funções para alocação única em tempo de compilação
-- `Map` em Dart preserva ordem de inserção — útil para agrupar e exibir dados em sequência cronológica sem ordenação extra
+- `rootBundle.loadString()` para ler assets em tempo de execução
+- Callback `void Function(int)` como padrão de comunicação filho → pai
+- `widget.X` dentro de um `State` para acessar propriedades do `StatefulWidget`
+- Funções top-level em Dart como alternativa idiomática a métodos `static`
+- `const` em mapas literais para alocação única em tempo de compilação
+- `Map` em Dart preserva ordem de inserção
+- Arrow function `=>` vs bloco `{}` — diferença de tipo de retorno (causou o bug do setState)
+- `Builder` widget para acessar o `Scaffold` correto dentro do `AppBar`
+- `addPostFrameCallback` para executar código após o frame atual terminar
+- `.clamp(min, max)` para limitar valores numéricos
+- `WidgetsBinding.instance.addPostFrameCallback` para evitar conflito de setState
 
 ---
 
 ## Próximos passos (na ordem recomendada)
 
-1. **Tela de palpites** — o usuário escolhe um jogo e registra o placar previsto; o palpite é salvo no Firestore na coleção `palpites` associado ao UID do usuário
-2. **Coleção `palpites`** no Firestore — estrutura a definir
-3. **Cálculo de pontuação** — comparar palpite com placar real e atualizar `pontuacao` no documento do usuário
-4. **Tela de ranking** — listar usuários ordenados por pontuação
-5. **Regras de segurança do Firestore** — substituir o modo de teste por regras reais antes do lançamento
-6. **Logout** — botão no perfil ou no menu
-7. **Tradução dos nomes dos países** para português no Firestore (pendência de baixa prioridade)
+1. **Regras de segurança do Firestore** — substituir modo de teste por regras reais antes do lançamento (ex: usuário só lê/escreve seus próprios palpites; só admin escreve em jogos)
+2. **Remover IDs de teste** da `tela_admin.dart` (`_jogosTesteIds`) quando a Copa começar
+3. **Tradução dos nomes dos países** para português no Firestore (baixa prioridade)
+4. **Logout** já funciona via drawer — considerar também botão de perfil dedicado
+5. **Telas pendentes no drawer:** Meu Perfil, Notificações, Configurações, Ajuda & FAQ
