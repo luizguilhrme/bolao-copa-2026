@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +10,79 @@ import '../services/palpite_service.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 
+// ─── Modelo interno ───────────────────────────────────────────────────────────
+
+class _ItemResultado {
+  const _ItemResultado({required this.jogo, this.palpite, this.pontos});
+  final Jogo jogo;
+  final Palpite? palpite;
+  final int? pontos; // null se jogo não encerrado ou sem palpite
+}
+
+enum _Status { prestesAComecar, aoVivo, encerrado }
+
+// ─── Funções auxiliares (top-level) ──────────────────────────────────────────
+
+int _calcularPontos(int p1, int p2, int r1, int r2) {
+  if (p1 == r1 && p2 == r2) return 10;
+  final sP = p1 - p2, sR = r1 - r2;
+  final vP = p1.compareTo(p2), vR = r1.compareTo(r2);
+  if (sP == sR && vP == vR) return 7;
+  if (vP == vR && vR != 0) return 5;
+  if (vP == 0 && vR == 0) return 4;
+  return 0;
+}
+
+_Status _statusDe(Jogo jogo) {
+  if (jogo.placar1 != null) return _Status.encerrado;
+  return DateTime.now().isAfter(jogo.dataHora.toLocal())
+      ? _Status.aoVivo
+      : _Status.prestesAComecar;
+}
+
+bool _estaBloqueado(Jogo jogo) => DateTime.now().isAfter(
+    jogo.dataHora.toLocal().subtract(const Duration(minutes: 5)));
+
+String _formatarCriadoEm(DateTime? dt) {
+  if (dt == null) return '';
+  final l = dt.toLocal();
+  return '${l.day.toString().padLeft(2, '0')}/'
+      '${l.month.toString().padLeft(2, '0')} às '
+      '${l.hour.toString().padLeft(2, '0')}h'
+      '${l.minute.toString().padLeft(2, '0')}';
+}
+
+Color _corFundo(int? pontos) {
+  if (pontos == null) return Cores.surface;
+  if (pontos == 10) return const Color(0xFF006D32).withOpacity(0.08);
+  if (pontos == 7) return const Color(0xFF1B7F3A).withOpacity(0.08);
+  if (pontos == 5) return const Color(0xFF4CAF50).withOpacity(0.08);
+  if (pontos == 4) return const Color(0xFFFCD400).withOpacity(0.12);
+  return const Color(0xFFBBCBB9).withOpacity(0.2);
+}
+
+Color _corBorda(int? pontos) {
+  if (pontos == null) return Cores.outlineVariant;
+  if (pontos == 10) return const Color(0xFF006D32);
+  if (pontos == 7) return const Color(0xFF1B7F3A);
+  if (pontos == 5) return const Color(0xFF4CAF50);
+  if (pontos == 4) return const Color(0xFFFCD400);
+  return const Color(0xFFBBCBB9);
+}
+
+Color _corBadge(int pontos) {
+  if (pontos == 10) return const Color(0xFF006D32);
+  if (pontos == 7) return const Color(0xFF1B7F3A);
+  if (pontos == 5) return const Color(0xFF4CAF50);
+  if (pontos == 4) return const Color(0xFFFCD400);
+  return const Color(0xFFBBCBB9);
+}
+
+Color _corTextoBadge(int pontos) =>
+    pontos == 4 ? Cores.onSecondaryContainer : Colors.white;
+
+// ─── Tela principal ───────────────────────────────────────────────────────────
+
 class TelaPalpites extends StatefulWidget {
   const TelaPalpites({super.key});
 
@@ -17,398 +91,434 @@ class TelaPalpites extends StatefulWidget {
 }
 
 class _TelaPalpitesState extends State<TelaPalpites> {
-  late Future<void> _futureCarregar;
+  bool _abaProximos = true;
+  bool _carregando = true;
 
-  Map<String, List<Jogo>> _grupos = {};
+  // Dados brutos — carregados uma vez do Firestore
+  List<Jogo> _todosJogos = [];
+  Map<int, Palpite> _palpitesMap = {};
+
+  // Dados derivados — atualizados pelo timer
+  Map<String, List<Jogo>> _gruposProximos = {};
   List<String> _todasAsDatas = [];
   int _datasVisiveis = 1;
+  List<_ItemResultado> _resultados = [];
+
+  Timer? _timer;
+  final _uid = FirebaseAuth.instance.currentUser!.uid;
 
   @override
   void initState() {
     super.initState();
-    _futureCarregar = _carregarJogos();
-  }
-
-  Future<void> _carregarJogos() async {
-    final todos = await JogoService().buscarTodos();
-
-    final mapa = <String, List<Jogo>>{};
-    for (final jogo in todos) {
-      if (jogo.placar1 != null) continue;
-      final local = jogo.dataHora.toLocal();
-      final chave =
-          '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
-      mapa.putIfAbsent(chave, () => []).add(jogo);
-    }
-
-    setState(() {
-      _grupos = mapa;
-      _todasAsDatas = mapa.keys.toList();
-      _datasVisiveis = 1;
+    _carregar();
+    // Reclassifica a cada 30s para mover jogos entre abas automaticamente
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) _reclassificar(preservarDatasVisiveis: true);
     });
   }
 
-  void _verMais() => setState(() => _datasVisiveis++);
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
-  bool get _temMais => _datasVisiveis < _todasAsDatas.length;
+  Future<void> _carregar() async {
+    setState(() => _carregando = true);
+    try {
+      final results = await Future.wait([
+        JogoService().buscarTodos(),
+        PalpiteService().buscarTodosPorUsuario(_uid),
+      ]);
+      _todosJogos = results[0] as List<Jogo>;
+      final palpites = results[1] as List<Palpite>;
+      _palpitesMap = {for (final p in palpites) p.jogoId: p};
+      _reclassificar(preservarDatasVisiveis: false);
+    } catch (_) {
+      setState(() => _carregando = false);
+    }
+  }
+
+  void _reclassificar({required bool preservarDatasVisiveis}) {
+    final agora = DateTime.now();
+    final proximos = <String, List<Jogo>>{};
+    final resultados = <_ItemResultado>[];
+
+    for (final jogo in _todosJogos) {
+      final cutoff =
+      jogo.dataHora.toLocal().subtract(const Duration(minutes: 5));
+
+      if (agora.isBefore(cutoff) && jogo.placar1 == null) {
+        // Disponível para palpite
+        final local = jogo.dataHora.toLocal();
+        final chave =
+            '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+        proximos.putIfAbsent(chave, () => []).add(jogo);
+      } else {
+        // Bloqueado, ao vivo ou encerrado
+        final palpite = _palpitesMap[jogo.id];
+        int? pontos;
+        if (jogo.placar1 != null &&
+            jogo.placar2 != null &&
+            palpite != null) {
+          pontos = _calcularPontos(
+            palpite.palpite1, palpite.palpite2,
+            jogo.placar1!, jogo.placar2!,
+          );
+        }
+        resultados.add(
+            _ItemResultado(jogo: jogo, palpite: palpite, pontos: pontos));
+      }
+    }
+
+    final datas = proximos.keys.toList();
+
+    setState(() {
+      _gruposProximos = proximos;
+      _todasAsDatas = datas;
+      _datasVisiveis = preservarDatasVisiveis
+          ? _datasVisiveis.clamp(1, datas.isEmpty ? 1 : datas.length)
+          : 1;
+      _resultados = resultados;
+      _carregando = false;
+    });
+  }
+
+  // Chamado pelo card quando o usuário salva um palpite novo
+  void _onPalpiteSalvo(Palpite palpite) {
+    _palpitesMap[palpite.jogoId] = palpite;
+    // O jogo continua em Próximos — não precisa reclassificar
+  }
+
+  bool get _temMaisProximos => _datasVisiveis < _todasAsDatas.length;
 
   List<String> get _datasAtivas =>
       _todasAsDatas.take(_datasVisiveis).toList();
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<void>(
-      future: _futureCarregar,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              'Erro ao carregar jogos.',
-              style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
-            ),
-          );
-        }
-
-        if (_grupos.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.sports_soccer_rounded,
-                    size: 64, color: Cores.outlineVariant),
-                const SizedBox(height: 16),
-                Text(
-                  'Nenhum jogo disponível',
-                  style: GoogleFonts.anybody(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Cores.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Todos os palpites já foram registrados.',
-                  style: GoogleFonts.hankenGrotesk(
-                    fontSize: 14,
-                    color: Cores.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'MEUS PALPITES',
-                      style: GoogleFonts.anybody(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Cores.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Insira seus placares para os próximos jogos.',
-                      style: GoogleFonts.hankenGrotesk(
-                        fontSize: 16,
-                        color: Cores.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            for (final chave in _datasAtivas) ...[
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-                sliver: SliverToBoxAdapter(
-                  child: _CabecalhoData(dataChave: chave),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                        (context, i) => Padding(
-                      padding: const EdgeInsets.only(top: 16, bottom: 4),
-                      child: _CardPalpite(jogo: _grupos[chave]![i]),
-                    ),
-                    childCount: _grupos[chave]!.length,
-                  ),
-                ),
-              ),
-            ],
-
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
-              sliver: SliverToBoxAdapter(
-                child: _temMais
-                    ? _BotaoVerMais(onTap: _verMais)
-                    : const _FimDaLista(),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-// ─── Cabeçalho de data ────────────────────────────────────────────────────────
-
-class _CabecalhoData extends StatelessWidget {
-  const _CabecalhoData({required this.dataChave});
-
-  final String dataChave;
-
-  static const _meses = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-  ];
-
-  static const _diasSemana = [
-    'Segunda-feira', 'Terça-feira', 'Quarta-feira',
-    'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final data = DateTime.parse(dataChave).toLocal();
-    final mes = _meses[data.month - 1];
-    final diaSemana = _diasSemana[data.weekday - 1];
+    if (_carregando) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '${data.day} de $mes de ${data.year} · $diaSemana',
-          style: GoogleFonts.anybody(
-            fontSize: 17,
-            fontWeight: FontWeight.w600,
-            color: Cores.onSurface,
+        // Seletor de abas
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: _SeletorAbas(
+            abaProximos: _abaProximos,
+            countProximos: _gruposProximos.values
+                .fold(0, (s, l) => s + l.length),
+            countResultados: _resultados.length,
+            onChanged: (v) => setState(() => _abaProximos = v),
           ),
         ),
-        const SizedBox(height: 8),
-        const Divider(color: Cores.outlineVariant, height: 1),
+
+        // Conteúdo
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: _abaProximos
+                ? _AbaProximos(
+              key: const ValueKey('proximos'),
+              grupos: _gruposProximos,
+              datasAtivas: _datasAtivas,
+              palpitesMap: _palpitesMap,
+              temMais: _temMaisProximos,
+              onVerMais: () => setState(() => _datasVisiveis++),
+              onPalpiteSalvo: _onPalpiteSalvo,
+            )
+                : _AbaResultados(
+              key: const ValueKey('resultados'),
+              resultados: _resultados,
+            ),
+          ),
+        ),
       ],
     );
   }
 }
 
-// ─── Card de palpite ──────────────────────────────────────────────────────────
+// ─── Seletor de abas ──────────────────────────────────────────────────────────
+
+class _SeletorAbas extends StatelessWidget {
+  const _SeletorAbas({
+    required this.abaProximos,
+    required this.countProximos,
+    required this.countResultados,
+    required this.onChanged,
+  });
+
+  final bool abaProximos;
+  final int countProximos;
+  final int countResultados;
+  final void Function(bool) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _BotaoAba(
+            label: 'Próximos',
+            count: countProximos,
+            ativo: abaProximos,
+            onTap: () => onChanged(true),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _BotaoAba(
+            label: 'Resultados',
+            count: countResultados,
+            ativo: !abaProximos,
+            onTap: () => onChanged(false),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BotaoAba extends StatelessWidget {
+  const _BotaoAba({
+    required this.label,
+    required this.count,
+    required this.ativo,
+    required this.onTap,
+  });
+
+  final String label;
+  final int count;
+  final bool ativo;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: ativo ? Cores.verdePrincipal : Cores.surfaceContainer,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.anybody(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: ativo ? Colors.white : Cores.onSurfaceVariant,
+              ),
+            ),
+            if (count > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding:
+                const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: ativo
+                      ? Colors.white.withOpacity(0.25)
+                      : Cores.outlineVariant,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$count',
+                  style: GoogleFonts.hankenGrotesk(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: ativo ? Colors.white : Cores.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Aba Próximos ─────────────────────────────────────────────────────────────
+
+class _AbaProximos extends StatelessWidget {
+  const _AbaProximos({
+    super.key,
+    required this.grupos,
+    required this.datasAtivas,
+    required this.palpitesMap,
+    required this.temMais,
+    required this.onVerMais,
+    required this.onPalpiteSalvo,
+  });
+
+  final Map<String, List<Jogo>> grupos;
+  final List<String> datasAtivas;
+  final Map<int, Palpite> palpitesMap;
+  final bool temMais;
+  final VoidCallback onVerMais;
+  final void Function(Palpite) onPalpiteSalvo;
+
+  @override
+  Widget build(BuildContext context) {
+    if (grupos.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.sports_soccer_rounded,
+                size: 64, color: Cores.outlineVariant),
+            const SizedBox(height: 16),
+            Text('Nenhum jogo disponível',
+                style: GoogleFonts.anybody(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Cores.onSurface)),
+            const SizedBox(height: 8),
+            Text('Todos os jogos já foram encerrados\nou estão prestes a começar.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.hankenGrotesk(
+                    fontSize: 14,
+                    color: Cores.onSurfaceVariant,
+                    height: 1.5)),
+          ],
+        ),
+      );
+    }
+
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+          sliver: SliverToBoxAdapter(
+            child: Text(
+              'Insira seus placares para os próximos jogos.',
+              style: GoogleFonts.hankenGrotesk(
+                  fontSize: 15, color: Cores.onSurfaceVariant),
+            ),
+          ),
+        ),
+
+        for (final chave in datasAtivas) ...[
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            sliver: SliverToBoxAdapter(
+              child: _CabecalhoData(dataChave: chave),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                    (_, i) => Padding(
+                  padding: const EdgeInsets.only(top: 16, bottom: 4),
+                  child: _CardPalpite(
+                    jogo: grupos[chave]![i],
+                    palpiteInicial: palpitesMap[grupos[chave]![i].id],
+                    onPalpiteSalvo: onPalpiteSalvo,
+                  ),
+                ),
+                childCount: grupos[chave]!.length,
+              ),
+            ),
+          ),
+        ],
+
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+          sliver: SliverToBoxAdapter(
+            child: temMais
+                ? _BotaoVerMais(onTap: onVerMais)
+                : const _FimDaLista(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Aba Resultados ───────────────────────────────────────────────────────────
+
+class _AbaResultados extends StatelessWidget {
+  const _AbaResultados({super.key, required this.resultados});
+
+  final List<_ItemResultado> resultados;
+
+  @override
+  Widget build(BuildContext context) {
+    if (resultados.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.hourglass_empty_rounded,
+                size: 64, color: Cores.outlineVariant),
+            const SizedBox(height: 16),
+            Text('Nenhum resultado ainda',
+                style: GoogleFonts.anybody(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Cores.onSurface)),
+            const SizedBox(height: 8),
+            Text('Os jogos aparecerão aqui\nquando estiverem prestes a começar.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.hankenGrotesk(
+                    fontSize: 14,
+                    color: Cores.onSurfaceVariant,
+                    height: 1.5)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+      itemCount: resultados.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (_, i) => _CardResultado(item: resultados[i]),
+    );
+  }
+}
+
+// ─── Card de palpite (aba Próximos) ──────────────────────────────────────────
 
 class _CardPalpite extends StatefulWidget {
-  const _CardPalpite({required this.jogo});
+  const _CardPalpite({
+    required this.jogo,
+    required this.palpiteInicial,
+    required this.onPalpiteSalvo,
+  });
 
   final Jogo jogo;
+  final Palpite? palpiteInicial;
+  final void Function(Palpite) onPalpiteSalvo;
 
   @override
   State<_CardPalpite> createState() => _CardPalpiteState();
 }
 
 class _CardPalpiteState extends State<_CardPalpite> {
-  final _ctrl1 = TextEditingController();
-  final _ctrl2 = TextEditingController();
-
-  // UID garantido não-nulo: o StreamBuilder do main.dart só chega aqui
-  // se o usuário estiver logado.
+  late final TextEditingController _ctrl1;
+  late final TextEditingController _ctrl2;
   final _uid = FirebaseAuth.instance.currentUser!.uid;
 
   bool _salvo = false;
-  bool _carregando = true; // busca palpite existente no initState
-  bool _salvando = false;  // operação de escrita em andamento
+  bool _salvando = false;
 
   @override
   void initState() {
     super.initState();
-    _carregarPalpiteExistente();
-  }
-
-  // Busca no Firestore se o usuário já palpitou nesse jogo.
-  // Se sim, pré-preenche os campos e marca como salvo.
-  Future<void> _carregarPalpiteExistente() async {
-    final palpite =
-    await PalpiteService().buscarPorJogo(_uid, widget.jogo.id);
-
-    if (!mounted) return; // widget pode ter sido removido enquanto aguardava
-
-    if (palpite != null) {
-      _ctrl1.text = palpite.palpite1.toString();
-      _ctrl2.text = palpite.palpite2.toString();
-      _salvo = true;
-    }
-
-    setState(() => _carregando = false);
-  }
-
-  Future<void> _salvar() async {
-    final v1 = int.tryParse(_ctrl1.text);
-    final v2 = int.tryParse(_ctrl2.text);
-
-    if (v1 == null || v2 == null) {
-      mostrarMensagem(context, 'Preencha os dois placares antes de salvar.');
-      return;
-    }
-
-    setState(() => _salvando = true);
-
-    try {
-      await PalpiteService().salvar(Palpite(
-        uid: _uid,
-        jogoId: widget.jogo.id,
-        palpite1: v1,
-        palpite2: v2,
-        criadoEm: DateTime.now(), // substituído pelo serverTimestamp no toMap()
-      ));
-
-      if (!mounted) return;
-
-      FocusScope.of(context).unfocus();
-      setState(() {
-        _salvo = true;
-        _salvando = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _salvando = false);
-      mostrarMensagem(context, 'Erro ao salvar palpite. Tente novamente.');
-    }
-  }
-
-  void _editar() => setState(() => _salvo = false);
-
-  String get _horario {
-    final local = widget.jogo.dataHora.toLocal();
-    return '${local.hour.toString().padLeft(2, '0')}:'
-        '${local.minute.toString().padLeft(2, '0')}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        // ── Card principal ─────────────────────────────────────────────────
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
-            color: _salvo ? Cores.surfaceContainer : Cores.surface,
-            border: Border.all(
-              color: _salvo ? Cores.verdePrincipal : Cores.outlineVariant,
-              width: _salvo ? 2.0 : 1.0,
-            ),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 28, 16, 16),
-          child: _carregando
-          // Enquanto busca o palpite existente, exibe um placeholder
-          // com a mesma altura do conteúdo real para evitar layout jump.
-              ? const SizedBox(
-            height: 80,
-            child: Center(
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          )
-              : Row(
-            children: [
-              Expanded(child: _Time(nome: widget.jogo.team1)),
-              Expanded(
-                flex: 2,
-                child: _Inputs(
-                  ctrl1: _ctrl1,
-                  ctrl2: _ctrl2,
-                  salvo: _salvo,
-                ),
-              ),
-              Expanded(child: _Time(nome: widget.jogo.team2)),
-            ],
-          ),
-        ),
-
-        // ── Pill de horário ────────────────────────────────────────────────
-        Positioned(
-          top: -12,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: Cores.surfaceContainer,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: Cores.outlineVariant),
-              ),
-              child: Text(
-                _horario,
-                style: GoogleFonts.hankenGrotesk(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Cores.onSurfaceVariant,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        // ── Ícone de lock (ou loading de salvamento) ───────────────────────
-        if (!_carregando)
-          Positioned(
-            top: 8,
-            right: 8,
-            child: _salvando
-            // Spinner pequeno enquanto o set() do Firestore está em andamento
-                ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Cores.verdePrincipal,
-              ),
-            )
-                : GestureDetector(
-              onTap: _salvo ? _editar : _salvar,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: Icon(
-                  _salvo
-                      ? Icons.lock_rounded
-                      : Icons.lock_open_rounded,
-                  key: ValueKey(_salvo),
-                  size: 20,
-                  color: _salvo
-                      ? Cores.verdePrincipal
-                      : Cores.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
+    // Pré-preenche com o palpite precarregado pelo pai — sem query adicional
+    final p = widget.palpiteInicial;
+    _ctrl1 = TextEditingController(text: p != null ? '${p.palpite1}' : '');
+    _ctrl2 = TextEditingController(text: p != null ? '${p.palpite2}' : '');
+    _salvo = p != null;
   }
 
   @override
@@ -417,55 +527,523 @@ class _CardPalpiteState extends State<_CardPalpite> {
     _ctrl2.dispose();
     super.dispose();
   }
-}
 
-// ─── Bandeira + sigla ─────────────────────────────────────────────────────────
+  Future<void> _salvar() async {
+    // Trava de segurança: impede salvar após o cutoff de 5 min
+    if (_estaBloqueado(widget.jogo)) {
+      mostrarMensagem(context, 'Palpites encerrados para este jogo.');
+      return;
+    }
 
-class _Time extends StatelessWidget {
-  const _Time({required this.nome});
+    final v1 = int.tryParse(_ctrl1.text);
+    final v2 = int.tryParse(_ctrl2.text);
+    if (v1 == null || v2 == null) {
+      mostrarMensagem(context, 'Preencha os dois placares antes de salvar.');
+      return;
+    }
 
-  final String nome;
+    setState(() => _salvando = true);
+
+    final novoPalpite = Palpite(
+      uid: _uid,
+      jogoId: widget.jogo.id,
+      palpite1: v1,
+      palpite2: v2,
+      criadoEm: DateTime.now(),
+    );
+
+    try {
+      await PalpiteService().salvar(novoPalpite);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _salvando = false);
+      mostrarMensagem(context, 'Erro ao salvar. Tente novamente.');
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _salvo = true;
+      _salvando = false;
+    });
+    FocusScope.of(context).unfocus();
+    widget.onPalpiteSalvo(novoPalpite);
+  }
+
+  void _editar() => setState(() => _salvo = false);
+
+  String get _horario {
+    final l = widget.jogo.dataHora.toLocal();
+    return '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    return Stack(
+      clipBehavior: Clip.none,
       children: [
-        Container(
-          width: 48,
-          height: 48,
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Cores.surfaceContainerHigh,
-            border: Border.all(color: Cores.outlineVariant),
+            color: _salvo ? Cores.surfaceContainer : Cores.surface,
+            border: Border.all(
+              color: _salvo ? Cores.verdePrincipal : Cores.outlineVariant,
+              width: _salvo ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2))
+            ],
           ),
-          child: Center(
-            child: Text(flagDe(nome), style: const TextStyle(fontSize: 26)),
+          padding: const EdgeInsets.fromLTRB(16, 28, 16, 16),
+          child: Row(
+            children: [
+              Expanded(child: _Time(nome: widget.jogo.team1)),
+              Expanded(
+                  flex: 2,
+                  child: _InputsProximos(
+                      ctrl1: _ctrl1, ctrl2: _ctrl2, salvo: _salvo)),
+              Expanded(child: _Time(nome: widget.jogo.team2)),
+            ],
           ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          siglaDe(nome),
-          style: GoogleFonts.anybody(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Cores.onSurface,
+
+        // Pill de horário
+        Positioned(
+          top: -12,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: Container(
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: Cores.surfaceContainer,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Cores.outlineVariant),
+              ),
+              child: Text(
+                _horario,
+                style: GoogleFonts.hankenGrotesk(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Cores.onSurfaceVariant,
+                    letterSpacing: 0.5),
+              ),
+            ),
           ),
-          textAlign: TextAlign.center,
+        ),
+
+        // Lock
+        Positioned(
+          top: 8,
+          right: 8,
+          child: _salvando
+              ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Cores.verdePrincipal))
+              : GestureDetector(
+            onTap: _salvo ? _editar : _salvar,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: Icon(
+                _salvo
+                    ? Icons.lock_rounded
+                    : Icons.lock_open_rounded,
+                key: ValueKey(_salvo),
+                size: 20,
+                color: _salvo
+                    ? Cores.verdePrincipal
+                    : Cores.onSurfaceVariant,
+              ),
+            ),
+          ),
         ),
       ],
     );
   }
 }
 
-// ─── Par de campos de placar ──────────────────────────────────────────────────
+// ─── Card de resultado (aba Resultados) ───────────────────────────────────────
 
-class _Inputs extends StatelessWidget {
-  const _Inputs({
-    required this.ctrl1,
-    required this.ctrl2,
-    required this.salvo,
+class _CardResultado extends StatelessWidget {
+  const _CardResultado({required this.item});
+
+  final _ItemResultado item;
+
+  Jogo get jogo => item.jogo;
+  Palpite? get palpite => item.palpite;
+  int? get pontos => item.pontos;
+
+  String get _horario {
+    final l = jogo.dataHora.toLocal();
+    return '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _statusDe(jogo);
+    final encerrado = status == _Status.encerrado;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: encerrado ? _corFundo(pontos) : Cores.surface,
+        border: Border.all(
+          color: encerrado ? _corBorda(pontos) : Cores.outlineVariant,
+          width: encerrado && pontos != null ? 2 : 1,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      child: Column(
+        children: [
+          // Cabeçalho: grupo/fase + status
+          Container(
+            padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: Cores.surfaceContainer,
+              borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(11)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  jogo.group ?? jogo.round,
+                  style: GoogleFonts.hankenGrotesk(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Cores.onSurfaceVariant),
+                ),
+                _ChipStatus(status: status, horario: _horario),
+              ],
+            ),
+          ),
+
+          // Times + palpite
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _Time(nome: jogo.team1)),
+                    Expanded(
+                      flex: 2,
+                      child: _ScoreDisplay(
+                        valor1: palpite != null
+                            ? '${palpite!.palpite1}'
+                            : '—',
+                        valor2: palpite != null
+                            ? '${palpite!.palpite2}'
+                            : '—',
+                        label: palpite != null
+                            ? 'Seu palpite'
+                            : 'Sem palpite',
+                        corTexto: Cores.onSurface,
+                      ),
+                    ),
+                    Expanded(child: _Time(nome: jogo.team2)),
+                  ],
+                ),
+
+                // Resultado real (só se encerrado)
+                if (encerrado && jogo.placar1 != null) ...[
+                  const SizedBox(height: 8),
+                  Divider(
+                      color: _corBorda(pontos).withOpacity(0.3),
+                      height: 1),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Spacer(),
+                      _ScoreDisplay(
+                        valor1: '${jogo.placar1}',
+                        valor2: '${jogo.placar2}',
+                        label: 'Resultado',
+                        corTexto: Cores.onSurfaceVariant,
+                        compacto: true,
+                      ),
+                      const Spacer(),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Rodapé: pontuação + horário do palpite
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Badge de pontos (só se encerrado)
+                if (encerrado)
+                  _BadgePontos(pontos: pontos, temPalpite: palpite != null)
+                else
+                  const SizedBox.shrink(),
+
+                // criadoEm
+                if (palpite?.criadoEm != null)
+                  Text(
+                    'Registrado em ${_formatarCriadoEm(palpite!.criadoEm)}',
+                    style: GoogleFonts.hankenGrotesk(
+                        fontSize: 11, color: Cores.onSurfaceVariant),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Widgets auxiliares ───────────────────────────────────────────────────────
+
+class _ChipStatus extends StatelessWidget {
+  const _ChipStatus({required this.status, required this.horario});
+
+  final _Status status;
+  final String horario;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (status) {
+      case _Status.aoVivo:
+        return const _ChipAoVivo();
+      case _Status.prestesAComecar:
+        return Container(
+          padding:
+          const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFCD400).withOpacity(0.2),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+                color: const Color(0xFFFCD400).withOpacity(0.6)),
+          ),
+          child: Text(
+            'PRESTES A COMEÇAR',
+            style: GoogleFonts.hankenGrotesk(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF6E5C00)),
+          ),
+        );
+      case _Status.encerrado:
+        return Text(
+          horario,
+          style: GoogleFonts.hankenGrotesk(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Cores.onSurfaceVariant),
+        );
+    }
+  }
+}
+
+class _ChipAoVivo extends StatefulWidget {
+  const _ChipAoVivo();
+
+  @override
+  State<_ChipAoVivo> createState() => _ChipAoVivoState();
+}
+
+class _ChipAoVivoState extends State<_ChipAoVivo>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Cores.primaryContainer.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Cores.primaryContainer),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedBuilder(
+            animation: _ctrl,
+            builder: (_, __) => Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Cores.verdePrincipal
+                    .withOpacity(0.4 + 0.6 * _ctrl.value),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'AO VIVO',
+            style: GoogleFonts.hankenGrotesk(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: Cores.verdePrincipal),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScoreDisplay extends StatelessWidget {
+  const _ScoreDisplay({
+    required this.valor1,
+    required this.valor2,
+    required this.label,
+    required this.corTexto,
+    this.compacto = false,
   });
+
+  final String valor1;
+  final String valor2;
+  final String label;
+  final Color corTexto;
+  final bool compacto;
+
+  @override
+  Widget build(BuildContext context) {
+    final fontSize = compacto ? 18.0 : 24.0;
+    final boxSize = compacto ? 40.0 : 52.0;
+
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _ScoreBox(valor: valor1, size: boxSize, fontSize: fontSize),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Text('×',
+                  style: GoogleFonts.anybody(
+                      fontSize: compacto ? 16 : 20,
+                      fontWeight: FontWeight.w600,
+                      color: Cores.onSurfaceVariant)),
+            ),
+            _ScoreBox(valor: valor2, size: boxSize, fontSize: fontSize),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: GoogleFonts.hankenGrotesk(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Cores.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScoreBox extends StatelessWidget {
+  const _ScoreBox(
+      {required this.valor, required this.size, required this.fontSize});
+
+  final String valor;
+  final double size;
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Cores.surfaceContainer,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Cores.outlineVariant),
+      ),
+      child: Center(
+        child: Text(
+          valor,
+          style: GoogleFonts.hankenGrotesk(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w700,
+              color: Cores.onSurface),
+        ),
+      ),
+    );
+  }
+}
+
+class _BadgePontos extends StatelessWidget {
+  const _BadgePontos({required this.pontos, required this.temPalpite});
+
+  final int? pontos;
+  final bool temPalpite;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!temPalpite) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFBBCBB9),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          'Sem palpite',
+          style: GoogleFonts.hankenGrotesk(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Colors.white),
+        ),
+      );
+    }
+
+    final pts = pontos ?? 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: _corBadge(pts),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '$pts pts',
+        style: GoogleFonts.anybody(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: _corTextoBadge(pts)),
+      ),
+    );
+  }
+}
+
+class _InputsProximos extends StatelessWidget {
+  const _InputsProximos(
+      {required this.ctrl1, required this.ctrl2, required this.salvo});
 
   final TextEditingController ctrl1;
   final TextEditingController ctrl2;
@@ -479,14 +1057,11 @@ class _Inputs extends StatelessWidget {
         _CampoGol(controller: ctrl1, salvo: salvo),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Text(
-            'X',
-            style: GoogleFonts.anybody(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: Cores.onSurfaceVariant,
-            ),
-          ),
+          child: Text('X',
+              style: GoogleFonts.anybody(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Cores.onSurfaceVariant)),
         ),
         _CampoGol(controller: ctrl2, salvo: salvo),
       ],
@@ -515,27 +1090,24 @@ class _CampoGol extends StatelessWidget {
           LengthLimitingTextInputFormatter(2),
         ],
         style: GoogleFonts.hankenGrotesk(
-          fontSize: 26,
-          fontWeight: FontWeight.w700,
-          color: Cores.onSurface,
-          letterSpacing: 1,
-        ),
+            fontSize: 26,
+            fontWeight: FontWeight.w700,
+            color: Cores.onSurface,
+            letterSpacing: 1),
         decoration: InputDecoration(
           hintText: '–',
           hintStyle: GoogleFonts.hankenGrotesk(
-            fontSize: 26,
-            fontWeight: FontWeight.w300,
-            color: Cores.outlineVariant,
-          ),
+              fontSize: 26,
+              fontWeight: FontWeight.w300,
+              color: Cores.outlineVariant),
           filled: true,
           fillColor: salvo ? Cores.surfaceContainer : Cores.surface,
           contentPadding: EdgeInsets.zero,
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide(
-              color: salvo ? Cores.verdePrincipal : Cores.outlineVariant,
-              width: salvo ? 2.0 : 1.0,
-            ),
+                color: salvo ? Cores.verdePrincipal : Cores.outlineVariant,
+                width: salvo ? 2 : 1),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
@@ -548,7 +1120,73 @@ class _CampoGol extends StatelessWidget {
   }
 }
 
-// ─── Botão "Ver mais" ─────────────────────────────────────────────────────────
+class _Time extends StatelessWidget {
+  const _Time({required this.nome});
+
+  final String nome;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Cores.surfaceContainerHigh,
+            border: Border.all(color: Cores.outlineVariant),
+          ),
+          child: Center(
+              child: Text(flagDe(nome),
+                  style: const TextStyle(fontSize: 26))),
+        ),
+        const SizedBox(height: 6),
+        Text(siglaDe(nome),
+            style: GoogleFonts.anybody(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Cores.onSurface),
+            textAlign: TextAlign.center),
+      ],
+    );
+  }
+}
+
+class _CabecalhoData extends StatelessWidget {
+  const _CabecalhoData({required this.dataChave});
+
+  final String dataChave;
+
+  static const _meses = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+  ];
+  static const _dias = [
+    'Segunda-feira', 'Terça-feira', 'Quarta-feira',
+    'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final data = DateTime.parse(dataChave).toLocal();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${data.day} de ${_meses[data.month - 1]} de ${data.year} · ${_dias[data.weekday - 1]}',
+          style: GoogleFonts.anybody(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              color: Cores.onSurface),
+        ),
+        const SizedBox(height: 8),
+        const Divider(color: Cores.outlineVariant, height: 1),
+      ],
+    );
+  }
+}
 
 class _BotaoVerMais extends StatelessWidget {
   const _BotaoVerMais({required this.onTap});
@@ -560,14 +1198,11 @@ class _BotaoVerMais extends StatelessWidget {
     return OutlinedButton.icon(
       onPressed: onTap,
       icon: const Icon(Icons.expand_more_rounded),
-      label: Text(
-        'VER MAIS',
-        style: GoogleFonts.anybody(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.5,
-        ),
-      ),
+      label: Text('VER MAIS',
+          style: GoogleFonts.anybody(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5)),
       style: OutlinedButton.styleFrom(
         foregroundColor: Cores.verdePrincipal,
         side: const BorderSide(color: Cores.verdePrincipal),
@@ -579,8 +1214,6 @@ class _BotaoVerMais extends StatelessWidget {
   }
 }
 
-// ─── Fim da lista ─────────────────────────────────────────────────────────────
-
 class _FimDaLista extends StatelessWidget {
   const _FimDaLista();
 
@@ -591,13 +1224,9 @@ class _FimDaLista extends StatelessWidget {
         const Expanded(child: Divider(color: Cores.outlineVariant)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(
-            'Todos os jogos exibidos',
-            style: GoogleFonts.hankenGrotesk(
-              fontSize: 12,
-              color: Cores.onSurfaceVariant,
-            ),
-          ),
+          child: Text('Todos os jogos exibidos',
+              style: GoogleFonts.hankenGrotesk(
+                  fontSize: 12, color: Cores.onSurfaceVariant)),
         ),
         const Expanded(child: Divider(color: Cores.outlineVariant)),
       ],

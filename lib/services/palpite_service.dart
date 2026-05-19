@@ -4,20 +4,26 @@ import '../models/palpite.dart';
 class PalpiteService {
   final _colecao = FirebaseFirestore.instance.collection('palpites');
 
-  // Salva ou sobrescreve o palpite do usuário para um jogo.
   Future<void> salvar(Palpite palpite) async {
     await _colecao.doc(palpite.docId).set(palpite.toMap());
   }
 
-  // Busca o palpite de um usuário para um jogo específico.
-  // Retorna null se o usuário ainda não palpitou nesse jogo.
   Future<Palpite?> buscarPorJogo(String uid, int jogoId) async {
     final doc = await _colecao.doc('${uid}_$jogoId').get();
     if (!doc.exists) return null;
     return Palpite.fromMap(doc.data()!);
   }
 
-  // Busca todos os palpites de um usuário — útil para o ranking.
+  // Sem orderBy → sem índice composto necessário.
+  // Usado na tela de palpites para precarregar todos os palpites do usuário
+  // de uma vez, evitando N queries individuais por card.
+  Future<List<Palpite>> buscarTodosPorUsuario(String uid) async {
+    final snap = await _colecao.where('uid', isEqualTo: uid).get();
+    return snap.docs.map((d) => Palpite.fromMap(d.data())).toList();
+  }
+
+  // Com orderBy — requer índice composto (uid + jogoId).
+  // Reservado para uso futuro (ranking detalhado etc.).
   Future<List<Palpite>> buscarPorUsuario(String uid) async {
     final snap = await _colecao
         .where('uid', isEqualTo: uid)
@@ -26,13 +32,10 @@ class PalpiteService {
     return snap.docs.map((d) => Palpite.fromMap(d.data())).toList();
   }
 
-  // Busca todos os palpites de um jogo específico — usado pelo admin
-  // para calcular pontuação de todos os participantes após inserir o placar.
-  // Usa apenas um where() → nenhum índice composto necessário.
+  // Todos os palpites de um jogo — usado pelo admin para calcular pontuação.
   Future<List<Palpite>> buscarTodosPorJogo(int jogoId) async {
-    final snap = await _colecao
-        .where('jogoId', isEqualTo: jogoId)
-        .get();
+    final snap =
+    await _colecao.where('jogoId', isEqualTo: jogoId).get();
     return snap.docs.map((d) => Palpite.fromMap(d.data())).toList();
   }
 }

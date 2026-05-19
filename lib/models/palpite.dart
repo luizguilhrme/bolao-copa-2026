@@ -5,19 +5,18 @@ class Palpite {
   final int jogoId;
   final int palpite1;
   final int palpite2;
-  final DateTime criadoEm;
+  // Nullable porque FieldValue.serverTimestamp() chega como null
+  // no cache local antes de o servidor responder.
+  final DateTime? criadoEm;
 
   Palpite({
     required this.uid,
     required this.jogoId,
     required this.palpite1,
     required this.palpite2,
-    required this.criadoEm,
+    this.criadoEm,
   });
 
-  // O ID do documento no Firestore é sempre "{uid}_{jogoId}".
-  // Mesmo padrão usado em jogos e usuarios — garante idempotência:
-  // salvar duas vezes o mesmo palpite sobrescreve, não duplica.
   String get docId => '${uid}_$jogoId';
 
   Map<String, dynamic> toMap() {
@@ -36,7 +35,9 @@ class Palpite {
       jogoId: map['jogoId'] as int,
       palpite1: map['palpite1'] as int,
       palpite2: map['palpite2'] as int,
-      criadoEm: (map['criadoEm'] as Timestamp).toDate(),
+      criadoEm: map['criadoEm'] != null
+          ? (map['criadoEm'] as Timestamp).toDate()
+          : null,
     );
   }
 }
