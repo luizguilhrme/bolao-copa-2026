@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "847953336398",
+    "project_id": "bolaodasoci2026",
+    "storage_bucket": "bolaodasoci2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:847953336398:android:d327d3ece2006e11dfcb1f",
+        "android_client_info": {
+          "package_name": "com.luizdeveloper.bolao.bolao"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdoV324rAhVsdJ4L6wjGWBfCANP3m-IP8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

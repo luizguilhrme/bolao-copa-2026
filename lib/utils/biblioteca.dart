@@ -1,0 +1,213 @@
+import 'package:flutter/material.dart';
+
+// =============================================================================
+// biblioteca.dart — funções utilitárias do projeto Bolão Copa 2026
+//
+// Todas as funções aqui são top-level: existem soltas no arquivo, sem classe
+// container. Isso é idiomático em Dart — funções top-level são cidadãs de
+// primeira classe na linguagem, exatamente como runApp() e showDialog() do
+// próprio Flutter.
+//
+// Para usar em qualquer tela ou service, basta importar este arquivo:
+//   import '../utils/biblioteca.dart';
+//
+// E chamar diretamente pelo nome, sem prefixo de classe:
+//   flagDe('Brazil')       → '🇧🇷'
+//   siglaDe('Germany')     → 'GER'
+//   formatarData(agora)    → '12/06/2026 às 20h00'
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Formatação de data
+// -----------------------------------------------------------------------------
+
+/// Formata um [DateTime] para exibição legível ao usuário.
+/// Exemplo: DateTime de 2026-06-12 20:00 → "12/06/2026 às 20h00"
+///
+/// Recebe um [DateTime] já convertido para o fuso local do dispositivo.
+/// A conversão de UTC → local deve ser feita antes de chamar esta função:
+///   formatarData(jogo.dataHora.toLocal())
+String formatarData(DateTime data) {
+  final local = data.toLocal();
+  return '${local.day.toString().padLeft(2, '0')}/'
+      '${local.month.toString().padLeft(2, '0')}/'
+      '${local.year} às '
+      '${local.hour.toString().padLeft(2, '0')}h'
+      '${local.minute.toString().padLeft(2, '0')}';
+}
+
+// -----------------------------------------------------------------------------
+// Feedback visual
+// -----------------------------------------------------------------------------
+
+/// Exibe um [SnackBar] padronizado em qualquer tela.
+///
+/// O [ScaffoldMessenger] é um widget que vive acima do Scaffold na árvore
+/// e gerencia a fila de SnackBars. Usar `of(context)` localiza o messenger
+/// mais próximo — o mesmo padrão de Theme.of(context) e Navigator.of(context).
+void mostrarMensagem(BuildContext context, String mensagem) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(mensagem)),
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Bandeiras e siglas
+//
+// Usadas em tela_home.dart e tela_tabela.dart para converter o nome completo
+// do time (como vem do Firestore) para emoji de bandeira e sigla de 3 letras.
+//
+// Os mapas são declarados como `const` dentro das funções: isso significa que
+// Dart os compila como constantes em tempo de compilação — a memória é alocada
+// uma única vez e o mapa nunca é recriado, independente de quantas vezes a
+// função for chamada.
+// -----------------------------------------------------------------------------
+
+/// Retorna o emoji de bandeira correspondente ao nome completo do país.
+/// Para times ainda indefinidos nas fases eliminatórias ("Vencedor 73", "1A"),
+/// retorna '🏳️' como fallback.
+String flagDe(String team) {
+  const flags = {
+    'Mexico': '🇲🇽',
+    'Poland': '🇵🇱',
+    'USA': '🇺🇸',
+    'United States': '🇺🇸',
+    'Canada': '🇨🇦',
+    'Brazil': '🇧🇷',
+    'Argentina': '🇦🇷',
+    'France': '🇫🇷',
+    'Germany': '🇩🇪',
+    'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+    'Spain': '🇪🇸',
+    'Portugal': '🇵🇹',
+    'Netherlands': '🇳🇱',
+    'Belgium': '🇧🇪',
+    'Croatia': '🇭🇷',
+    'Morocco': '🇲🇦',
+    'Japan': '🇯🇵',
+    'South Korea': '🇰🇷',
+    'Australia': '🇦🇺',
+    'Senegal': '🇸🇳',
+    'Ecuador': '🇪🇨',
+    'Uruguay': '🇺🇾',
+    'Colombia': '🇨🇴',
+    'Chile': '🇨🇱',
+    'Peru': '🇵🇪',
+    'Venezuela': '🇻🇪',
+    'Paraguay': '🇵🇾',
+    'Bolivia': '🇧🇴',
+    'Iran': '🇮🇷',
+    'Saudi Arabia': '🇸🇦',
+    'Qatar': '🇶🇦',
+    'Turkey': '🇹🇷',
+    'Ukraine': '🇺🇦',
+    'Switzerland': '🇨🇭',
+    'Serbia': '🇷🇸',
+    'Denmark': '🇩🇰',
+    'Austria': '🇦🇹',
+    'Czech Republic': '🇨🇿',
+    'Slovakia': '🇸🇰',
+    'Hungary': '🇭🇺',
+    'Romania': '🇷🇴',
+    'Greece': '🇬🇷',
+    'Algeria': '🇩🇿',
+    'Nigeria': '🇳🇬',
+    'Ghana': '🇬🇭',
+    'Cameroon': '🇨🇲',
+    'Ivory Coast': '🇨🇮',
+    'Egypt': '🇪🇬',
+    'Tunisia': '🇹🇳',
+    'Mali': '🇲🇱',
+    'South Africa': '🇿🇦',
+    'DR Congo': '🇨🇩',
+    'New Zealand': '🇳🇿',
+    'Panama': '🇵🇦',
+    'Costa Rica': '🇨🇷',
+    'Honduras': '🇭🇳',
+    'Jamaica': '🇯🇲',
+    'Indonesia': '🇮🇩',
+    'Vietnam': '🇻🇳',
+    'China': '🇨🇳',
+    'Philippines': '🇵🇭',
+    'Wales': '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
+    'Scotland': '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
+    'Ireland': '🇮🇪',
+    'Norway': '🇳🇴',
+    'Sweden': '🇸🇪',
+    'Finland': '🇫🇮',
+    'Iceland': '🇮🇸',
+    'Israel': '🇮🇱',
+    'UAE': '🇦🇪',
+    'Iraq': '🇮🇶',
+    'Kuwait': '🇰🇼',
+    'Guatemala': '🇬🇹',
+    'El Salvador': '🇸🇻',
+    'Trinidad and Tobago': '🇹🇹',
+    'Kenya': '🇰🇪',
+    'Tanzania': '🇹🇿',
+    'Uganda': '🇺🇬',
+    'Cuba': '🇨🇺',
+  };
+  return flags[team] ?? '🏳️';
+}
+
+/// Retorna a sigla de 3 letras correspondente ao nome completo do país.
+/// Para times não mapeados, usa as 3 primeiras letras do nome em maiúsculo
+/// como fallback — ex: "Vencedor 73" → "VEN".
+String siglaDe(String team) {
+  const siglas = {
+    'Mexico': 'MEX',
+    'Poland': 'POL',
+    'USA': 'USA',
+    'United States': 'USA',
+    'Canada': 'CAN',
+    'Brazil': 'BRA',
+    'Argentina': 'ARG',
+    'France': 'FRA',
+    'Germany': 'GER',
+    'England': 'ENG',
+    'Spain': 'ESP',
+    'Portugal': 'POR',
+    'Netherlands': 'NED',
+    'Belgium': 'BEL',
+    'Croatia': 'CRO',
+    'Morocco': 'MAR',
+    'Japan': 'JPN',
+    'South Korea': 'KOR',
+    'Australia': 'AUS',
+    'Senegal': 'SEN',
+    'Ecuador': 'ECU',
+    'Uruguay': 'URU',
+    'Colombia': 'COL',
+    'Chile': 'CHI',
+    'Peru': 'PER',
+    'Venezuela': 'VEN',
+    'Paraguay': 'PAR',
+    'Bolivia': 'BOL',
+    'Iran': 'IRN',
+    'Saudi Arabia': 'KSA',
+    'Qatar': 'QAT',
+    'Turkey': 'TUR',
+    'Ukraine': 'UKR',
+    'Switzerland': 'SUI',
+    'Serbia': 'SRB',
+    'Denmark': 'DEN',
+    'Austria': 'AUT',
+    'Norway': 'NOR',
+    'Sweden': 'SWE',
+    'Wales': 'WAL',
+    'Scotland': 'SCO',
+    'Ireland': 'IRL',
+    'Nigeria': 'NGA',
+    'Ghana': 'GHA',
+    'Cameroon': 'CMR',
+    'Ivory Coast': 'CIV',
+    'Egypt': 'EGY',
+    'Algeria': 'ALG',
+    'Indonesia': 'IDN',
+    'China': 'CHN',
+    'Philippines': 'PHI',
+  };
+  return siglas[team] ??
+      team.substring(0, team.length.clamp(0, 3)).toUpperCase();
+}
