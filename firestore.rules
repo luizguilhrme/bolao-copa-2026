@@ -1,0 +1,42 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Retorna true se o usuário autenticado tiver isAdmin == true no Firestore.
+    // A leitura do próprio documento é permitida pela regra de /usuarios abaixo,
+    // então não há loop de permissão.
+    function isAdmin() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // ── usuarios ─────────────────────────────────────────────────────────────
+    // Cada usuário lê e escreve apenas o próprio documento.
+    // O ranking (TelaRanking) precisa listar todos os usuários — por isso
+    // qualquer usuário autenticado pode ler a coleção inteira.
+    match /usuarios/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ── jogos ─────────────────────────────────────────────────────────────────
+    // Qualquer usuário autenticado pode ler jogos (TelaHome, TelaPalpites, etc.).
+    // Apenas o admin pode criar, atualizar ou deletar documentos de jogos.
+    match /jogos/{jogoId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // ── palpites ──────────────────────────────────────────────────────────────
+    // Usuário lê e escreve apenas os próprios palpites (docId começa com o uid).
+    // Admin pode ler qualquer palpite para calcular pontuação (TelaAdmin).
+    // Admin nunca precisa escrever palpites — só a pontuação do usuário é alterada.
+    match /palpites/{palpiteId} {
+      allow read: if request.auth != null
+        && (request.auth.uid == resource.data.uid || isAdmin());
+      allow write: if request.auth != null
+        && request.auth.uid == request.resource.data.uid;
+    }
+  }
+}
