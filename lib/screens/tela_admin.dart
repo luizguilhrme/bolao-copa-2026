@@ -234,11 +234,9 @@ class _CardAdminState extends State<_CardAdmin> {
           final userRef = FirebaseFirestore.instance
               .collection('usuarios')
               .doc(palpite.uid);
-          batch.set(
-            userRef,
-            {'pontuacao': FieldValue.increment(delta)},
-            SetOptions(merge: true),
-          );
+          // update() falha se o documento não existir (ao contrário de set+merge,
+          // que criaria um documento fantasma só com o campo pontuacao).
+          batch.update(userRef, {'pontuacao': FieldValue.increment(delta)});
         }
       }
 
