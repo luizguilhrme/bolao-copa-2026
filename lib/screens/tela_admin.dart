@@ -17,11 +17,25 @@ class TelaAdmin extends StatefulWidget {
 
 class _TelaAdminState extends State<TelaAdmin> {
   late Future<List<Jogo>> _futureJogos;
+  bool _populando = false;
 
   @override
   void initState() {
     super.initState();
     _futureJogos = _carregarElegiveis();
+  }
+
+  // BOTÃO TEMPORÁRIO — remover após atualizar o Firestore
+  Future<void> _popularJogos() async {
+    setState(() => _populando = true);
+    try {
+      await JogoService().popularJogosNoFirestore();
+      if (mounted) mostrarMensagem(context, 'Jogos atualizados no Firestore!');
+    } catch (e) {
+      if (mounted) mostrarMensagem(context, 'Erro: $e');
+    } finally {
+      if (mounted) setState(() => _populando = false);
+    }
   }
 
   Future<List<Jogo>> _carregarElegiveis() async {
@@ -58,6 +72,23 @@ class _TelaAdminState extends State<TelaAdmin> {
           ),
         ),
         centerTitle: true,
+        // TEMPORÁRIO — remover após popular o Firestore
+        actions: [
+          _populando
+              ? const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.cloud_upload_outlined,
+                      color: Cores.verdePrincipal),
+                  tooltip: 'Popular jogos no Firestore',
+                  onPressed: _popularJogos,
+                ),
+        ],
       ),
       body: FutureBuilder<List<Jogo>>(
         future: _futureJogos,
