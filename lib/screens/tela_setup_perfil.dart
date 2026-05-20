@@ -3,30 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/usuario.dart';
 import '../services/usuario_service.dart';
-import '../utils/biblioteca.dart';
+import '../utils/avatares.dart';
 import '../utils/cores.dart';
-
-class _Jogador {
-  final String id;
-  final String nome;
-  final String pais;
-  const _Jogador(this.id, this.nome, this.pais);
-}
-
-const _jogadores = [
-  _Jogador('messi', 'Messi', 'Argentina'),
-  _Jogador('cr7', 'Cristiano Ronaldo', 'Portugal'),
-  _Jogador('mbappe', 'Mbappé', 'France'),
-  _Jogador('vinicius', 'Vinicius Jr.', 'Brazil'),
-  _Jogador('haaland', 'Haaland', 'Norway'),
-  _Jogador('bellingham', 'Bellingham', 'England'),
-  _Jogador('salah', 'Salah', 'Egypt'),
-  _Jogador('kane', 'Kane', 'England'),
-  _Jogador('yamal', 'Yamal', 'Spain'),
-  _Jogador('pedri', 'Pedri', 'Spain'),
-  _Jogador('de_bruyne', 'De Bruyne', 'Belgium'),
-  _Jogador('rodri', 'Rodri', 'Spain'),
-];
 
 class TelaSetupPerfil extends StatefulWidget {
   const TelaSetupPerfil({super.key, required this.email, required this.senha});
@@ -40,7 +18,7 @@ class TelaSetupPerfil extends StatefulWidget {
 
 class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
   late final TextEditingController _nomeController;
-  String _avatarSelecionado = _jogadores.first.id;
+  String _avatarSelecionado = kJogadores.first.id;
   bool _carregando = false;
   String? _erro;
 
@@ -78,7 +56,7 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
         avatar: _avatarSelecionado,
         criadoEm: DateTime.now(),
       ));
-      // authStateChanges dispara e o main.dart troca para MenuPrincipal automaticamente
+      // authStateChanges dispara e main.dart troca para MenuPrincipal automaticamente
     } on FirebaseAuthException catch (e) {
       setState(() => _erro = _traduzirErro(e.code));
     } finally {
@@ -129,7 +107,6 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
               children: [
-                // Campo de nome
                 Text(
                   'NOME NO BOLÃO',
                   style: GoogleFonts.hankenGrotesk(
@@ -161,8 +138,6 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
                   ),
                 ),
                 const SizedBox(height: 28),
-
-                // Grade de avatares
                 Text(
                   'ESCOLHA SEU AVATAR',
                   style: GoogleFonts.hankenGrotesk(
@@ -182,10 +157,10 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
                     crossAxisSpacing: 10,
                     childAspectRatio: 0.82,
                   ),
-                  itemCount: _jogadores.length,
+                  itemCount: kJogadores.length,
                   itemBuilder: (context, index) {
-                    final jogador = _jogadores[index];
-                    return _CardAvatar(
+                    final jogador = kJogadores[index];
+                    return CardAvatar(
                       jogador: jogador,
                       selecionado: _avatarSelecionado == jogador.id,
                       onTap: () => setState(() => _avatarSelecionado = jogador.id),
@@ -195,8 +170,6 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
               ],
             ),
           ),
-
-          // Barra inferior com botão
           Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
             decoration: const BoxDecoration(
@@ -245,88 +218,6 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _CardAvatar extends StatelessWidget {
-  const _CardAvatar({
-    required this.jogador,
-    required this.selecionado,
-    required this.onTap,
-  });
-
-  final _Jogador jogador;
-  final bool selecionado;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        decoration: BoxDecoration(
-          color: selecionado ? const Color(0xFFE8F5E9) : Cores.surface,
-          border: Border.all(
-            color: selecionado ? Cores.verdePrincipal : Cores.outlineVariant,
-            width: selecionado ? 2.5 : 1,
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Stack(
-              alignment: Alignment.bottomRight,
-              children: [
-                ClipOval(
-                  child: Image.asset(
-                    'assets/avatares/${jogador.id}.jpg',
-                    width: 62,
-                    height: 62,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 62,
-                      height: 62,
-                      color: Cores.surfaceContainerHigh,
-                      child: const Icon(Icons.person_rounded, size: 38, color: Cores.onSurfaceVariant),
-                    ),
-                  ),
-                ),
-                if (selecionado)
-                  Container(
-                    decoration: const BoxDecoration(
-                      color: Cores.verdePrincipal,
-                      shape: BoxShape.circle,
-                    ),
-                    padding: const EdgeInsets.all(2),
-                    child: const Icon(Icons.check_rounded, size: 14, color: Colors.white),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                jogador.nome,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.hankenGrotesk(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Cores.onSurface,
-                ),
-              ),
-            ),
-            Text(
-              flagDe(jogador.pais),
-              style: const TextStyle(fontSize: 14),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/usuario.dart';
 import '../services/usuario_service.dart';
+import '../utils/avatares.dart';
 import '../utils/cores.dart';
 
 class TelaPerfil extends StatelessWidget {
@@ -65,10 +66,7 @@ class _PerfilConteudo extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           'Editar nome',
-          style: GoogleFonts.anybody(
-            fontWeight: FontWeight.w800,
-            color: Cores.onSurface,
-          ),
+          style: GoogleFonts.anybody(fontWeight: FontWeight.w800, color: Cores.onSurface),
         ),
         content: TextField(
           controller: controller,
@@ -91,10 +89,7 @@ class _PerfilConteudo extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              'Cancelar',
-              style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
-            ),
+            child: Text('Cancelar', style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant)),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Cores.verdePrincipal),
@@ -102,10 +97,7 @@ class _PerfilConteudo extends StatelessWidget {
               final valor = controller.text.trim();
               if (valor.isNotEmpty) Navigator.of(ctx).pop(valor);
             },
-            child: Text(
-              'Salvar',
-              style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w700),
-            ),
+            child: Text('Salvar', style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -116,34 +108,59 @@ class _PerfilConteudo extends StatelessWidget {
     }
   }
 
+  void _editarAvatar(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Cores.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _SeletorAvatarSheet(
+        avatarAtual: usuario.avatar,
+        onSelecionado: (id) async {
+          Navigator.of(context).pop();
+          await UsuarioService().atualizarAvatar(usuario.uid, id);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final inicial = usuario.nome.isNotEmpty ? usuario.nome[0].toUpperCase() : '?';
-    const meses = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    const meses = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+        'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
     final data = usuario.criadoEm.toLocal();
     final membroDesde = '${meses[data.month - 1]} de ${data.year}';
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 32, 16, 32),
       children: [
-        // Avatar
+        // Avatar com botão de editar
         Center(
-          child: Container(
-            width: 90,
-            height: 90,
-            decoration: const BoxDecoration(
-              color: Cores.verdePrincipal,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                inicial,
-                style: GoogleFonts.anybody(
-                  fontSize: 40,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
+          child: GestureDetector(
+            onTap: () => _editarAvatar(context),
+            child: Stack(
+              children: [
+                WidgetAvatar(
+                  avatarId: usuario.avatar,
+                  nome: usuario.nome,
+                  tamanho: 90,
                 ),
-              ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Cores.verdePrincipal,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Cores.background, width: 2),
+                    ),
+                    padding: const EdgeInsets.all(6),
+                    child: const Icon(Icons.edit_rounded, size: 14, color: Colors.white),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -158,7 +175,6 @@ class _PerfilConteudo extends StatelessWidget {
           ),
           child: Column(
             children: [
-              // Nome
               _CampoInfo(
                 icone: Icons.person_outline_rounded,
                 label: 'Nome',
@@ -170,14 +186,12 @@ class _PerfilConteudo extends StatelessWidget {
                 ),
               ),
               const Divider(height: 1, color: Cores.outlineVariant, indent: 16, endIndent: 16),
-              // Email
               _CampoInfo(
                 icone: Icons.email_outlined,
                 label: 'E-mail',
                 valor: usuario.email,
               ),
               const Divider(height: 1, color: Cores.outlineVariant, indent: 16, endIndent: 16),
-              // Membro desde
               _CampoInfo(
                 icone: Icons.calendar_today_outlined,
                 label: 'Membro desde',
@@ -204,10 +218,7 @@ class _PerfilConteudo extends StatelessWidget {
                 children: [
                   Text(
                     'Pontuação total',
-                    style: GoogleFonts.hankenGrotesk(
-                      fontSize: 13,
-                      color: Colors.white70,
-                    ),
+                    style: GoogleFonts.hankenGrotesk(fontSize: 13, color: Colors.white70),
                   ),
                   Text(
                     '${usuario.pontuacao} pts',
@@ -227,6 +238,87 @@ class _PerfilConteudo extends StatelessWidget {
     );
   }
 }
+
+// ─── Bottom sheet de seleção de avatar ───────────────────────────────────────
+
+class _SeletorAvatarSheet extends StatefulWidget {
+  const _SeletorAvatarSheet({required this.avatarAtual, required this.onSelecionado});
+
+  final String? avatarAtual;
+  final void Function(String) onSelecionado;
+
+  @override
+  State<_SeletorAvatarSheet> createState() => _SeletorAvatarSheetState();
+}
+
+class _SeletorAvatarSheetState extends State<_SeletorAvatarSheet> {
+  late String? _selecionado;
+
+  @override
+  void initState() {
+    super.initState();
+    _selecionado = widget.avatarAtual;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.65,
+      maxChildSize: 0.9,
+      builder: (_, scrollController) => Column(
+        children: [
+          // Handle
+          Container(
+            margin: const EdgeInsets.only(top: 12, bottom: 16),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Cores.outlineVariant,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Text(
+            'ESCOLHA SEU AVATAR',
+            style: GoogleFonts.anybody(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Cores.verdePrincipal,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: GridView.builder(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 0.82,
+              ),
+              itemCount: kJogadores.length,
+              itemBuilder: (context, index) {
+                final jogador = kJogadores[index];
+                return CardAvatar(
+                  jogador: jogador,
+                  selecionado: _selecionado == jogador.id,
+                  onTap: () {
+                    setState(() => _selecionado = jogador.id);
+                    widget.onSelecionado(jogador.id);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Campo de informação ──────────────────────────────────────────────────────
 
 class _CampoInfo extends StatelessWidget {
   const _CampoInfo({
