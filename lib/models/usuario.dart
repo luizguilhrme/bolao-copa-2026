@@ -7,12 +7,15 @@ class Usuario {
   final int pontuacao;       // pontuação total acumulada no bolão
   final DateTime criadoEm;   // data de cadastro
 
+  final String? avatar;
+
   const Usuario({
     required this.uid,
     required this.email,
     required this.nome,
     this.pontuacao = 0,      // novo usuário começa com zero pontos
     required this.criadoEm,
+    this.avatar,
   });
 
   // fromMap é equivalente ao fromJson do Gson —
@@ -23,8 +26,8 @@ class Usuario {
       email: map['email'] as String,
       nome: map['nome'] as String,
       pontuacao: (map['pontuacao'] as num?)?.toInt() ?? 0,
-      // Timestamp é o tipo de data do Firestore — convertemos para DateTime do Dart
       criadoEm: (map['criadoEm'] as Timestamp).toDate(),
+      avatar: map['avatar'] as String?,
     );
   }
 
@@ -35,10 +38,8 @@ class Usuario {
       'email': email,
       'nome': nome,
       'pontuacao': pontuacao,
-      // FieldValue.serverTimestamp() deixa o servidor do Firebase
-      // registrar o horário exato — mais confiável do que usar DateTime.now()
-      // no celular do usuário, que pode estar com o horário errado
       'criadoEm': FieldValue.serverTimestamp(),
+      if (avatar != null) 'avatar': avatar,
     };
   }
 
@@ -48,6 +49,7 @@ class Usuario {
   Usuario copyWith({
     String? nome,
     int? pontuacao,
+    String? avatar,
   }) {
     return Usuario(
       uid: uid,
@@ -55,6 +57,7 @@ class Usuario {
       nome: nome ?? this.nome,
       pontuacao: pontuacao ?? this.pontuacao,
       criadoEm: criadoEm,
+      avatar: avatar ?? this.avatar,
     );
   }
 }
