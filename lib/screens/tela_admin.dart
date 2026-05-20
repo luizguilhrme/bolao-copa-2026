@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/jogo.dart';
 import '../services/jogo_service.dart';
-import '../services/palpite_service.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 
@@ -193,31 +192,7 @@ class _CardAdminState extends State<_CardAdmin> {
     super.dispose();
   }
 
-  // ── Lógica de pontuação ───────────────────────────────────────────────────
-  // p = palpite, r = resultado real
-  int _calcularPontos(int p1, int p2, int r1, int r2) {
-    // 10 pts — placar exato
-    if (p1 == r1 && p2 == r2) return 10;
-
-    final saldoP = p1 - p2;
-    final saldoR = r1 - r2;
-    // compareTo retorna -1 (time2 venceu), 0 (empate) ou 1 (time1 venceu)
-    final vencP = p1.compareTo(p2);
-    final vencR = r1.compareTo(r2);
-
-    // 7 pts — acertou o vencedor E o saldo de gols
-    if (saldoP == saldoR && vencP == vencR) return 7;
-
-    // 5 pts — acertou apenas o vencedor (sem empate)
-    if (vencP == vencR && vencR != 0) return 5;
-
-    // 4 pts — acertou o empate, mas não o placar exato
-    if (vencP == 0 && vencR == 0) return 4;
-
-    return 0;
-  }
-
-  // ── Salvar placar + recalcular pontos ─────────────────────────────────────
+  // ── Salvar placar — pontuação calculada pela Cloud Function ──────────────
   Future<void> _salvar() async {
     final novoP1 = int.tryParse(_ctrl1.text);
     final novoP2 = int.tryParse(_ctrl2.text);
@@ -230,36 +205,6 @@ class _CardAdminState extends State<_CardAdmin> {
     setState(() => _salvando = true);
 
     try {
-      final palpites =
-      await PalpiteService().buscarTodosPorJogo(widget.jogo.id);
-
-      final batch = FirebaseFirestore.instance.batch();
-
-      for (final palpite in palpites) {
-        int delta = 0;
-
-        if (widget.jogo.placar1 != null && widget.jogo.placar2 != null) {
-          delta -= _calcularPontos(
-            palpite.palpite1, palpite.palpite2,
-            widget.jogo.placar1!, widget.jogo.placar2!,
-          );
-        }
-
-        delta += _calcularPontos(
-          palpite.palpite1, palpite.palpite2,
-          novoP1, novoP2,
-        );
-
-        if (delta != 0) {
-          final userRef = FirebaseFirestore.instance
-              .collection('usuarios')
-              .doc(palpite.uid);
-          // update() falha se o documento não existir (ao contrário de set+merge,
-          // que criaria um documento fantasma só com o campo pontuacao).
-          batch.update(userRef, {'pontuacao': FieldValue.increment(delta)});
-        }
-      }
-
       final jogoSnap = await FirebaseFirestore.instance
           .collection('jogos')
           .where('id', isEqualTo: widget.jogo.id)
@@ -270,13 +215,10 @@ class _CardAdminState extends State<_CardAdmin> {
         throw Exception('Jogo ${widget.jogo.id} não encontrado no Firestore.');
       }
 
-      batch.update(
-        jogoSnap.docs.first.reference, // usa a referência real do documento
-        {'placar1': novoP1, 'placar2': novoP2},
-      );
-
-      await batch.commit();
-
+      await jogoSnap.docs.first.reference.update({
+        'placar1': novoP1,
+        'placar2': novoP2,
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() => _salvando = false);
@@ -284,14 +226,13 @@ class _CardAdminState extends State<_CardAdmin> {
       return;
     }
 
-    // Só chega aqui se o batch teve sucesso
     if (!mounted) return;
     setState(() {
       _salvando = false;
       _salvo = true;
     });
 
-    mostrarMensagem(context, 'Placar salvo e pontuações atualizadas!');
+    mostrarMensagem(context, 'Placar salvo! Pontuações sendo calculadas...');
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) widget.onSalvo();
