@@ -47,4 +47,8 @@ class UsuarioService {
   Future<void> atualizarNome(String uid, String novoNome) async {
     await _colecao.doc(uid).update({'nome': novoNome});
   }
+
+  Future<void> atualizarAvatar(String uid, String avatarId) async {
+    await _colecao.doc(uid).update({'avatar': avatarId});
+  }
 }

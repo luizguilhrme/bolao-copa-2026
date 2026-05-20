@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/usuario.dart';
 import '../services/usuario_service.dart';
+import '../utils/avatares.dart';
 import '../utils/cores.dart';
 import 'tela_admin.dart';
 import 'tela_ajuda.dart';
@@ -287,11 +288,6 @@ class _CabecalhoDrawer extends StatelessWidget {
 
   final Usuario? usuario;
 
-  String get _inicial {
-    final nome = usuario?.nome ?? '';
-    return nome.isNotEmpty ? nome[0].toUpperCase() : '?';
-  }
-
   @override
   Widget build(BuildContext context) {
     final statusBarHeight = MediaQuery.of(context).padding.top;
@@ -303,26 +299,14 @@ class _CabecalhoDrawer extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Avatar com inicial — sem foto de perfil por ora
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Cores.primaryContainer,
-              border:
-              Border.all(color: Colors.white.withOpacity(0.4), width: 2),
-            ),
-            child: Center(
-              child: Text(
-                _inicial,
-                style: GoogleFonts.anybody(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: Cores.verdePrincipal,
-                ),
-              ),
-            ),
+          WidgetAvatar(
+            avatarId: usuario?.avatar,
+            nome: usuario?.nome ?? '',
+            tamanho: 64,
+            corFundo: Cores.primaryContainer,
+            corTexto: Cores.verdePrincipal,
+            borderColor: Colors.white54,
+            borderWidth: 2,
           ),
           const SizedBox(height: 14),
 
