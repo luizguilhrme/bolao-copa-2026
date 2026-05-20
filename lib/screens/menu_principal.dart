@@ -6,6 +6,7 @@ import '../models/usuario.dart';
 import '../services/usuario_service.dart';
 import '../utils/cores.dart';
 import 'tela_admin.dart';
+import 'tela_ajuda.dart';
 import 'tela_home.dart';
 import 'tela_palpites.dart';
 import 'tela_ranking.dart';
@@ -235,7 +236,12 @@ class _DrawerNav extends StatelessWidget {
                 _ItemDrawer(
                   icone: Icons.help_outline_rounded,
                   label: 'Ajuda & FAQ',
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const TelaAjuda()),
+                    );
+                  },
                 ),
               ],
             ),
