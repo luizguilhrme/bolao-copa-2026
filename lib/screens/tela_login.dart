@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../models/usuario.dart';
-import '../services/usuario_service.dart';
 import '../utils/cores.dart';
+import 'tela_setup_perfil.dart';
 
 class TelaLogin extends StatefulWidget {
   const TelaLogin({super.key});
@@ -27,44 +26,36 @@ class _TelaLoginState extends State<TelaLogin> {
   }
 
   Future<void> _entrar() async {
-    setState(() {
-      _carregando = true;
-      _erro = null;
-    });
-
-    try {
-      if (_modoLogin) {
+    if (_modoLogin) {
+      setState(() { _carregando = true; _erro = null; });
+      try {
         await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _senhaController.text.trim(),
         );
-      } else {
-        // Passo 1: cria a conta no Firebase Auth
-        final resultado =
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _senhaController.text.trim(),
-        );
-
-        // Passo 2: usa o UID gerado pelo Auth para criar o perfil no Firestore.
-        // O nome inicial é a parte do e-mail antes do '@' — pode ser editado depois.
-        final uid = resultado.user!.uid;
-        final email = _emailController.text.trim();
-        final nomeInicial = email.split('@').first;
-
-        final usuario = Usuario(
-          uid: uid,
-          email: email,
-          nome: nomeInicial,
-          criadoEm: DateTime.now(), // só para o construtor — o Firestore vai sobrescrever com serverTimestamp
-        );
-
-        await UsuarioService().criarPerfil(usuario);
+      } on FirebaseAuthException catch (e) {
+        setState(() => _erro = _traduzirErro(e.code));
+      } finally {
+        setState(() => _carregando = false);
       }
-    } on FirebaseAuthException catch (e) {
-      setState(() => _erro = _traduzirErro(e.code));
-    } finally {
-      setState(() => _carregando = false);
+    } else {
+      // Valida localmente antes de abrir o setup
+      final email = _emailController.text.trim();
+      final senha = _senhaController.text.trim();
+      if (email.isEmpty || senha.isEmpty) {
+        setState(() => _erro = 'Preencha todos os campos.');
+        return;
+      }
+      if (senha.length < 6) {
+        setState(() => _erro = 'A senha precisa ter pelo menos 6 caracteres.');
+        return;
+      }
+      setState(() => _erro = null);
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => TelaSetupPerfil(email: email, senha: senha),
+        ),
+      );
     }
   }
   String _traduzirErro(String codigo) {
