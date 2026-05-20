@@ -39,23 +39,23 @@ class _TelaLoginState extends State<TelaLogin> {
         setState(() => _carregando = false);
       }
     } else {
-      // Valida localmente antes de abrir o setup
-      final email = _emailController.text.trim();
-      final senha = _senhaController.text.trim();
-      if (email.isEmpty || senha.isEmpty) {
-        setState(() => _erro = 'Preencha todos os campos.');
-        return;
+      setState(() { _carregando = true; _erro = null; });
+      try {
+        final resultado = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _senhaController.text.trim(),
+        );
+        if (!mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => TelaSetupPerfil(user: resultado.user!),
+          ),
+        );
+      } on FirebaseAuthException catch (e) {
+        setState(() => _erro = _traduzirErro(e.code));
+      } finally {
+        if (mounted) setState(() => _carregando = false);
       }
-      if (senha.length < 6) {
-        setState(() => _erro = 'A senha precisa ter pelo menos 6 caracteres.');
-        return;
-      }
-      setState(() => _erro = null);
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => TelaSetupPerfil(email: email, senha: senha),
-        ),
-      );
     }
   }
   String _traduzirErro(String codigo) {
