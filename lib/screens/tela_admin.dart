@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -17,6 +18,7 @@ class TelaAdmin extends StatefulWidget {
 class _TelaAdminState extends State<TelaAdmin> {
   late Future<List<Jogo>> _futureJogos;
   bool _populando = false;
+  bool _recalculando = false;
 
   @override
   void initState() {
@@ -34,6 +36,20 @@ class _TelaAdminState extends State<TelaAdmin> {
       if (mounted) mostrarMensagem(context, 'Erro: $e');
     } finally {
       if (mounted) setState(() => _populando = false);
+    }
+  }
+
+  Future<void> _recalcularTudo() async {
+    setState(() => _recalculando = true);
+    try {
+      final fn = FirebaseFunctions.instanceFor(region: 'southamerica-east1');
+      final result = await fn.httpsCallable('recalcularTudo').call();
+      final atualizados = result.data['atualizados'];
+      if (mounted) mostrarMensagem(context, 'Pontuações recalculadas ($atualizados usuários).');
+    } catch (e) {
+      if (mounted) mostrarMensagem(context, 'Erro ao recalcular: $e');
+    } finally {
+      if (mounted) setState(() => _recalculando = false);
     }
   }
 
@@ -71,15 +87,23 @@ class _TelaAdminState extends State<TelaAdmin> {
           ),
         ),
         centerTitle: true,
-        // TEMPORÁRIO — remover após popular o Firestore
         actions: [
+          _recalculando
+              ? const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.sync_rounded, color: Cores.verdePrincipal),
+                  tooltip: 'Recalcular todas as pontuações',
+                  onPressed: _recalcularTudo,
+                ),
           _populando
               ? const Padding(
                   padding: EdgeInsets.all(14),
-                  child: SizedBox(
-                    width: 20, height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                  child: SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
                 )
               : IconButton(
                   icon: const Icon(Icons.cloud_upload_outlined,

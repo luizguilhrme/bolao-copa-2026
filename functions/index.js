@@ -1,4 +1,5 @@
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
@@ -51,6 +52,54 @@ exports.calcularPontuacao = onDocumentUpdated(
     });
 
     return batch.commit();
+  }
+);
+
+// Recalcula pontuação de TODOS os usuários do zero, a partir dos placares
+// e palpites atuais. Útil para corrigir inconsistências geradas em testes.
+// Só pode ser chamada por um usuário com isAdmin == true no Firestore.
+exports.recalcularTudo = onCall(
+  { region: 'southamerica-east1' },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Não autenticado.');
+    }
+
+    const db = getFirestore();
+
+    const userDoc = await db.collection('usuarios').doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data().isAdmin !== true) {
+      throw new HttpsError('permission-denied', 'Acesso restrito ao admin.');
+    }
+
+    // Indexa jogos com placar por id numérico
+    const jogosSnap = await db.collection('jogos').get();
+    const jogosPorId = {};
+    jogosSnap.forEach((doc) => {
+      const d = doc.data();
+      if (d.placar1 != null && d.placar2 != null) jogosPorId[d.id] = d;
+    });
+
+    // Soma pontos por uid
+    const pontuacaoPorUid = {};
+    const palpitesSnap = await db.collection('palpites').get();
+    palpitesSnap.forEach((doc) => {
+      const p = doc.data();
+      const jogo = jogosPorId[p.jogoId];
+      if (!jogo) return;
+      const pts = calcularPontos(p.palpite1, p.palpite2, jogo.placar1, jogo.placar2);
+      pontuacaoPorUid[p.uid] = (pontuacaoPorUid[p.uid] || 0) + pts;
+    });
+
+    // Sobrescreve pontuacao de todos os usuários com o valor correto (ou 0)
+    const usuariosSnap = await db.collection('usuarios').get();
+    const batch = db.batch();
+    usuariosSnap.forEach((doc) => {
+      batch.update(doc.reference, { pontuacao: pontuacaoPorUid[doc.id] || 0 });
+    });
+    await batch.commit();
+
+    return { atualizados: usuariosSnap.size };
   }
 );
 
