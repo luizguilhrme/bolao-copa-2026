@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/cores.dart';
-import 'tela_setup_perfil.dart';
 
 class TelaLogin extends StatefulWidget {
   const TelaLogin({super.key});
@@ -41,16 +40,11 @@ class _TelaLoginState extends State<TelaLogin> {
     } else {
       setState(() { _carregando = true; _erro = null; });
       try {
-        final resultado = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _senhaController.text.trim(),
         );
-        if (!mounted) return;
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => TelaSetupPerfil(user: resultado.user!),
-          ),
-        );
+        // authStateChanges dispara → main.dart roteia para TelaSetupPerfil automaticamente
       } on FirebaseAuthException catch (e) {
         setState(() => _erro = _traduzirErro(e.code));
       } finally {
