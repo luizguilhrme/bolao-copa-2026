@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import '../models/usuario.dart';
 import '../services/usuario_service.dart';
 import '../utils/cores.dart';
@@ -120,7 +119,9 @@ class _PerfilConteudo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final inicial = usuario.nome.isNotEmpty ? usuario.nome[0].toUpperCase() : '?';
-    final membroDesde = DateFormat("MMMM 'de' yyyy", 'pt_BR').format(usuario.criadoEm.toLocal());
+    const meses = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    final data = usuario.criadoEm.toLocal();
+    final membroDesde = '${meses[data.month - 1]} de ${data.year}';
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 32, 16, 32),
