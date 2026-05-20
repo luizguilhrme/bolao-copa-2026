@@ -43,4 +43,8 @@ class UsuarioService {
       return Usuario.fromMap(doc.data() as Map<String, dynamic>);
     });
   }
+
+  Future<void> atualizarNome(String uid, String novoNome) async {
+    await _colecao.doc(uid).update({'nome': novoNome});
+  }
 }

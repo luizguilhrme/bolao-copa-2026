@@ -8,6 +8,7 @@ import '../utils/cores.dart';
 import 'tela_admin.dart';
 import 'tela_ajuda.dart';
 import 'tela_home.dart';
+import 'tela_perfil.dart';
 import 'tela_palpites.dart';
 import 'tela_ranking.dart';
 import 'tela_tabela.dart';
@@ -196,7 +197,12 @@ class _DrawerNav extends StatelessWidget {
                 _ItemDrawer(
                   icone: Icons.person_outline_rounded,
                   label: 'Meu Perfil',
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const TelaPerfil()),
+                    );
+                  },
                 ),
                 _ItemDrawer(
                   icone: Icons.notifications_outlined,
