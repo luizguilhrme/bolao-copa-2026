@@ -151,6 +151,75 @@ String flagDe(String team) {
   return flags[team] ?? '🏳️';
 }
 
+/// Retorna o nome do país em português a partir do nome em inglês.
+/// Cobre todos os 48 seleções da Copa 2026. Retorna o próprio nome
+/// em inglês como fallback para times não mapeados.
+String nomePtDe(String team) {
+  const nomes = {
+    // Copa 2026 — Grupo A
+    'Mexico': 'México',
+    'South Africa': 'África do Sul',
+    'South Korea': 'Coreia do Sul',
+    'Czech Republic': 'Rep. Tcheca',
+    // Grupo B
+    'Canada': 'Canadá',
+    'Bosnia & Herzegovina': 'Bósnia e Herzeg.',
+    'Qatar': 'Catar',
+    'Switzerland': 'Suíça',
+    // Grupo C
+    'Brazil': 'Brasil',
+    'Morocco': 'Marrocos',
+    'Haiti': 'Haiti',
+    'Scotland': 'Escócia',
+    // Grupo D
+    'USA': 'EUA',
+    'Paraguay': 'Paraguai',
+    'Australia': 'Austrália',
+    'Turkey': 'Turquia',
+    // Grupo E
+    'Germany': 'Alemanha',
+    'Curaçao': 'Curaçao',
+    'Ivory Coast': 'Costa do Marfim',
+    'Ecuador': 'Equador',
+    // Grupo F
+    'Netherlands': 'Países Baixos',
+    'Japan': 'Japão',
+    'Sweden': 'Suécia',
+    'Tunisia': 'Tunísia',
+    // Grupo G
+    'Belgium': 'Bélgica',
+    'Egypt': 'Egito',
+    'Iran': 'Irã',
+    'New Zealand': 'Nova Zelândia',
+    // Grupo H
+    'Spain': 'Espanha',
+    'Cape Verde': 'Cabo Verde',
+    'Saudi Arabia': 'Arábia Saudita',
+    'Uruguay': 'Uruguai',
+    // Grupo I
+    'France': 'França',
+    'Senegal': 'Senegal',
+    'Iraq': 'Iraque',
+    'Norway': 'Noruega',
+    // Grupo J
+    'Argentina': 'Argentina',
+    'Algeria': 'Argélia',
+    'Austria': 'Áustria',
+    'Jordan': 'Jordânia',
+    // Grupo K
+    'Portugal': 'Portugal',
+    'DR Congo': 'Congo',
+    'Uzbekistan': 'Uzbequistão',
+    'Colombia': 'Colômbia',
+    // Grupo L
+    'England': 'Inglaterra',
+    'Croatia': 'Croácia',
+    'Ghana': 'Gana',
+    'Panama': 'Panamá',
+  };
+  return nomes[team] ?? team;
+}
+
 /// Retorna a sigla de 3 letras correspondente ao nome completo do país.
 /// Para times não mapeados, usa as 3 primeiras letras do nome em maiúsculo
 /// como fallback — ex: "Vencedor 73" → "VEN".

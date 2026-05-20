@@ -397,7 +397,7 @@ class _CardJogo extends StatelessWidget {
         Text(flagDe(nome), style: const TextStyle(fontSize: 26)),
         const SizedBox(height: 4),
         Text(
-          nome,
+          nomePtDe(nome),
           textAlign: alinhamento,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
