@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
+import 'models/usuario.dart';
 import 'screens/menu_principal.dart';
 import 'screens/tela_login.dart';
+import 'screens/tela_setup_perfil.dart';
+import 'services/usuario_service.dart';
 import 'utils/cores.dart';
 
 void main() async {
@@ -26,24 +29,46 @@ class MeuApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Cores.verdePrincipal),
         useMaterial3: true,
       ),
-      // StreamBuilder ouve o estado de autenticação em tempo real
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          // Ainda conectando ao Firebase — mostra tela de espera
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
+        builder: (context, authSnapshot) {
+          if (authSnapshot.connectionState == ConnectionState.waiting) {
+            return const _Carregando();
           }
 
-          // snapshot.data é o usuário logado (null = ninguém logado)
-          if (snapshot.hasData) {
-            return const MenuPrincipal(); // logado → vai pro app
+          final firebaseUser = authSnapshot.data;
+          if (firebaseUser == null) {
+            return const TelaLogin();
           }
 
-          return const TelaLogin(); // deslogado → vai pro login
+          // Logado — verifica se o perfil Firestore já foi criado
+          return StreamBuilder<Usuario?>(
+            stream: UsuarioService().observarUsuario(firebaseUser.uid),
+            builder: (context, perfilSnapshot) {
+              if (perfilSnapshot.connectionState == ConnectionState.waiting) {
+                return const _Carregando();
+              }
+              if (perfilSnapshot.data != null) {
+                return const MenuPrincipal();
+              }
+              // Conta criada mas perfil ainda não configurado
+              return TelaSetupPerfil(user: firebaseUser);
+            },
+          );
         },
+      ),
+    );
+  }
+}
+
+class _Carregando extends StatelessWidget {
+  const _Carregando();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(color: Cores.verdePrincipal),
       ),
     );
   }

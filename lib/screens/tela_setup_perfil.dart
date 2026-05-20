@@ -35,9 +35,8 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
   }
 
   Future<void> _voltar() async {
-    // Cancela o cadastro: desfaz a conta criada e volta para o login
+    // Cancela o cadastro: desloga e main.dart volta para TelaLogin automaticamente
     await FirebaseAuth.instance.signOut();
-    if (mounted) Navigator.of(context).pop();
   }
 
   Future<void> _confirmar() async {
@@ -55,8 +54,7 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
         avatar: _avatarSelecionado,
         criadoEm: DateTime.now(),
       ));
-      // Volta para a root — que nesse momento já é o MenuPrincipal
-      if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+      // Perfil criado → stream em main.dart detecta e abre MenuPrincipal automaticamente
     } catch (_) {
       setState(() => _erro = 'Erro ao salvar perfil. Tente novamente.');
     } finally {
