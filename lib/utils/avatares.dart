@@ -15,14 +15,14 @@ const kJogadores = [
   Jogador('cr7', 'Cristiano Ronaldo', 'Portugal'),
   Jogador('mbappe', 'Mbappé', 'France'),
   Jogador('vinicius', 'Vinicius Jr.', 'Brazil'),
+  Jogador('neymar', 'Neymar Jr.', 'Brazil'),
+  Jogador('paqueta', 'Paquetá', 'Brazil'),
   Jogador('haaland', 'Haaland', 'Norway'),
   Jogador('bellingham', 'Bellingham', 'England'),
   Jogador('salah', 'Salah', 'Egypt'),
-  Jogador('kane', 'Kane', 'England'),
   Jogador('yamal', 'Yamal', 'Spain'),
-  Jogador('pedri', 'Pedri', 'Spain'),
-  Jogador('de_bruyne', 'De Bruyne', 'Belgium'),
-  Jogador('rodri', 'Rodri', 'Spain'),
+  Jogador('modric', 'Modrić', 'Croatia'),
+  Jogador('ochoa', 'Ochoa', 'Mexico'),
 ];
 
 // Widget de avatar circular reutilizável.
