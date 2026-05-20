@@ -7,10 +7,9 @@ import '../utils/avatares.dart';
 import '../utils/cores.dart';
 
 class TelaSetupPerfil extends StatefulWidget {
-  const TelaSetupPerfil({super.key, required this.email, required this.senha});
+  const TelaSetupPerfil({super.key, required this.user});
 
-  final String email;
-  final String senha;
+  final User user;
 
   @override
   State<TelaSetupPerfil> createState() => _TelaSetupPerfilState();
@@ -25,7 +24,8 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
   @override
   void initState() {
     super.initState();
-    _nomeController = TextEditingController(text: widget.email.split('@').first);
+    final email = widget.user.email ?? '';
+    _nomeController = TextEditingController(text: email.split('@').first);
   }
 
   @override
@@ -34,46 +34,33 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
     super.dispose();
   }
 
+  Future<void> _voltar() async {
+    // Cancela o cadastro: desfaz a conta criada e volta para o login
+    await FirebaseAuth.instance.signOut();
+    if (mounted) Navigator.of(context).pop();
+  }
+
   Future<void> _confirmar() async {
     final nome = _nomeController.text.trim();
     if (nome.isEmpty) {
       setState(() => _erro = 'Digite seu nome.');
       return;
     }
-    setState(() {
-      _carregando = true;
-      _erro = null;
-    });
+    setState(() { _carregando = true; _erro = null; });
     try {
-      final resultado = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: widget.email,
-        password: widget.senha,
-      );
       await UsuarioService().criarPerfil(Usuario(
-        uid: resultado.user!.uid,
-        email: widget.email,
+        uid: widget.user.uid,
+        email: widget.user.email!,
         nome: nome,
         avatar: _avatarSelecionado,
         criadoEm: DateTime.now(),
       ));
-      // authStateChanges dispara e main.dart troca para MenuPrincipal automaticamente
-    } on FirebaseAuthException catch (e) {
-      setState(() => _erro = _traduzirErro(e.code));
+      // Volta para a root — que nesse momento já é o MenuPrincipal
+      if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (_) {
+      setState(() => _erro = 'Erro ao salvar perfil. Tente novamente.');
     } finally {
       if (mounted) setState(() => _carregando = false);
-    }
-  }
-
-  String _traduzirErro(String codigo) {
-    switch (codigo) {
-      case 'email-already-in-use':
-        return 'Esse e-mail já está cadastrado. Volte e faça login.';
-      case 'weak-password':
-        return 'A senha precisa ter pelo menos 6 caracteres.';
-      case 'invalid-email':
-        return 'E-mail inválido.';
-      default:
-        return 'Ocorreu um erro. Tente novamente.';
     }
   }
 
@@ -87,7 +74,7 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
         shadowColor: Colors.black12,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Cores.verdePrincipal),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _carregando ? null : _voltar,
         ),
         title: const Text(
           'CONFIGURAR PERFIL',
