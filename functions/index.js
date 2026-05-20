@@ -95,7 +95,7 @@ exports.recalcularTudo = onCall(
     const usuariosSnap = await db.collection('usuarios').get();
     const batch = db.batch();
     usuariosSnap.forEach((doc) => {
-      batch.update(doc.reference, { pontuacao: pontuacaoPorUid[doc.id] || 0 });
+      batch.update(doc.ref, { pontuacao: pontuacaoPorUid[doc.id] || 0 });
     });
     await batch.commit();
 
