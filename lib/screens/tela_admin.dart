@@ -8,10 +8,6 @@ import '../services/palpite_service.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 
-// IDs dos jogos que aparecem sem aguardar os 105 min — apenas para testes
-// iniciais. Remover quando a Copa começar de verdade.
-const _jogosTesteIds = {1, 2};
-
 class TelaAdmin extends StatefulWidget {
   const TelaAdmin({super.key});
 
@@ -33,12 +29,8 @@ class _TelaAdminState extends State<TelaAdmin> {
     final agora = DateTime.now();
 
     return todos.where((jogo) {
-      // Exceção de teste — aparecem independente do horário
-      if (_jogosTesteIds.contains(jogo.id)) return true;
-
-      // Regra normal: libera 105 minutos após o início do jogo
       final liberadoEm =
-      jogo.dataHora.toLocal().add(const Duration(minutes: 105));
+          jogo.dataHora.toLocal().add(const Duration(minutes: 105));
       return agora.isAfter(liberadoEm);
     }).toList();
   }
@@ -123,7 +115,6 @@ class _TelaAdminState extends State<TelaAdmin> {
             separatorBuilder: (_, __) => const SizedBox(height: 16),
             itemBuilder: (_, i) => _CardAdmin(
               jogo: jogos[i],
-              eTeste: _jogosTesteIds.contains(jogos[i].id),
               onSalvo: () => setState(() { _futureJogos = _carregarElegiveis(); }),
             ),
           );
@@ -138,12 +129,10 @@ class _TelaAdminState extends State<TelaAdmin> {
 class _CardAdmin extends StatefulWidget {
   const _CardAdmin({
     required this.jogo,
-    required this.eTeste,
     required this.onSalvo,
   });
 
   final Jogo jogo;
-  final bool eTeste;
   final VoidCallback onSalvo;
 
   @override
@@ -328,37 +317,13 @@ class _CardAdminState extends State<_CardAdmin> {
                   ),
                 ),
 
-                // Horário + chip de teste
-                Row(
-                  children: [
-                    if (widget.eTeste) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Cores.secondaryContainer,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          'TESTE',
-                          style: GoogleFonts.hankenGrotesk(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: Cores.onSecondaryContainer,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    Text(
-                      _horario,
-                      style: GoogleFonts.hankenGrotesk(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Cores.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                Text(
+                  _horario,
+                  style: GoogleFonts.hankenGrotesk(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Cores.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
