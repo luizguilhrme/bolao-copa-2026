@@ -278,17 +278,9 @@ class Bandeira extends StatelessWidget {
         ),
       );
     }
-    return SizedBox(
-      width: tamanho,
-      height: tamanho,
-      child: FittedBox(
-        fit: BoxFit.cover,
-        clipBehavior: Clip.hardEdge,
-        child: CountryFlag.fromCountryCode(
-          iso,
-          theme: ImageTheme(width: tamanho * 2.2, height: tamanho),
-        ),
-      ),
+    return CountryFlag.fromCountryCode(
+      iso,
+      theme: ImageTheme(width: tamanho, height: tamanho),
     );
   }
 }
