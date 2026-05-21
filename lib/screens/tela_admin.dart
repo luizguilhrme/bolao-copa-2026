@@ -423,24 +423,25 @@ class _Time extends StatelessWidget {
         Container(
           width: 48,
           height: 48,
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Cores.surfaceContainerHigh,
             border: Border.all(color: Cores.outlineVariant),
           ),
-          child: Center(
-            child: Text(flagDe(nome), style: const TextStyle(fontSize: 26)),
-          ),
+          child: Bandeira(nome, tamanho: 48),
         ),
         const SizedBox(height: 6),
         Text(
-          siglaDe(nome),
+          nomePtDe(nome),
           style: GoogleFonts.anybody(
-            fontSize: 18,
+            fontSize: 12,
             fontWeight: FontWeight.w600,
             color: Cores.onSurface,
           ),
           textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );

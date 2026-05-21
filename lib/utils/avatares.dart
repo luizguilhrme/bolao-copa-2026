@@ -176,10 +176,7 @@ class CardAvatar extends StatelessWidget {
                 ),
               ),
             ),
-            Text(
-              flagDe(jogador.pais),
-              style: const TextStyle(fontSize: 14),
-            ),
+            Bandeira(jogador.pais, tamanho: 14),
           ],
         ),
       ),

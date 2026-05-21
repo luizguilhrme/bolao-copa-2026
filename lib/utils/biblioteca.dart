@@ -1,3 +1,4 @@
+import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 
 // =============================================================================
@@ -218,6 +219,67 @@ String nomePtDe(String team) {
     'Panama': 'Panamá',
   };
   return nomes[team] ?? team;
+}
+
+/// Retorna o código ISO 3166-1 alpha-2 do país (ex: 'BR', 'FR').
+/// Para nações do Reino Unido usa o formato de subdivisão (ex: 'GB-ENG').
+/// Retorna string vazia como fallback para times não mapeados.
+String isoDe(String team) {
+  const isos = {
+    // Copa 2026 — todos os 48 times
+    'Mexico': 'MX', 'Canada': 'CA', 'Brazil': 'BR', 'Argentina': 'AR',
+    'France': 'FR', 'Germany': 'DE', 'Spain': 'ES', 'Portugal': 'PT',
+    'Netherlands': 'NL', 'Belgium': 'BE', 'Croatia': 'HR', 'Morocco': 'MA',
+    'Japan': 'JP', 'South Korea': 'KR', 'Australia': 'AU', 'Senegal': 'SN',
+    'Ecuador': 'EC', 'Uruguay': 'UY', 'Colombia': 'CO', 'Iran': 'IR',
+    'Saudi Arabia': 'SA', 'Qatar': 'QA', 'Turkey': 'TR', 'Switzerland': 'CH',
+    'Austria': 'AT', 'Norway': 'NO', 'Sweden': 'SE', 'Denmark': 'DK',
+    'Algeria': 'DZ', 'Tunisia': 'TN', 'Egypt': 'EG', 'Ghana': 'GH',
+    'Ivory Coast': 'CI', 'DR Congo': 'CD', 'Nigeria': 'NG', 'Cameroon': 'CM',
+    'New Zealand': 'NZ', 'Panama': 'PA', 'Paraguay': 'PY', 'South Africa': 'ZA',
+    'Iraq': 'IQ', 'Jordan': 'JO', 'Serbia': 'RS', 'Czech Republic': 'CZ',
+    'Cape Verde': 'CV', 'Uzbekistan': 'UZ', 'Haiti': 'HT',
+    'Bosnia & Herzegovina': 'BA', 'Curaçao': 'CW',
+    // UK nações com subdivison ISO 3166-2
+    'England': 'GB-ENG', 'Wales': 'GB-WLS', 'Scotland': 'GB-SCT',
+    // Outros países que aparecem nos dados
+    'USA': 'US', 'United States': 'US', 'Poland': 'PL', 'Ukraine': 'UA',
+    'Slovakia': 'SK', 'Hungary': 'HU', 'Romania': 'RO', 'Greece': 'GR',
+    'Chile': 'CL', 'Peru': 'PE', 'Venezuela': 'VE', 'Bolivia': 'BO',
+    'Indonesia': 'ID', 'Vietnam': 'VN', 'China': 'CN', 'Philippines': 'PH',
+    'Ireland': 'IE', 'Finland': 'FI', 'Iceland': 'IS', 'Israel': 'IL',
+    'UAE': 'AE', 'Kuwait': 'KW', 'Guatemala': 'GT', 'El Salvador': 'SV',
+    'Trinidad and Tobago': 'TT', 'Cuba': 'CU', 'Costa Rica': 'CR',
+    'Honduras': 'HN', 'Jamaica': 'JM', 'Kenya': 'KE', 'Tanzania': 'TZ',
+    'Uganda': 'UG', 'Mali': 'ML',
+  };
+  return isos[team] ?? '';
+}
+
+/// Widget que exibe a bandeira de um país como imagem (via country_flags).
+/// [tamanho] define largura e altura em pixels lógicos.
+/// Para uso em containers circulares, o pai deve usar clipBehavior: Clip.antiAlias.
+/// Mostra '🏳️' como fallback para times não mapeados.
+class Bandeira extends StatelessWidget {
+  const Bandeira(this.team, {super.key, this.tamanho = 24});
+
+  final String team;
+  final double tamanho;
+
+  @override
+  Widget build(BuildContext context) {
+    final iso = isoDe(team);
+    if (iso.isEmpty) {
+      return SizedBox(
+        width: tamanho,
+        height: tamanho,
+        child: Center(
+          child: Text('🏳️', style: TextStyle(fontSize: tamanho * 0.5)),
+        ),
+      );
+    }
+    return CountryFlag.fromCountryCode(iso, height: tamanho, width: tamanho);
+  }
 }
 
 /// Retorna a sigla de 3 letras correspondente ao nome completo do país.
