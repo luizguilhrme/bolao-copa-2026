@@ -27,8 +27,6 @@ exports.calcularPontuacao = onDocumentUpdated(
       .where('jogoId', '==', jogoId)
       .get();
 
-    if (palpitesSnap.empty) return null;
-
     // Lê ranking atual (antes do batch) para calcular mudanças de posição
     const usuariosSnap = await db.collection('usuarios').orderBy('pontuacao', 'desc').get();
     const rankingAntes = {};
@@ -50,6 +48,22 @@ exports.calcularPontuacao = onDocumentUpdated(
       delta += calcularPontos(p.palpite1, p.palpite2, depois.placar1, depois.placar2);
       if (delta !== 0) deltasPorUid[p.uid] = (deltasPorUid[p.uid] || 0) + delta;
     });
+
+    // Regra −1: na primeira vez que o resultado é inserido, penaliza usuários
+    // sem palpite que criaram conta antes do início do jogo.
+    const primeiraVez = antes.placar1 == null || antes.placar2 == null;
+    if (primeiraVez) {
+      const comPalpite = new Set(palpitesSnap.docs.map((d) => d.data().uid));
+      const gameDataHora = depois.dataHora?.toDate?.();
+      if (gameDataHora) {
+        usuariosSnap.docs.forEach((doc) => {
+          if (comPalpite.has(doc.id)) return;
+          const criadoEm = doc.data().criadoEm?.toDate?.();
+          if (!criadoEm || criadoEm >= gameDataHora) return;
+          deltasPorUid[doc.id] = (deltasPorUid[doc.id] || 0) - 1;
+        });
+      }
+    }
 
     if (Object.keys(deltasPorUid).length === 0) return null;
 
@@ -195,15 +209,33 @@ exports.recalcularTudo = onCall(
 
     const pontuacaoPorUid = {};
     const palpitesSnap = await db.collection('palpites').get();
+
+    // Indexa palpites por jogo para detectar ausências
+    const palpitesPorJogo = {};
     palpitesSnap.forEach((doc) => {
       const p = doc.data();
       const jogo = jogosPorId[p.jogoId];
       if (!jogo) return;
       const pts = calcularPontos(p.palpite1, p.palpite2, jogo.placar1, jogo.placar2);
       pontuacaoPorUid[p.uid] = (pontuacaoPorUid[p.uid] || 0) + pts;
+      if (!palpitesPorJogo[p.jogoId]) palpitesPorJogo[p.jogoId] = new Set();
+      palpitesPorJogo[p.jogoId].add(p.uid);
     });
 
     const usuariosSnap = await db.collection('usuarios').get();
+
+    // Regra −1: penaliza ausência de palpite em jogos após o cadastro do usuário
+    usuariosSnap.forEach((doc) => {
+      const criadoEm = doc.data().criadoEm?.toDate?.();
+      if (!criadoEm) return;
+      for (const [jogoId, jogo] of Object.entries(jogosPorId)) {
+        if (palpitesPorJogo[jogoId]?.has(doc.id)) continue;
+        const gameDataHora = jogo.dataHora?.toDate?.();
+        if (!gameDataHora || criadoEm >= gameDataHora) continue;
+        pontuacaoPorUid[doc.id] = (pontuacaoPorUid[doc.id] || 0) - 1;
+      }
+    });
+
     const batch = db.batch();
     usuariosSnap.forEach((doc) => {
       batch.update(doc.ref, { pontuacao: pontuacaoPorUid[doc.id] || 0 });

@@ -59,6 +59,11 @@ class TelaAjuda extends StatelessWidget {
             descricao: 'Errou tudo',
             exemplo: 'Nenhum critério acima',
           ),
+          const _ItemPontuacao(
+            pontos: -1,
+            descricao: 'Esqueceu de palpitar',
+            exemplo: 'Sem palpite registrado antes do jogo',
+          ),
           const SizedBox(height: 32),
           _SecaoHeader(icone: Icons.help_outline_rounded, titulo: 'PERGUNTAS FREQUENTES'),
           const SizedBox(height: 8),
@@ -88,14 +93,15 @@ class TelaAjuda extends StatelessWidget {
           const _FaqItem(
             pergunta: 'O que acontece se eu não palpitar em um jogo?',
             resposta:
-                'Você simplesmente fica com zero naquele jogo. '
-                'Não há penalidade por não palpitar.',
+                'Se você não registrar um palpite em um jogo disputado após a sua data de cadastro, '
+                'você perde 1 ponto (−1). Jogos disputados antes do seu cadastro não geram penalidade.',
           ),
           const _FaqItem(
             pergunta: 'Posso ver os palpites dos outros participantes?',
             resposta:
-                'Não — os palpites são privados. Você só vê os seus próprios. '
-                'O ranking mostra apenas a pontuação total de cada jogador.',
+                'Sim — após o jogo ser encerrado, você pode tocar no card de qualquer jogador no Ranking '
+                'para ver os palpites dele. Na Tabela de jogos, toque em um jogo encerrado para ver '
+                'todos os palpites registrados, ordenados por pontuação.',
           ),
         ],
       ),
@@ -145,6 +151,7 @@ class _ItemPontuacao extends StatelessWidget {
   final String exemplo;
 
   Color get _corBadge {
+    if (pontos == -1) return const Color(0xFFE53935);
     if (pontos == 10) return const Color(0xFF006D32);
     if (pontos == 7) return const Color(0xFF1B7F3A);
     if (pontos == 5) return const Color(0xFF4CAF50);

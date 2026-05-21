@@ -5,8 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/jogo.dart';
 import '../models/palpite.dart';
+import '../models/usuario.dart';
 import '../services/jogo_service.dart';
 import '../services/palpite_service.dart';
+import '../services/usuario_service.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 
@@ -54,6 +56,7 @@ String _formatarCriadoEm(DateTime? dt) {
 
 Color _corFundo(int? pontos) {
   if (pontos == null) return Cores.surface;
+  if (pontos == -1) return const Color(0xFFE53935).withOpacity(0.08);
   if (pontos == 10) return const Color(0xFF006D32).withOpacity(0.08);
   if (pontos == 7) return const Color(0xFF1B7F3A).withOpacity(0.08);
   if (pontos == 5) return const Color(0xFF4CAF50).withOpacity(0.08);
@@ -63,6 +66,7 @@ Color _corFundo(int? pontos) {
 
 Color _corBorda(int? pontos) {
   if (pontos == null) return Cores.outlineVariant;
+  if (pontos == -1) return const Color(0xFFE53935);
   if (pontos == 10) return const Color(0xFF006D32);
   if (pontos == 7) return const Color(0xFF1B7F3A);
   if (pontos == 5) return const Color(0xFF4CAF50);
@@ -71,6 +75,7 @@ Color _corBorda(int? pontos) {
 }
 
 Color _corBadge(int pontos) {
+  if (pontos == -1) return const Color(0xFFE53935);
   if (pontos == 10) return const Color(0xFF006D32);
   if (pontos == 7) return const Color(0xFF1B7F3A);
   if (pontos == 5) return const Color(0xFF4CAF50);
@@ -104,6 +109,7 @@ class _TelaPalpitesState extends State<TelaPalpites> {
   int _datasVisiveis = 1;
   List<_ItemResultado> _resultados = [];
 
+  DateTime? _criadoEm;
   Timer? _timer;
   final _uid = FirebaseAuth.instance.currentUser!.uid;
 
@@ -129,9 +135,11 @@ class _TelaPalpitesState extends State<TelaPalpites> {
       final results = await Future.wait([
         JogoService().buscarTodos(),
         PalpiteService().buscarTodosPorUsuario(_uid),
+        UsuarioService().buscarPorUid(_uid),
       ]);
       _todosJogos = results[0] as List<Jogo>;
       final palpites = results[1] as List<Palpite>;
+      _criadoEm = (results[2] as Usuario?)?.criadoEm;
       _palpitesMap = {for (final p in palpites) p.jogoId: p};
       _reclassificar(preservarDatasVisiveis: false);
     } catch (_) {
@@ -158,13 +166,15 @@ class _TelaPalpitesState extends State<TelaPalpites> {
         // Bloqueado, ao vivo ou encerrado
         final palpite = _palpitesMap[jogo.id];
         int? pontos;
-        if (jogo.placar1 != null &&
-            jogo.placar2 != null &&
-            palpite != null) {
-          pontos = _calcularPontos(
-            palpite.palpite1, palpite.palpite2,
-            jogo.placar1!, jogo.placar2!,
-          );
+        if (jogo.placar1 != null && jogo.placar2 != null) {
+          if (palpite != null) {
+            pontos = _calcularPontos(
+              palpite.palpite1, palpite.palpite2,
+              jogo.placar1!, jogo.placar2!,
+            );
+          } else if (_criadoEm != null && jogo.dataHora.isAfter(_criadoEm!)) {
+            pontos = -1;
+          }
         }
         resultados.add(
             _ItemResultado(jogo: jogo, palpite: palpite, pontos: pontos));
@@ -1074,6 +1084,23 @@ class _BadgePontos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (pontos == -1) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE53935),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          '−1 pt',
+          style: GoogleFonts.anybody(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: Colors.white),
+        ),
+      );
+    }
+
     if (!temPalpite) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

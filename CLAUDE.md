@@ -32,12 +32,13 @@ To populate Firestore with the 104 games, use the upload button in TelaAdmin (ad
 
 **Admin access:** Gated by `isAdmin: true` in the user's Firestore document. Checked once at session start in `MenuPrincipal._verificarAdmin()`. Admin screen (`TelaAdmin`) lets the admin enter final scores; saving a score triggers the `calcularPontuacao` Cloud Function which recalculates `pontuacao` for every user who palpited that game, then sends FCM ranking-change notifications.
 
-**Scoring (implemented in both `tela_admin.dart` and `tela_palpites.dart`):**
+**Scoring (implemented in `tela_palpites.dart` and Cloud Function `calcularPontuacao`/`recalcularTudo`):**
 - 10 pts — exact score
 - 7 pts — correct winner + correct goal difference
 - 5 pts — correct winner only
 - 4 pts — correct draw (wrong score)
 - 0 pts — none of the above
+- −1 pt — forgot to palpite (only applies to games after the user's `criadoEm`)
 
 **Palpite cutoff:** palpites are locked 5 minutes before game start. Admin unlock: 105 minutes after game start (IDs 1 and 2 are always unlocked for testing — see `_jogosTesteIds` in `tela_admin.dart`).
 
