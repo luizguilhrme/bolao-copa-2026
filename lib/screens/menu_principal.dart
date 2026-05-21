@@ -41,14 +41,37 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
     _inicializarFcm();
   }
 
+  void _navegarPorNotificacao(Map<String, dynamic> data) {
+    final tela = data['tela'] as String?;
+    if (tela == 'palpites') {
+      setState(() => _indiceNav = 1);
+    } else if (tela == 'ranking') {
+      setState(() => _indiceNav = 2);
+    }
+  }
+
   Future<void> _inicializarFcm() async {
     await NotificacoesService().inicializar(_uid);
 
-    // Exibe SnackBar quando a notificação chega com o app em foreground.
+    // App estava fechado quando a notificação foi tocada.
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialMessage != null && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _navegarPorNotificacao(initialMessage.data),
+      );
+    }
+
+    // App estava em background quando a notificação foi tocada.
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      if (mounted) _navegarPorNotificacao(message.data);
+    });
+
+    // App em foreground — exibe SnackBar com botão "Ver".
     FirebaseMessaging.onMessage.listen((message) {
       final titulo = message.notification?.title ?? '';
       final corpo = message.notification?.body ?? '';
       if (!mounted || corpo.isEmpty) return;
+      final tela = message.data['tela'] as String?;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Cores.verdePrincipal,
@@ -73,6 +96,13 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
               ),
             ],
           ),
+          action: tela != null
+              ? SnackBarAction(
+                  label: 'VER',
+                  textColor: Cores.secondaryContainer,
+                  onPressed: () => _navegarPorNotificacao(message.data),
+                )
+              : null,
         ),
       );
     });
