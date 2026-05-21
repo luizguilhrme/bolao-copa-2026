@@ -44,7 +44,7 @@ To populate Firestore with the 104 games, use the upload button in TelaAdmin (ad
 ## Code conventions
 
 - All identifiers, comments, and UI strings are in **Brazilian Portuguese**.
-- Utility functions in `lib/utils/biblioteca.dart` are top-level (no wrapping class): `flagDe()`, `siglaDe()`, `formatarData()`, `mostrarMensagem()`.
+- Utility functions in `lib/utils/biblioteca.dart` are top-level (no wrapping class): `flagDe()`, `siglaDe()`, `isoDe()`, `nomePtDe()`, `formatarData()`, `mostrarMensagem()`. The `Bandeira` widget is also defined there — it renders a real flag image via `country_flags` package using `isoDe()` to map team names to ISO 3166-1 alpha-2 codes. For circular containers, the parent must set `clipBehavior: Clip.antiAlias`.
 - Color palette is entirely in `lib/utils/cores.dart` (`Cores` class — never instantiated). Primary green is `Cores.verdePrincipal`.
 - Two fonts from `google_fonts`: `GoogleFonts.anybody()` for headings/labels, `GoogleFonts.hankenGrotesk()` for body text.
 - `Jogo.dataHora` is a computed getter that parses `date`+`time` strings (including UTC offset like `"15:00 UTC-4"`) into a UTC `DateTime`. Always call `.toLocal()` before displaying times to the user.
@@ -250,6 +250,7 @@ firebase_auth: ^5.3.1
 cloud_firestore: ^5.4.4
 cloud_functions: ^5.1.0
 firebase_messaging: ^15.1.0
+country_flags: ^2.0.0
 google_fonts: ^6.2.1
 intl: ^0.19.0
 ```
@@ -345,16 +346,19 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - Alterna entre login e cadastro com `AnimatedSwitcher`
 - Erros do Firebase Auth traduzidos para português
 - Cadastro: cria conta no Auth + perfil no Firestore via `UsuarioService`
+- Navegação por Enter: Enter no e-mail move o foco para a senha; Enter na senha submete o formulário
 
 ### `tela_home.dart` — implementada
 - Carrossel de jogos do dia (Firestore) com chip AO VIVO
 - Bento grid de navegação para Palpites, Ranking e Tabela
 - Callback `onNavegar` recebido do `MenuPrincipal`
+- Cards do carrossel exibem bandeiras reais (`Bandeira`) e nome completo em português (`nomePtDe`)
 
 ### `tela_tabela.dart` — implementada
 - Tabs "Próximos" / "Resultados" com `AnimatedContainer`
 - `CustomScrollView` com slivers agrupados por seção
 - Chip AO VIVO com ponto pulsante via `AnimationController`
+- Exibe bandeiras reais (`Bandeira`) e nomes em português (`nomePtDe`)
 
 ### `tela_palpites.dart` — implementada
 - Duas abas: **Próximos** e **Resultados**
@@ -363,6 +367,9 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - **Aba Próximos:** jogos disponíveis para palpite (mais de 5 min antes do início); "Ver mais" carrega próxima data; trava impede salvar após o cutoff
 - **Aba Resultados:** chip "PRESTES A COMEÇAR" (amarelo, <5 min), "AO VIVO" (pulsante), ou horário; cards encerrados coloridos pela pontuação; badge de pontos; "Registrado em DD/MM às HHhMM"
 - Palpite precarregado pelo pai — `_CardPalpite` não faz query individual
+- Bandeiras reais (`Bandeira`) e nome completo em português nos cards de ambas as abas
+- **Navegação por Enter:** Enter no gol 1 → foco para gol 2; Enter no gol 2 → salva o palpite e move o foco para o gol 1 do próximo card; se não houver próximo card, fecha o teclado
+- `_AbaProximos` é `StatefulWidget` gerenciando uma lista de `FocusNode` (um por card visível); reconstruída ao mudar o número de cards visíveis (ex: "Ver mais")
 
 ### `tela_ranking.dart` — implementada
 - `StreamBuilder` direto no Firestore → ranking atualiza em tempo real
@@ -371,7 +378,7 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 
 ### `tela_admin.dart` — implementada (acesso exclusivo via drawer)
 - Filtra jogos elegíveis: 105 min após o início
-- Card com pré-preenchimento se já tiver placar (modo correção)
+- Card com pré-preenchimento se já tiver placar (modo correção); exibe bandeiras reais e nomes em português
 - Ao salvar: atualiza `placar1`/`placar2` no Firestore → Cloud Function `calcularPontuacao` dispara automaticamente
 - Botão de popular jogos abre dialog pedindo **Teste** (`jogos_teste.json`) ou **Produção** (`jogos.json`)
 - Botão de recalcular chama a Cloud Function `recalcularTudo` (admin only)
@@ -473,6 +480,12 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 - `EmailAuthProvider.credential` + `reauthenticateWithCredential` — reautenticação necessária para operações sensíveis (updatePassword, delete)
 - Converter `StatelessWidget` em `StatefulWidget` — padrão quando um widget filho precisa de estado próprio (ex: `_PerfilConteudo`)
 - `showDialog<T>` retornando valor via `Navigator.of(ctx).pop(valor)` — comunicação do dialog de volta ao chamador
+- `FocusNode` + `FocusScope.of(context).requestFocus()` — navegação programática entre campos de texto
+- `TextInputAction.next` / `.done` + `onSubmitted` — ação do botão Enter no teclado virtual
+- `FocusNode` compartilhado entre pai e filho — pai cria o nó, filho usa como `focusNode` no `TextField`; permite que o pai solicite foco externamente
+- Gerenciar lista de `FocusNode` em `StatefulWidget` com `didUpdateWidget` para recriar nós quando o número de itens muda
+- `CountryFlag.fromCountryCode(iso, height: h, width: w)` do pacote `country_flags` — renderiza bandeiras como imagens SVG por código ISO 3166-1 alpha-2; suporta subdivisões como `GB-ENG`, `GB-WLS`, `GB-SCT`
+- `Container.clipBehavior: Clip.antiAlias` com `BoxDecoration(shape: BoxShape.circle)` — recorta o filho (ex: imagem de bandeira) em formato circular
 
 ---
 
@@ -494,4 +507,3 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 
 1. **Regras de segurança do Firestore** — substituir modo de teste por regras reais antes do lançamento (ex: usuário só lê/escreve seus próprios palpites; só admin escreve em jogos)
 2. **Popular com dados de produção** — clicar em Popular → Produção quando a Copa começar (11/jun)
-3. **Tradução dos nomes dos países** para português no Firestore (baixa prioridade)
