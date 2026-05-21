@@ -662,22 +662,35 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
             child: Column(
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Bandeira(j.team1, tamanho: 28),
-                    const SizedBox(width: 8),
-                    Text(
-                      nomePtDe(j.team1),
-                      style: GoogleFonts.anybody(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                    // Time 1: nome à direita, bandeira na ponta
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              nomePtDe(j.team1),
+                              style: GoogleFonts.anybody(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                              textAlign: TextAlign.end,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Bandeira(j.team1, tamanho: 26),
+                        ],
                       ),
                     ),
+                    // Placar central
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       child: Text(
-                        '${j.placar1}  ×  ${j.placar2}',
+                        '${j.placar1}×${j.placar2}',
                         style: GoogleFonts.anybody(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
@@ -685,16 +698,28 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
                         ),
                       ),
                     ),
-                    Text(
-                      nomePtDe(j.team2),
-                      style: GoogleFonts.anybody(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                    // Time 2: bandeira na ponta, nome à esquerda
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: [
+                          Bandeira(j.team2, tamanho: 26),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              nomePtDe(j.team2),
+                              style: GoogleFonts.anybody(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Bandeira(j.team2, tamanho: 28),
                   ],
                 ),
                 const SizedBox(height: 4),
