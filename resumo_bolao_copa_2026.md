@@ -35,7 +35,8 @@ C:\bolao\
       palpite.dart            ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
     screens/
       menu_principal.dart     ← shell com drawer lateral, AppBar, IndexedStack, NavigationBar;
-                                 inicializa FCM; exibe SnackBar para mensagens em foreground
+                                 inicializa FCM; deep linking via notificação (onMessageOpenedApp,
+                                 getInitialMessage); SnackBar com botão VER em foreground
       tela_home.dart          ← jogos de hoje (Firestore) + bento grid de navegação
       tela_login.dart         ← login e cadastro; navegação por Enter entre campos
       tela_setup_perfil.dart  ← seleção de avatar no primeiro acesso (pós-cadastro)
@@ -309,6 +310,8 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 
 ### `tela_home.dart` — implementada
 - Carrossel de jogos do dia (Firestore) com chip AO VIVO
+- Jogos com placar já inserido vão para o final do carrossel; chip "ENCERRADO" (bolinha cinza) e placar real exibido
+- AO VIVO exibe "0 – 0" (nunca exibe null); aviso "O placar é atualizado somente ao final da partida." abaixo do carrossel
 - Bento grid de navegação para Palpites, Ranking e Tabela
 - Callback `onNavegar` recebido do `MenuPrincipal`
 - Cards exibem bandeiras reais (`Bandeira`) e nome completo em português (`nomePtDe`)
@@ -332,8 +335,8 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 
 ### `tela_ranking.dart` — implementada
 - `StreamBuilder` direto no Firestore → ranking atualiza em tempo real
-- Pódio visual para top 3 (1º = amarelo/troféu, 2º = prata, 3º = bronze)
-- Lista para 4º em diante; usuário logado destacado com borda verde
+- Pódio visual para top 3: avatar real (foto do jogador via `WidgetAvatar`); fundo do degrau dourado/prata (`Color(0xFFC0C0C0)`)/bronze (`Color(0xFFCD7F32)`); texto em `Cores.onSurface`
+- Lista para 4º em diante com avatar real; usuário logado destacado com borda verde
 
 ### `tela_admin.dart` — implementada (acesso exclusivo via drawer)
 - Filtra jogos elegíveis: 105 min após o início (IDs 1 e 2 sempre desbloqueados para teste)
@@ -371,6 +374,8 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 | `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação de todos os usuários do zero |
 
 **FCM token management:** token salvo em `usuarios/{uid}.fcmToken`. Tokens inválidos são removidos automaticamente (`messaging/registration-token-not-registered`).
+
+**Deep linking via notificação:** payload FCM inclui `data: { tela: 'palpites' }` (lembrete) ou `data: { tela: 'ranking' }` (ranking). `MenuPrincipal` lê esse campo em `onMessageOpenedApp`, `getInitialMessage` e no `onMessage` (SnackBar com botão VER) para navegar para a aba correta.
 
 ---
 
@@ -482,6 +487,8 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 - Gerenciar lista de `FocusNode` em `StatefulWidget` com `didUpdateWidget` para recriar nós quando o número de itens muda
 - `CountryFlag.fromCountryCode(iso, height: h, width: w)` do pacote `country_flags` — renderiza bandeiras como imagens SVG por código ISO 3166-1 alpha-2; suporta subdivisões como `GB-ENG`, `GB-WLS`, `GB-SCT`
 - `Container.clipBehavior: Clip.antiAlias` com `BoxDecoration(shape: BoxShape.circle)` — recorta o filho em formato circular
+- `FittedBox(fit: BoxFit.cover, clipBehavior: Clip.hardEdge)` com `CountryFlag(width: tamanho * 2.2)` — força bandeira a preencher o círculo sem letterboxing (largura 2.2× garante que flags até 2:1 preencham a altura)
+- `FirebaseMessaging.onMessageOpenedApp` — stream disparado quando usuário toca na notificação com app em background; `getInitialMessage()` — recupera notificação que abriu o app quando estava fechado; usados juntos para deep linking FCM
 
 ---
 
