@@ -8,14 +8,18 @@ class Usuario {
   final DateTime criadoEm;   // data de cadastro
 
   final String? avatar;
+  final String? palpiteCampeao;
+  final String? palpiteArtilheiro;
 
   const Usuario({
     required this.uid,
     required this.email,
     required this.nome,
-    this.pontuacao = 0,      // novo usuário começa com zero pontos
+    this.pontuacao = 0,
     required this.criadoEm,
     this.avatar,
+    this.palpiteCampeao,
+    this.palpiteArtilheiro,
   });
 
   // fromMap é equivalente ao fromJson do Gson —
@@ -28,6 +32,8 @@ class Usuario {
       pontuacao: (map['pontuacao'] as num?)?.toInt() ?? 0,
       criadoEm: (map['criadoEm'] as Timestamp).toDate(),
       avatar: map['avatar'] as String?,
+      palpiteCampeao: map['palpiteCampeao'] as String?,
+      palpiteArtilheiro: map['palpiteArtilheiro'] as String?,
     );
   }
 
@@ -50,6 +56,8 @@ class Usuario {
     String? nome,
     int? pontuacao,
     String? avatar,
+    String? palpiteCampeao,
+    String? palpiteArtilheiro,
   }) {
     return Usuario(
       uid: uid,
@@ -58,6 +66,8 @@ class Usuario {
       pontuacao: pontuacao ?? this.pontuacao,
       criadoEm: criadoEm,
       avatar: avatar ?? this.avatar,
+      palpiteCampeao: palpiteCampeao ?? this.palpiteCampeao,
+      palpiteArtilheiro: palpiteArtilheiro ?? this.palpiteArtilheiro,
     );
   }
 }

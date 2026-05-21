@@ -40,7 +40,8 @@ service cloud.firestore {
       allow update: if request.auth != null
         && request.auth.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['nome', 'avatar', 'fcmToken', 'notifLembretes', 'notifRanking']);
+             .hasOnly(['nome', 'avatar', 'fcmToken', 'notifLembretes', 'notifRanking',
+                       'palpiteCampeao', 'palpiteArtilheiro']);
 
       allow delete: if request.auth != null && request.auth.uid == uid;
     }
