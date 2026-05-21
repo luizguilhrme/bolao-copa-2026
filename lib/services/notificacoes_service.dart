@@ -1,12 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 
 class NotificacoesService {
   final _messaging = FirebaseMessaging.instance;
   final _firestore = FirebaseFirestore.instance;
 
   Future<void> inicializar(String uid) async {
+    // Push notifications não são suportadas na versão web (PWA iOS/desktop).
+    if (kIsWeb) return;
+
     final settings = await _messaging.requestPermission(
       alert: true,
       badge: true,
