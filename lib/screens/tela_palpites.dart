@@ -347,7 +347,7 @@ class _BotaoAba extends StatelessWidget {
 
 // ─── Aba Próximos ─────────────────────────────────────────────────────────────
 
-class _AbaProximos extends StatelessWidget {
+class _AbaProximos extends StatefulWidget {
   const _AbaProximos({
     super.key,
     required this.grupos,
@@ -366,8 +366,53 @@ class _AbaProximos extends StatelessWidget {
   final void Function(Palpite) onPalpiteSalvo;
 
   @override
+  State<_AbaProximos> createState() => _AbaProximosState();
+}
+
+class _AbaProximosState extends State<_AbaProximos> {
+  final List<FocusNode> _focusNodes = [];
+
+  int get _totalCards => widget.datasAtivas.fold<int>(
+      0, (s, d) => s + (widget.grupos[d]?.length ?? 0));
+
+  @override
+  void initState() {
+    super.initState();
+    _reconstruirFocusNodes(_totalCards);
+  }
+
+  @override
+  void didUpdateWidget(_AbaProximos old) {
+    super.didUpdateWidget(old);
+    final total = _totalCards;
+    if (total != _focusNodes.length) _reconstruirFocusNodes(total);
+  }
+
+  void _reconstruirFocusNodes(int count) {
+    for (final fn in _focusNodes) { fn.dispose(); }
+    _focusNodes
+      ..clear()
+      ..addAll(List.generate(count, (_) => FocusNode()));
+  }
+
+  @override
+  void dispose() {
+    for (final fn in _focusNodes) { fn.dispose(); }
+    super.dispose();
+  }
+
+  void _onSalvoComEnter(int index) {
+    final next = index + 1;
+    if (next < _focusNodes.length) {
+      _focusNodes[next].requestFocus();
+    } else {
+      FocusScope.of(context).unfocus();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (grupos.isEmpty) {
+    if (widget.grupos.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -392,54 +437,62 @@ class _AbaProximos extends StatelessWidget {
       );
     }
 
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-          sliver: SliverToBoxAdapter(
-            child: Text(
-              'Insira seus placares para os próximos jogos.',
-              style: GoogleFonts.hankenGrotesk(
-                  fontSize: 15, color: Cores.onSurfaceVariant),
-            ),
+    final slivers = <Widget>[
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+        sliver: SliverToBoxAdapter(
+          child: Text(
+            'Insira seus placares para os próximos jogos.',
+            style: GoogleFonts.hankenGrotesk(
+                fontSize: 15, color: Cores.onSurfaceVariant),
           ),
         ),
+      ),
+    ];
 
-        for (final chave in datasAtivas) ...[
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            sliver: SliverToBoxAdapter(
-              child: _CabecalhoData(dataChave: chave),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                    (_, i) => Padding(
-                  padding: const EdgeInsets.only(top: 16, bottom: 4),
-                  child: _CardPalpite(
-                    jogo: grupos[chave]![i],
-                    palpiteInicial: palpitesMap[grupos[chave]![i].id],
-                    onPalpiteSalvo: onPalpiteSalvo,
-                  ),
+    int cardIndex = 0;
+    for (final chave in widget.datasAtivas) {
+      final jogos = widget.grupos[chave]!;
+      final baseIndex = cardIndex;
+
+      slivers.add(SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        sliver: SliverToBoxAdapter(child: _CabecalhoData(dataChave: chave)),
+      ));
+      slivers.add(SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        sliver: SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (_, i) {
+              final idx = baseIndex + i;
+              return Padding(
+                padding: const EdgeInsets.only(top: 16, bottom: 4),
+                child: _CardPalpite(
+                  jogo: jogos[i],
+                  palpiteInicial: widget.palpitesMap[jogos[i].id],
+                  onPalpiteSalvo: widget.onPalpiteSalvo,
+                  focusCtrl1: idx < _focusNodes.length ? _focusNodes[idx] : null,
+                  onSalvoComEnter: () => _onSalvoComEnter(idx),
                 ),
-                childCount: grupos[chave]!.length,
-              ),
-            ),
-          ),
-        ],
-
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
-          sliver: SliverToBoxAdapter(
-            child: temMais
-                ? _BotaoVerMais(onTap: onVerMais)
-                : const _FimDaLista(),
+              );
+            },
+            childCount: jogos.length,
           ),
         ),
-      ],
-    );
+      ));
+      cardIndex += jogos.length;
+    }
+
+    slivers.add(SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+      sliver: SliverToBoxAdapter(
+        child: widget.temMais
+            ? _BotaoVerMais(onTap: widget.onVerMais)
+            : const _FimDaLista(),
+      ),
+    ));
+
+    return CustomScrollView(slivers: slivers);
   }
 }
 
@@ -493,11 +546,15 @@ class _CardPalpite extends StatefulWidget {
     required this.jogo,
     required this.palpiteInicial,
     required this.onPalpiteSalvo,
+    this.focusCtrl1,
+    this.onSalvoComEnter,
   });
 
   final Jogo jogo;
   final Palpite? palpiteInicial;
   final void Function(Palpite) onPalpiteSalvo;
+  final FocusNode? focusCtrl1;
+  final VoidCallback? onSalvoComEnter;
 
   @override
   State<_CardPalpite> createState() => _CardPalpiteState();
@@ -530,7 +587,7 @@ class _CardPalpiteState extends State<_CardPalpite> {
     super.dispose();
   }
 
-  Future<void> _salvar() async {
+  Future<void> _salvar({bool fromEnter = false}) async {
     // Trava de segurança: impede salvar após o cutoff de 5 min
     if (_estaBloqueado(widget.jogo)) {
       mostrarMensagem(context, 'Palpites encerrados para este jogo.');
@@ -568,7 +625,11 @@ class _CardPalpiteState extends State<_CardPalpite> {
       _salvo = true;
       _salvando = false;
     });
-    FocusScope.of(context).unfocus();
+    if (fromEnter && widget.onSalvoComEnter != null) {
+      widget.onSalvoComEnter!();
+    } else {
+      FocusScope.of(context).unfocus();
+    }
     widget.onPalpiteSalvo(novoPalpite);
   }
 
@@ -608,7 +669,9 @@ class _CardPalpiteState extends State<_CardPalpite> {
                   flex: 2,
                   child: _InputsProximos(
                       ctrl1: _ctrl1, ctrl2: _ctrl2, salvo: _salvo,
-                      focusCtrl2: _focusCtrl2, onSalvar: _salvar)),
+                      focusCtrl1: widget.focusCtrl1,
+                      focusCtrl2: _focusCtrl2,
+                      onSalvar: () => _salvar(fromEnter: true))),
               Expanded(child: _Time(nome: widget.jogo.team2)),
             ],
           ),
@@ -1049,6 +1112,7 @@ class _InputsProximos extends StatelessWidget {
     required this.ctrl1,
     required this.ctrl2,
     required this.salvo,
+    this.focusCtrl1,
     this.focusCtrl2,
     this.onSalvar,
   });
@@ -1056,6 +1120,7 @@ class _InputsProximos extends StatelessWidget {
   final TextEditingController ctrl1;
   final TextEditingController ctrl2;
   final bool salvo;
+  final FocusNode? focusCtrl1;
   final FocusNode? focusCtrl2;
   final VoidCallback? onSalvar;
 
@@ -1067,6 +1132,7 @@ class _InputsProximos extends StatelessWidget {
         _CampoGol(
           controller: ctrl1,
           salvo: salvo,
+          focusNode: focusCtrl1,
           textInputAction: TextInputAction.next,
           onSubmitted: focusCtrl2 != null
               ? (_) => focusCtrl2!.requestFocus()
