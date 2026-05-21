@@ -6,14 +6,9 @@ import '../models/jogo.dart';
 class JogoService {
   final CollectionReference _colecao = FirebaseFirestore.instance.collection('jogos');
 
-  // Lê o jogos.json dos assets, converte para objetos Dart,
-  // e grava todos no Firestore em uma única operação em lote.
-  Future<void> popularJogosNoFirestore() async {
-    // rootBundle é o sistema de assets do Flutter.
-    // loadString lê o arquivo como texto — equivalente ao
-    // open(getAssets(), "dados/jogos.json") do Android.
-    final jsonString =
-    await rootBundle.loadString('assets/dados/jogos.json');
+  Future<void> popularJogosNoFirestore({bool teste = false}) async {
+    final asset = teste ? 'assets/dados/jogos_teste.json' : 'assets/dados/jogos.json';
+    final jsonString = await rootBundle.loadString(asset);
 
     // jsonDecode transforma a String em uma List<dynamic>,
     // onde cada item é um Map<String, dynamic> — um jogo.
