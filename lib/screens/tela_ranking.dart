@@ -299,7 +299,7 @@ class _ColunaPodio extends StatelessWidget {
           width: double.infinity,
           height: alturaBase,
           decoration: BoxDecoration(
-            color: corBase,
+            color: corBorda,
             borderRadius:
             const BorderRadius.vertical(top: Radius.circular(12)),
             border: Border.all(
@@ -318,7 +318,7 @@ class _ColunaPodio extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                   color: posicao == 1
                       ? Cores.onSecondaryContainer
-                      : corBorda,
+                      : Cores.onSurface,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
@@ -332,7 +332,7 @@ class _ColunaPodio extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                   color: posicao == 1
                       ? Cores.onSecondaryContainer
-                      : corBorda,
+                      : Cores.onSurface,
                 ),
               ),
               Text(
@@ -342,7 +342,7 @@ class _ColunaPodio extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                   color: posicao == 1
                       ? Cores.onSecondaryContainer
-                      : corBorda,
+                      : Cores.onSurfaceVariant,
                 ),
               ),
               if (euSou) ...[
