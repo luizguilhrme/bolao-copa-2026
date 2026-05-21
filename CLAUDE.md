@@ -17,7 +17,7 @@ flutter test test/foo_test.dart  # run a single test file
 flutter build apk        # build Android APK
 ```
 
-To populate Firestore with the 104 games from the local JSON asset, call `JogoService().popularJogosNoFirestore()` once (e.g., temporarily from a button or `main()`).
+To populate Firestore with the 104 games, use the upload button in TelaAdmin (admin only). A dialog will ask whether to use production (`jogos.json`) or test data (`jogos_teste.json`). The test dataset has dates shifted −25 days and results pre-filled for past games.
 
 ## Architecture
 
@@ -30,7 +30,7 @@ To populate Firestore with the 104 games from the local JSON asset, call `JogoSe
 
 **Auth routing:** `main.dart` wraps the app in a `StreamBuilder<User?>` on `FirebaseAuth.instance.authStateChanges()`. Logged-in users go to `MenuPrincipal`; logged-out users go to `TelaLogin`.
 
-**Admin access:** Gated by `isAdmin: true` in the user's Firestore document. Checked once at session start in `MenuPrincipal._verificarAdmin()`. Admin screen (`TelaAdmin`) lets the admin enter final scores; saving a score triggers a Firestore batch that recalculates and updates `pontuacao` for every user who made a palpite on that game.
+**Admin access:** Gated by `isAdmin: true` in the user's Firestore document. Checked once at session start in `MenuPrincipal._verificarAdmin()`. Admin screen (`TelaAdmin`) lets the admin enter final scores; saving a score triggers the `calcularPontuacao` Cloud Function which recalculates `pontuacao` for every user who palpited that game, then sends FCM ranking-change notifications.
 
 **Scoring (implemented in both `tela_admin.dart` and `tela_palpites.dart`):**
 - 10 pts — exact score
@@ -73,34 +73,45 @@ To populate Firestore with the 104 games from the local JSON asset, call `JogoSe
 C:\bolao\
   assets/
     dados/
-      jogos.json              ← 104 jogos da Copa 2026 (não declarado no pubspec.yaml;
-                                 mantido em disco como referência — dados já populados
-                                 no Firestore via WriteBatch. Declarar temporariamente
-                                 no pubspec.yaml quando precisar rodar popularJogosNoFirestore)
+      jogos.json              ← 104 jogos com datas reais da Copa 2026
+      jogos_teste.json        ← 104 jogos com datas deslocadas -25 dias;
+                                 jogos antes de 21/05/2026 já têm resultados
+    avatares/                 ← imagens dos jogadores para seleção de avatar
+  functions/
+    index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
+                                 calcularPontuacao, lembretesPalpite, recalcularTudo
   lib/
-    main.dart                 ← configuração + inicialização Firebase + StreamBuilder de auth
+    main.dart                 ← Firebase init + FCM background handler + StreamBuilder de auth
     firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
     models/
       jogo.dart               ← model com fromJson, fromMap, toMap e getter dataHora
       usuario.dart            ← model com fromMap, toMap e copyWith
       palpite.dart            ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
     screens/
-      menu_principal.dart     ← shell com drawer lateral, AppBar, IndexedStack, NavigationBar
+      menu_principal.dart     ← shell com drawer lateral, AppBar, IndexedStack, NavigationBar;
+                                 inicializa FCM; exibe SnackBar para mensagens em foreground
       tela_home.dart          ← jogos de hoje (Firestore) + bento grid de navegação
       tela_login.dart         ← login e cadastro com design do Stitch
+      tela_setup_perfil.dart  ← seleção de avatar no primeiro acesso (pós-cadastro)
+      tela_perfil.dart        ← exibe/edita nome e avatar; alterar senha; excluir conta
+      tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
       tela_palpites.dart      ← duas abas: Próximos (com palpites) e Resultados
       tela_ranking.dart       ← ranking em tempo real com pódio e lista
       tela_tabela.dart        ← lista os 104 jogos com seções e tabs
-      tela_admin.dart         ← tela exclusiva do admin para inserir placares
+      tela_admin.dart         ← inserção de placares; dialog Teste/Produção no popular jogos
+      tela_ajuda.dart         ← FAQ estático
     services/
-      jogo_service.dart       ← popularJogosNoFirestore, buscarTodos, buscarPorData
-      usuario_service.dart    ← criarPerfil, buscarPorUid, observarUsuario
+      jogo_service.dart       ← popularJogosNoFirestore({bool teste}), buscarTodos, buscarPorData
+      usuario_service.dart    ← criarPerfil, buscarPorUid, observarUsuario,
+                                 atualizarNome, atualizarAvatar
       palpite_service.dart    ← salvar, buscarPorJogo, buscarTodosPorUsuario,
                                  buscarPorUsuario, buscarTodosPorJogo
+      notificacoes_service.dart ← inicializar FCM, salvar token, buscar/atualizar prefs
     utils/
       cores.dart              ← constantes de cores (Cores.verdePrincipal etc)
       biblioteca.dart         ← funções utilitárias top-level (flagDe, siglaDe,
                                  formatarData, mostrarMensagem)
+      avatares.dart           ← lista kJogadores + widgets WidgetAvatar e CardAvatar
   pubspec.yaml
 ```
 
@@ -115,8 +126,9 @@ C:\bolao\
 - IDs dos documentos Firestore sempre iguais ao identificador da entidade (UID do usuário, id do jogo) — garante idempotência e busca O(1)
 - Funções utilitárias compartilhadas são declaradas como funções top-level em `biblioteca.dart`, não como métodos `static` de uma classe wrapper — padrão idiomático em Dart
 - Comunicação de filho para pai via callback (`void Function(int)`) — o `MenuPrincipal` passa `onNavegar` para a `TelaHome`
-- Cálculo de pontuação feito no cliente (app), não em Cloud Functions — placares inseridos manualmente pelo admin via `tela_admin.dart`
+- Cálculo de pontuação feito na Cloud Function `calcularPontuacao` (trigger Firestore) — admin insere placar pelo app, função recalcula pontos e envia notificações de ranking
 - Palpites precarregados em lote (`buscarTodosPorUsuario`) ao abrir a tela, sem query individual por card
+- Notificações via FCM: `lembretesPalpite` (scheduled */30min) + `calcularPontuacao` envia ranking change. Token salvo no campo `fcmToken` do documento do usuário
 
 ---
 
@@ -173,10 +185,10 @@ leading: Builder(
 ```
 
 ### Drawer lateral
-- Cabeçalho verde com avatar (inicial do nome), nome e pontuação via `StreamBuilder<Usuario?>`
-- Seção "CONTA": Meu Perfil, Notificações, Configurações
+- Cabeçalho verde com avatar do jogador selecionado, nome e pontuação via `StreamBuilder<Usuario?>`
+- Seção "CONTA": Meu Perfil → `TelaPerfil`; Notificações → `TelaNotificacoes`
 - Seção "ADMIN" (só para `isAdmin == true`): Atualizar Placares → navega para `TelaAdmin`
-- Seção "SUPORTE": Ajuda & FAQ
+- Seção "SUPORTE": Ajuda & FAQ → `TelaAjuda`
 - Rodapé: botão Sair que chama `FirebaseAuth.instance.signOut()`
 
 ### Verificação de admin
@@ -236,6 +248,8 @@ android {
 firebase_core: ^3.6.0
 firebase_auth: ^5.3.1
 cloud_firestore: ^5.4.4
+cloud_functions: ^5.1.0
+firebase_messaging: ^15.1.0
 google_fonts: ^6.2.1
 intl: ^0.19.0
 ```
@@ -252,12 +266,16 @@ intl: ^0.19.0
 ID do documento = UID do Firebase Auth.
 
 ```
-uid         : String
-email       : String
-nome        : String   — parte antes do @ no cadastro
-pontuacao   : Number   — começa em 0; atualizado via FieldValue.increment()
-criadoEm    : Timestamp
-isAdmin     : Boolean  — campo opcional; adicionado manualmente no Console
+uid             : String
+email           : String
+nome            : String    — parte antes do @ no cadastro
+pontuacao       : Number    — começa em 0; atualizado via FieldValue.increment()
+criadoEm        : Timestamp
+avatar          : String?   — id do jogador selecionado no setup de perfil
+isAdmin         : Boolean   — campo opcional; adicionado manualmente no Console
+fcmToken        : String?   — token FCM do dispositivo; salvo pelo NotificacoesService
+notifLembretes  : Boolean?  — padrão true quando ausente
+notifRanking    : Boolean?  — padrão true quando ausente
 ```
 
 ### `jogos`
@@ -352,11 +370,31 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - Lista para 4º em diante; usuário logado destacado com borda verde
 
 ### `tela_admin.dart` — implementada (acesso exclusivo via drawer)
-- Filtra jogos elegíveis: 105 min após o início (ou IDs de teste configurados em `_jogosTesteIds`)
+- Filtra jogos elegíveis: 105 min após o início
 - Card com pré-preenchimento se já tiver placar (modo correção)
-- Ao salvar: `buscarTodosPorJogo` → calcula delta de pontos para cada palpite → `WriteBatch` atômico atualiza placar + pontuações de todos os participantes
-- Correção de placar: subtrai pontos antigos antes de adicionar os novos (evita dupla contagem)
-- Busca o documento do jogo por `where('id', isEqualTo: jogoId)` em vez de `.doc(id.toString())` — evita `not-found` quando o ID do documento não bate com o campo
+- Ao salvar: atualiza `placar1`/`placar2` no Firestore → Cloud Function `calcularPontuacao` dispara automaticamente
+- Botão de popular jogos abre dialog pedindo **Teste** (`jogos_teste.json`) ou **Produção** (`jogos.json`)
+- Botão de recalcular chama a Cloud Function `recalcularTudo` (admin only)
+
+### `tela_perfil.dart` — implementada
+- Exibe avatar do jogador com botão de troca (bottom sheet grid)
+- Edição de nome inline via dialog
+- Alterar senha: dialog com senha atual + nova senha + confirmação + reautenticação
+- Excluir conta: dialog com senha para confirmação; remove doc Firestore + conta Auth
+
+### `tela_notificacoes.dart` — implementada
+- Toggle **Lembrete de palpite**: notificação 30 min antes de jogos sem palpite
+- Toggle **Mudança no ranking**: notificação quando posição no ranking muda
+- Prefs salvas nos campos `notifLembretes` / `notifRanking` do documento do usuário
+- Auto-save a cada toggle
+
+### `tela_setup_perfil.dart` — implementada
+- Exibida após cadastro, antes de entrar no app
+- Seleção de avatar obrigatória (grid de jogadores)
+- Salva `avatar` no Firestore via `UsuarioService.atualizarAvatar`
+
+### `tela_ajuda.dart` — implementada
+- FAQ estático com perguntas e respostas expansíveis
 
 ---
 
@@ -429,13 +467,31 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 - `addPostFrameCallback` para executar código após o frame atual terminar
 - `.clamp(min, max)` para limitar valores numéricos
 - `WidgetsBinding.instance.addPostFrameCallback` para evitar conflito de setState
+- `@pragma('vm:entry-point')` — necessário para funções top-level chamadas pelo runtime nativo (ex: handler de background do FCM)
+- `FirebaseMessaging.onBackgroundMessage` — registra handler para mensagens com app fechado; deve ser top-level
+- `FirebaseMessaging.onMessage` — stream de mensagens com app em foreground (não exibe notificação automaticamente)
+- `EmailAuthProvider.credential` + `reauthenticateWithCredential` — reautenticação necessária para operações sensíveis (updatePassword, delete)
+- Converter `StatelessWidget` em `StatefulWidget` — padrão quando um widget filho precisa de estado próprio (ex: `_PerfilConteudo`)
+- `showDialog<T>` retornando valor via `Navigator.of(ctx).pop(valor)` — comunicação do dialog de volta ao chamador
+
+---
+
+## Cloud Functions — visão geral
+
+Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 22).
+
+| Função | Tipo | O que faz |
+|---|---|---|
+| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula delta de pontuação para cada palpite; envia FCM de ranking para quem mudou de posição |
+| `lembretesPalpite` | Schedule (`*/30 * * * *`) | Notifica usuários sem palpite em jogos que começam em ~30 min |
+| `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação de todos os usuários do zero |
+
+**FCM token management:** token salvo em `usuarios/{uid}.fcmToken`. Tokens inválidos são removidos automaticamente (`messaging/registration-token-not-registered`).
 
 ---
 
 ## Próximos passos (na ordem recomendada)
 
 1. **Regras de segurança do Firestore** — substituir modo de teste por regras reais antes do lançamento (ex: usuário só lê/escreve seus próprios palpites; só admin escreve em jogos)
-2. **Remover IDs de teste** da `tela_admin.dart` (`_jogosTesteIds`) quando a Copa começar
+2. **Popular com dados de produção** — clicar em Popular → Produção quando a Copa começar (11/jun)
 3. **Tradução dos nomes dos países** para português no Firestore (baixa prioridade)
-4. **Logout** já funciona via drawer — considerar também botão de perfil dedicado
-5. **Telas pendentes no drawer:** Meu Perfil, Notificações, Configurações, Ajuda & FAQ
