@@ -183,7 +183,7 @@ String nomePtDe(String team) {
     'Ivory Coast': 'Costa do Marfim',
     'Ecuador': 'Equador',
     // Grupo F
-    'Netherlands': 'Países Baixos',
+    'Netherlands': 'Holanda',
     'Japan': 'Japão',
     'Sweden': 'Suécia',
     'Tunisia': 'Tunísia',
@@ -266,9 +266,19 @@ class Bandeira extends StatelessWidget {
   final String team;
   final double tamanho;
 
+  // country_flags 2.x só suporta ISO 3166-1 alpha-2 (2 letras).
+  // Nações do Reino Unido usam subdivision codes (GB-ENG etc.) que o pacote
+  // não reconhece — tratamos com emoji de texto, que funciona no Android/iOS.
+  static const _emojiUk = {
+    'GB-ENG': '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+    'GB-SCT': '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
+    'GB-WLS': '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
+  };
+
   @override
   Widget build(BuildContext context) {
     final iso = isoDe(team);
+
     if (iso.isEmpty) {
       return SizedBox(
         width: tamanho,
@@ -278,6 +288,18 @@ class Bandeira extends StatelessWidget {
         ),
       );
     }
+
+    final emoji = _emojiUk[iso];
+    if (emoji != null) {
+      return SizedBox(
+        width: tamanho,
+        height: tamanho,
+        child: Center(
+          child: Text(emoji, style: TextStyle(fontSize: tamanho * 0.75)),
+        ),
+      );
+    }
+
     return SizedBox(
       width: tamanho,
       height: tamanho,
