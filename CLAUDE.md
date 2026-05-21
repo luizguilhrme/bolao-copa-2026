@@ -286,8 +286,10 @@ criadoEm        : Timestamp
 avatar          : String?   — id do jogador selecionado no setup de perfil
 isAdmin         : Boolean   — campo opcional; adicionado manualmente no Console
 fcmToken        : String?   — token FCM do dispositivo; salvo pelo NotificacoesService
-notifLembretes  : Boolean?  — padrão true quando ausente
-notifRanking    : Boolean?  — padrão true quando ausente
+notifLembretes     : Boolean?  — padrão true quando ausente
+notifRanking       : Boolean?  — padrão true quando ausente
+palpiteCampeao     : String?   — nome em inglês do time (ex: "Brazil"); salvo via UsuarioService.salvarPalpiteEspecial
+palpiteArtilheiro  : String?   — nome livre do jogador; bloqueado após início do primeiro jogo
 ```
 
 ### `jogos`
@@ -363,7 +365,12 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - Carrossel de jogos do dia (Firestore) com chip AO VIVO
 - Jogos com placar já inserido vão para o final do carrossel; chip "ENCERRADO" (bolinha cinza) e placar real exibido
 - AO VIVO exibe "0 – 0" (nunca exibe null); aviso "O placar é atualizado somente ao final da partida." abaixo do carrossel
-- Bento grid de navegação para Palpites, Ranking e Tabela
+- Bento grid de navegação: MEUS PALPITES, CLASSIFICAÇÃO, CAMPEÃO & ARTILHEIRO, TODOS OS JOGOS
+- Card CAMPEÃO & ARTILHEIRO (azul) abre `_DialogPalpiteEspecial`:
+  - Campo de texto livre para artilheiro
+  - Lista rolável com todos os 48 times (ordenados por nome em PT) com bandeiras para seleção do campeão
+  - Bloqueio automático após início do primeiro jogo (verifica `dataHora` do jogo mais antigo)
+  - Pré-preenche com palpites já salvos no Firestore
 - Callback `onNavegar` recebido do `MenuPrincipal`
 - Cards exibem bandeiras reais (`Bandeira`) e nome completo em português (`nomePtDe`)
 
@@ -389,7 +396,9 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - `StreamBuilder` direto no Firestore → ranking atualiza em tempo real
 - Pódio visual para top 3: avatar real (foto do jogador via `WidgetAvatar`); fundo do degrau dourado/prata (`Color(0xFFC0C0C0)`)/bronze (`Color(0xFFCD7F32)`)
 - Lista para 4º em diante com avatar real; usuário logado destacado com borda verde
-- Tocar em qualquer card (pódio ou lista) abre dialog com palpites do usuário nos jogos encerrados, ordenados do mais recente para o mais antigo; cada linha mostra bandeiras + siglas + resultado, palpite e badge de pontos
+- Tocar em qualquer card (pódio ou lista) abre `_DialogPalpitesUsuario`:
+  - Cabeçalho verde com avatar + nome; se o usuário tiver palpiteCampeao/palpiteArtilheiro, exibe em destaque (container semitransparente) com bandeira do campeão e nome do artilheiro
+  - Lista dos palpites nos jogos encerrados, ordenados do mais recente para o mais antigo; cada linha mostra bandeiras + siglas + resultado, palpite e badge de pontos
 
 ### `tela_admin.dart` — implementada (acesso exclusivo via drawer)
 - Filtra jogos elegíveis: 105 min após o início
@@ -528,6 +537,5 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 
 ## Próximos passos (na ordem recomendada)
 
-1. **Regras de segurança do Firestore** — substituir modo de teste por regras reais antes do lançamento (ex: usuário só lê/escreve seus próprios palpites; só admin escreve em jogos)
-2. **Google Play Internal Testing** — conta Play Console aguardando verificação de identidade; quando aprovada: criar keystore, configurar signing no `build.gradle.kts`, build AAB, upload no Play Console
-3. **Popular com dados de produção** — clicar em Popular → Produção quando a Copa começar (11/jun)
+1. **Google Play Internal Testing** — conta Play Console aguardando verificação de identidade; quando aprovada: criar keystore, configurar signing no `build.gradle.kts`, build AAB, upload no Play Console
+2. **Popular com dados de produção** — clicar em Popular → Produção quando a Copa começar (11/jun)
