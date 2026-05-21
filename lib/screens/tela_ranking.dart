@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/usuario.dart';
+import '../utils/avatares.dart';
 import '../utils/cores.dart';
 
 class TelaRanking extends StatelessWidget {
@@ -225,15 +226,8 @@ class _ColunaPodio extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             Container(
-              width: _tamanhoAvatar,
-              height: _tamanhoAvatar,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: corBorda.withOpacity(0.2),
-                border: Border.all(
-                  color: corBorda,
-                  width: posicao == 1 ? 4 : 3,
-                ),
                 boxShadow: [
                   BoxShadow(
                     color: corBorda.withOpacity(0.4),
@@ -241,15 +235,13 @@ class _ColunaPodio extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Center(
-                child: Text(
-                  _inicial(usuario.nome),
-                  style: GoogleFonts.anybody(
-                    fontSize: posicao == 1 ? 28 : 22,
-                    fontWeight: FontWeight.w800,
-                    color: Cores.onSurface,
-                  ),
-                ),
+              child: WidgetAvatar(
+                avatarId: usuario.avatar,
+                nome: usuario.nome,
+                tamanho: _tamanhoAvatar,
+                corFundo: corBorda.withOpacity(0.2),
+                borderColor: corBorda,
+                borderWidth: posicao == 1 ? 4 : 3,
               ),
             ),
 
@@ -324,7 +316,9 @@ class _ColunaPodio extends StatelessWidget {
                 style: GoogleFonts.anybody(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: Cores.onSurface,
+                  color: posicao == 1
+                      ? Cores.onSecondaryContainer
+                      : corBorda,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
@@ -338,7 +332,7 @@ class _ColunaPodio extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                   color: posicao == 1
                       ? Cores.onSecondaryContainer
-                      : Cores.onSurface,
+                      : corBorda,
                 ),
               ),
               Text(
@@ -346,7 +340,9 @@ class _ColunaPodio extends StatelessWidget {
                 style: GoogleFonts.hankenGrotesk(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
-                  color: Cores.onSurfaceVariant,
+                  color: posicao == 1
+                      ? Cores.onSecondaryContainer
+                      : corBorda,
                 ),
               ),
               if (euSou) ...[
@@ -375,8 +371,6 @@ class _ColunaPodio extends StatelessWidget {
     );
   }
 
-  String _inicial(String nome) =>
-      nome.isNotEmpty ? nome[0].toUpperCase() : '?';
 }
 
 // ─── Item da lista (4º em diante) ─────────────────────────────────────────────
@@ -391,9 +385,6 @@ class _ItemRanking extends StatelessWidget {
   final int posicao;
   final Usuario usuario;
   final bool euSou;
-
-  String get _inicial =>
-      usuario.nome.isNotEmpty ? usuario.nome[0].toUpperCase() : '?';
 
   @override
   Widget build(BuildContext context) {
@@ -436,31 +427,14 @@ class _ItemRanking extends StatelessWidget {
           ),
           const SizedBox(width: 12),
 
-          // Avatar com inicial
-          Container(
-            width: euSou ? 48 : 44,
-            height: euSou ? 48 : 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: euSou
-                  ? Cores.verdePrincipal
-                  : Cores.surfaceContainerHigh,
-              border: Border.all(
-                color: euSou
-                    ? Cores.verdePrincipal
-                    : Cores.outlineVariant,
-              ),
-            ),
-            child: Center(
-              child: Text(
-                _inicial,
-                style: GoogleFonts.anybody(
-                  fontSize: euSou ? 20 : 18,
-                  fontWeight: FontWeight.w800,
-                  color: euSou ? Colors.white : Cores.onSurface,
-                ),
-              ),
-            ),
+          // Avatar
+          WidgetAvatar(
+            avatarId: usuario.avatar,
+            nome: usuario.nome,
+            tamanho: euSou ? 48 : 44,
+            corFundo: euSou ? Cores.verdePrincipal : Cores.surfaceContainerHigh,
+            corTexto: euSou ? Colors.white : Cores.onSurface,
+            borderColor: euSou ? Cores.verdePrincipal : Cores.outlineVariant,
           ),
           const SizedBox(width: 12),
 
