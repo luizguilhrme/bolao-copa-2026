@@ -1,14 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/usuario.dart';
+import '../services/notificacoes_service.dart';
 import '../services/usuario_service.dart';
 import '../utils/avatares.dart';
 import '../utils/cores.dart';
 import 'tela_admin.dart';
 import 'tela_ajuda.dart';
 import 'tela_home.dart';
+import 'tela_notificacoes.dart';
 import 'tela_perfil.dart';
 import 'tela_palpites.dart';
 import 'tela_ranking.dart';
@@ -35,6 +38,44 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
     super.initState();
     _streamUsuario = UsuarioService().observarUsuario(_uid);
     _verificarAdmin();
+    _inicializarFcm();
+  }
+
+  Future<void> _inicializarFcm() async {
+    await NotificacoesService().inicializar(_uid);
+
+    // Exibe SnackBar quando a notificação chega com o app em foreground.
+    FirebaseMessaging.onMessage.listen((message) {
+      final titulo = message.notification?.title ?? '';
+      final corpo = message.notification?.body ?? '';
+      if (!mounted || corpo.isEmpty) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Cores.verdePrincipal,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 5),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (titulo.isNotEmpty)
+                Text(
+                  titulo,
+                  style: GoogleFonts.anybody(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: Colors.white,
+                  ),
+                ),
+              Text(
+                corpo,
+                style: GoogleFonts.hankenGrotesk(fontSize: 13, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
   }
 
   // Lê isAdmin diretamente do Firestore — campo ausente equivale a false.
@@ -208,12 +249,12 @@ class _DrawerNav extends StatelessWidget {
                 _ItemDrawer(
                   icone: Icons.notifications_outlined,
                   label: 'Notificações',
-                  onTap: () {},
-                ),
-                _ItemDrawer(
-                  icone: Icons.settings_outlined,
-                  label: 'Configurações',
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const TelaNotificacoes()),
+                    );
+                  },
                 ),
 
                 // Seção admin — só visível para o administrador
