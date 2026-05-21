@@ -171,6 +171,8 @@ class _TelaPalpitesState extends State<TelaPalpites> {
       }
     }
 
+    resultados.sort((a, b) => b.jogo.dataHora.compareTo(a.jogo.dataHora));
+
     final datas = proximos.keys.toList();
 
     setState(() {

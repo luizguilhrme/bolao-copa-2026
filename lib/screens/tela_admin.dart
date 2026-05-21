@@ -69,7 +69,8 @@ class _TelaAdminState extends State<TelaAdmin> {
       final liberadoEm =
           jogo.dataHora.toLocal().add(const Duration(minutes: 105));
       return agora.isAfter(liberadoEm);
-    }).toList();
+    }).toList()
+      ..sort((a, b) => b.dataHora.compareTo(a.dataHora));
   }
 
   @override
