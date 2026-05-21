@@ -94,6 +94,7 @@ exports.calcularPontuacao = onDocumentUpdated(
       await _enviarNotificacao(messaging, db, uid, userData.fcmToken, {
         title: '📊 Ranking atualizado',
         body,
+        data: { tela: 'ranking' },
       });
     }
 
@@ -161,7 +162,7 @@ exports.lembretesPalpite = onSchedule(
         body = `${jogosSemPalpite.length} jogos começam em 30 minutos! Não esqueça de registrar seus palpites!`;
       }
 
-      await _enviarNotificacao(messaging, db, uid, userData.fcmToken, { title, body });
+      await _enviarNotificacao(messaging, db, uid, userData.fcmToken, { title, body, data: { tela: 'palpites' } });
     }
 
     return null;
@@ -216,11 +217,12 @@ exports.recalcularTudo = onCall(
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Envia notificação FCM e remove o token inválido do Firestore se necessário.
-async function _enviarNotificacao(messaging, db, uid, token, { title, body }) {
+async function _enviarNotificacao(messaging, db, uid, token, { title, body, data = {} }) {
   try {
     await messaging.send({
       token,
       notification: { title, body },
+      data,
       android: {
         notification: {
           channelId: 'bolao_alertas',
