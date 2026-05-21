@@ -284,7 +284,7 @@ class Bandeira extends StatelessWidget {
       child: FittedBox(
         fit: BoxFit.cover,
         clipBehavior: Clip.hardEdge,
-        child: CountryFlag.fromCountryCode(iso, height: tamanho, width: tamanho * 1.6),
+        child: CountryFlag.fromCountryCode(iso, height: tamanho, width: tamanho * 2.2),
       ),
     );
   }
