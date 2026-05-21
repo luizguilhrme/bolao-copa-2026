@@ -8,7 +8,7 @@
 - Projeto localizado em `C:\bolao\`
 - Emulador Android configurado e funcionando (Nexus S API 24)
 - Run Configuration apontando para `C:\bolao\lib\main.dart`
-- Android nativo apenas (sem iOS por enquanto)
+- Android (nativo) + Web/PWA — iOS suportado via PWA no Safari
 - Foco em aprendizado progressivo de Flutter
 
 ---
@@ -59,6 +59,12 @@ C:\bolao\
       biblioteca.dart         ← funções utilitárias top-level: flagDe, siglaDe, isoDe,
                                  nomePtDe, formatarData, mostrarMensagem + widget Bandeira
       avatares.dart           ← lista kJogadores + widgets WidgetAvatar e CardAvatar
+  web/
+    index.html              ← meta tags PWA iOS (apple-mobile-web-app-capable etc)
+    manifest.json           ← PWA manifest (nome "Bolão Copa 2026", tema #006D32)
+    favicon.png             ← ícone personalizado
+    icons/                  ← Icon-192.png, Icon-512.png, Icon-maskable-192.png,
+                               Icon-maskable-512.png, apple-touch-icon.png
   pubspec.yaml
 ```
 
@@ -66,7 +72,7 @@ C:\bolao\
 
 ## Decisões de arquitetura
 
-- Android nativo apenas (sem iOS por enquanto)
+- Android (nativo) + Web/PWA — iOS suportado via "Adicionar à Tela de Início" no Safari
 - Backend Firebase (Firestore + Auth) — configurado e funcionando
 - Foco em aprendizado progressivo de Flutter
 - Padrão Service como camada de abstração entre telas e Firestore (equivalente ao Repository pattern do Android)
@@ -186,6 +192,9 @@ StreamBuilder<User?>(
 - Nome: `bolaodasoci2026`
 - Região do Firestore: `southamerica-east1` (São Paulo)
 - App Android registrado com package name: `com.luizdeveloper.bolao.bolao`
+- App Web registrado (Firebase Console → Project settings → Apps)
+- Firebase Hosting configurado — `firebase.json` aponta para `build/web` com SPA rewrite
+- URL de produção: https://bolaodasoci2026.web.app
 - Arquivo `firebase_options.dart` gerado automaticamente pelo `flutterfire configure`
 
 ### Configurações do Android (`build.gradle.kts`)
@@ -489,10 +498,14 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 - `Container.clipBehavior: Clip.antiAlias` com `BoxDecoration(shape: BoxShape.circle)` — recorta o filho em formato circular
 - `FittedBox(fit: BoxFit.cover, clipBehavior: Clip.hardEdge)` com `CountryFlag(width: tamanho * 2.2)` — força bandeira a preencher o círculo sem letterboxing (largura 2.2× garante que flags até 2:1 preencham a altura)
 - `FirebaseMessaging.onMessageOpenedApp` — stream disparado quando usuário toca na notificação com app em background; `getInitialMessage()` — recupera notificação que abriu o app quando estava fechado; usados juntos para deep linking FCM
+- `kIsWeb` de `package:flutter/foundation.dart` — guard para código não suportado na web (ex: `FirebaseMessaging.onBackgroundMessage`, FCM token registration)
+- Flutter web: `flutter create --platforms web .` cria a pasta `web/` com boilerplate; `manifest.json` configura nome/ícone/tema; meta tags iOS habilitam "Adicionar à Tela de Início" no Safari
+- `firebase deploy --only hosting --project <id>` — deploya `build/web` no Firebase Hosting
 
 ---
 
 ## Próximos passos (na ordem recomendada)
 
 1. **Regras de segurança do Firestore** — substituir modo de teste por regras reais antes do lançamento (ex: usuário só lê/escreve seus próprios palpites; só admin escreve em jogos)
-2. **Popular com dados de produção** — clicar em Popular → Produção quando a Copa começar (11/jun)
+2. **Google Play Internal Testing** — conta Play Console aguardando verificação de identidade; quando aprovada: criar keystore, configurar signing no `build.gradle.kts`, build AAB, upload no Play Console
+3. **Popular com dados de produção** — clicar em Popular → Produção quando a Copa começar (11/jun)
