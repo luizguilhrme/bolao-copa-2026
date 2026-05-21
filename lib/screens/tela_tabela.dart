@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import '../models/jogo.dart';
 import '../services/jogo_service.dart';
 import '../utils/biblioteca.dart';
@@ -394,7 +393,7 @@ class _CardJogo extends StatelessWidget {
           ? CrossAxisAlignment.start
           : CrossAxisAlignment.end,
       children: [
-        Text(flagDe(nome), style: const TextStyle(fontSize: 26)),
+        Bandeira(nome, tamanho: 26),
         const SizedBox(height: 4),
         Text(
           nomePtDe(nome),

@@ -13,6 +13,7 @@ class TelaLogin extends StatefulWidget {
 class _TelaLoginState extends State<TelaLogin> {
   final _emailController = TextEditingController();
   final _senhaController = TextEditingController();
+  final _senhaFocus = FocusNode();
   bool _modoLogin = true;
   bool _carregando = false;
   String? _erro;
@@ -21,6 +22,7 @@ class _TelaLoginState extends State<TelaLogin> {
   void dispose() {
     _emailController.dispose();
     _senhaController.dispose();
+    _senhaFocus.dispose();
     super.dispose();
   }
 
@@ -175,6 +177,8 @@ class _TelaLoginState extends State<TelaLogin> {
           hint: 'seu@email.com',
           icone: Icons.mail_outlined,
           tipo: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          onSubmitted: (_) => FocusScope.of(context).requestFocus(_senhaFocus),
         ),
         const SizedBox(height: 16),
 
@@ -207,6 +211,9 @@ class _TelaLoginState extends State<TelaLogin> {
           hint: '••••••••',
           icone: Icons.lock_outlined,
           obscureText: true,
+          focusNode: _senhaFocus,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _entrar(),
         ),
 
         // Mensagem de erro (aparece só quando há erro)
@@ -301,19 +308,23 @@ class _TelaLoginState extends State<TelaLogin> {
     );
   }
 
-  // Campo de texto reutilizável com ícone e borda estilizada
-  // O focus muda a cor da borda para azul (tertiary), exatamente como o CSS
   Widget _buildCampoTexto({
     required TextEditingController controller,
     required String hint,
     required IconData icone,
     TextInputType tipo = TextInputType.text,
     bool obscureText = false,
+    FocusNode? focusNode,
+    TextInputAction? textInputAction,
+    ValueChanged<String>? onSubmitted,
   }) {
     return TextField(
       controller: controller,
       keyboardType: tipo,
       obscureText: obscureText,
+      focusNode: focusNode,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
       style: GoogleFonts.hankenGrotesk(
         fontSize: 16,
         color: Cores.onSurface,

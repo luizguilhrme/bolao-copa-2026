@@ -506,6 +506,7 @@ class _CardPalpite extends StatefulWidget {
 class _CardPalpiteState extends State<_CardPalpite> {
   late final TextEditingController _ctrl1;
   late final TextEditingController _ctrl2;
+  final _focusCtrl2 = FocusNode();
   final _uid = FirebaseAuth.instance.currentUser!.uid;
 
   bool _salvo = false;
@@ -525,6 +526,7 @@ class _CardPalpiteState extends State<_CardPalpite> {
   void dispose() {
     _ctrl1.dispose();
     _ctrl2.dispose();
+    _focusCtrl2.dispose();
     super.dispose();
   }
 
@@ -605,7 +607,8 @@ class _CardPalpiteState extends State<_CardPalpite> {
               Expanded(
                   flex: 2,
                   child: _InputsProximos(
-                      ctrl1: _ctrl1, ctrl2: _ctrl2, salvo: _salvo)),
+                      ctrl1: _ctrl1, ctrl2: _ctrl2, salvo: _salvo,
+                      focusCtrl2: _focusCtrl2, onSalvar: _salvar)),
               Expanded(child: _Time(nome: widget.jogo.team2)),
             ],
           ),
@@ -1042,19 +1045,33 @@ class _BadgePontos extends StatelessWidget {
 }
 
 class _InputsProximos extends StatelessWidget {
-  const _InputsProximos(
-      {required this.ctrl1, required this.ctrl2, required this.salvo});
+  const _InputsProximos({
+    required this.ctrl1,
+    required this.ctrl2,
+    required this.salvo,
+    this.focusCtrl2,
+    this.onSalvar,
+  });
 
   final TextEditingController ctrl1;
   final TextEditingController ctrl2;
   final bool salvo;
+  final FocusNode? focusCtrl2;
+  final VoidCallback? onSalvar;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _CampoGol(controller: ctrl1, salvo: salvo),
+        _CampoGol(
+          controller: ctrl1,
+          salvo: salvo,
+          textInputAction: TextInputAction.next,
+          onSubmitted: focusCtrl2 != null
+              ? (_) => focusCtrl2!.requestFocus()
+              : null,
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Text('X',
@@ -1063,17 +1080,32 @@ class _InputsProximos extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                   color: Cores.onSurfaceVariant)),
         ),
-        _CampoGol(controller: ctrl2, salvo: salvo),
+        _CampoGol(
+          controller: ctrl2,
+          salvo: salvo,
+          focusNode: focusCtrl2,
+          textInputAction: TextInputAction.done,
+          onSubmitted: onSalvar != null ? (_) => onSalvar!() : null,
+        ),
       ],
     );
   }
 }
 
 class _CampoGol extends StatelessWidget {
-  const _CampoGol({required this.controller, required this.salvo});
+  const _CampoGol({
+    required this.controller,
+    required this.salvo,
+    this.focusNode,
+    this.textInputAction,
+    this.onSubmitted,
+  });
 
   final TextEditingController controller;
   final bool salvo;
+  final FocusNode? focusNode;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -1085,6 +1117,9 @@ class _CampoGol extends StatelessWidget {
         readOnly: salvo,
         textAlign: TextAlign.center,
         keyboardType: TextInputType.number,
+        focusNode: focusNode,
+        textInputAction: textInputAction,
+        onSubmitted: onSubmitted,
         inputFormatters: [
           FilteringTextInputFormatter.digitsOnly,
           LengthLimitingTextInputFormatter(2),
@@ -1133,22 +1168,25 @@ class _Time extends StatelessWidget {
         Container(
           width: 48,
           height: 48,
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Cores.surfaceContainerHigh,
             border: Border.all(color: Cores.outlineVariant),
           ),
-          child: Center(
-              child: Text(flagDe(nome),
-                  style: const TextStyle(fontSize: 26))),
+          child: Bandeira(nome, tamanho: 48),
         ),
         const SizedBox(height: 6),
-        Text(siglaDe(nome),
-            style: GoogleFonts.anybody(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Cores.onSurface),
-            textAlign: TextAlign.center),
+        Text(
+          nomePtDe(nome),
+          style: GoogleFonts.anybody(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Cores.onSurface),
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
       ],
     );
   }

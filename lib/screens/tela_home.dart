@@ -265,7 +265,7 @@ class _CardJogo extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildTime(flagDe(jogo.team1), siglaDe(jogo.team1)),
+              _buildTime(jogo.team1),
               aoVivo
                   ? Text(
                 '${jogo.placar1}  –  ${jogo.placar2}',
@@ -284,7 +284,7 @@ class _CardJogo extends StatelessWidget {
                   color: Cores.onSurfaceVariant.withOpacity(0.5),
                 ),
               ),
-              _buildTime(flagDe(jogo.team2), siglaDe(jogo.team2)),
+              _buildTime(jogo.team2),
             ],
           ),
         ],
@@ -292,26 +292,29 @@ class _CardJogo extends StatelessWidget {
     );
   }
 
-  Widget _buildTime(String flag, String sigla) {
+  Widget _buildTime(String nome) {
     return Column(
       children: [
         Container(
           width: 48,
           height: 48,
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(color: Cores.outlineVariant),
             color: Cores.surfaceVariant,
           ),
-          child:
-          Center(child: Text(flag, style: const TextStyle(fontSize: 26))),
+          child: Bandeira(nome, tamanho: 48),
         ),
         const SizedBox(height: 6),
         Text(
-          sigla,
+          nomePtDe(nome),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: const TextStyle(
             fontWeight: FontWeight.w700,
-            fontSize: 14,
+            fontSize: 11,
             color: Cores.onSurface,
           ),
         ),
