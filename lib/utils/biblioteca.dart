@@ -266,19 +266,9 @@ class Bandeira extends StatelessWidget {
   final String team;
   final double tamanho;
 
-  // country_flags 2.x só suporta ISO 3166-1 alpha-2 (2 letras).
-  // Nações do Reino Unido usam subdivision codes (GB-ENG etc.) que o pacote
-  // não reconhece — tratamos com emoji de texto, que funciona no Android/iOS.
-  static const _emojiUk = {
-    'GB-ENG': '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-    'GB-SCT': '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
-    'GB-WLS': '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
-  };
-
   @override
   Widget build(BuildContext context) {
     final iso = isoDe(team);
-
     if (iso.isEmpty) {
       return SizedBox(
         width: tamanho,
@@ -288,25 +278,16 @@ class Bandeira extends StatelessWidget {
         ),
       );
     }
-
-    final emoji = _emojiUk[iso];
-    if (emoji != null) {
-      return SizedBox(
-        width: tamanho,
-        height: tamanho,
-        child: Center(
-          child: Text(emoji, style: TextStyle(fontSize: tamanho * 0.75)),
-        ),
-      );
-    }
-
     return SizedBox(
       width: tamanho,
       height: tamanho,
       child: FittedBox(
         fit: BoxFit.cover,
         clipBehavior: Clip.hardEdge,
-        child: CountryFlag.fromCountryCode(iso, height: tamanho, width: tamanho * 2.2),
+        child: CountryFlag.fromCountryCode(
+          iso,
+          theme: ImageTheme(width: tamanho * 2.2, height: tamanho),
+        ),
       ),
     );
   }
