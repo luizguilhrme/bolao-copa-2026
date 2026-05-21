@@ -214,7 +214,7 @@ firebase_auth: ^5.3.1
 cloud_firestore: ^5.4.4
 cloud_functions: ^5.1.0
 firebase_messaging: ^15.1.0
-country_flags: ^2.0.0
+country_flags: ^4.1.2
 google_fonts: ^6.2.1
 intl: ^0.19.0
 ```
@@ -329,7 +329,7 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - Tabs "Próximos" / "Resultados" com `AnimatedContainer`
 - `CustomScrollView` com slivers agrupados por seção
 - Chip AO VIVO com ponto pulsante via `AnimationController`
-- Exibe bandeiras reais (`Bandeira`) e nomes em português (`nomePtDe`)
+- Exibe bandeiras reais (`Bandeira`) em círculo e nomes em português (`nomePtDe`)
 - Tocar em um jogo encerrado na aba Resultados abre dialog com todos os palpites registrados, ordenados por pontuação; cada linha mostra posição, avatar, nome, palpite e badge de pontos
 
 ### `tela_palpites.dart` — implementada
@@ -496,7 +496,7 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 - `TextInputAction.next` / `.done` + `onSubmitted` — ação do botão Enter no teclado virtual
 - `FocusNode` compartilhado entre pai e filho — pai cria o nó, filho usa como `focusNode` no `TextField`
 - Gerenciar lista de `FocusNode` em `StatefulWidget` com `didUpdateWidget` para recriar nós quando o número de itens muda
-- `CountryFlag.fromCountryCode(iso, height: h, width: w)` do pacote `country_flags` — renderiza bandeiras como imagens SVG por código ISO 3166-1 alpha-2; suporta subdivisões como `GB-ENG`, `GB-WLS`, `GB-SCT`
+- `country_flags 4.x`: API mudou — tamanho agora vai dentro de `ImageTheme(width, height)` em vez de parâmetros diretos; suporta nativamente subdivisões do Reino Unido (`GB-ENG`, `GB-SCT`, `GB-WLS`); não precisa mais de `FittedBox` com zoom
 - `Container.clipBehavior: Clip.antiAlias` com `BoxDecoration(shape: BoxShape.circle)` — recorta o filho em formato circular
 - `FittedBox(fit: BoxFit.cover, clipBehavior: Clip.hardEdge)` com `CountryFlag(width: tamanho * 2.2)` — força bandeira a preencher o círculo sem letterboxing (largura 2.2× garante que flags até 2:1 preencham a altura)
 - `FirebaseMessaging.onMessageOpenedApp` — stream disparado quando usuário toca na notificação com app em background; `getInitialMessage()` — recupera notificação que abriu o app quando estava fechado; usados juntos para deep linking FCM
