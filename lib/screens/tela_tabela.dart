@@ -401,7 +401,17 @@ class _CardJogo extends StatelessWidget {
           ? CrossAxisAlignment.start
           : CrossAxisAlignment.end,
       children: [
-        Bandeira(nome, tamanho: 26),
+        Container(
+          width: 32,
+          height: 32,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Cores.surfaceContainerHigh,
+            border: Border.all(color: Cores.outlineVariant),
+          ),
+          child: Bandeira(nome, tamanho: 32),
+        ),
         const SizedBox(height: 4),
         Text(
           nomePtDe(nome),
@@ -682,7 +692,16 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
                             ),
                           ),
                           const SizedBox(width: 6),
-                          Bandeira(j.team1, tamanho: 26),
+                          Container(
+                            width: 28,
+                            height: 28,
+                            clipBehavior: Clip.antiAlias,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white24,
+                            ),
+                            child: Bandeira(j.team1, tamanho: 28),
+                          ),
                         ],
                       ),
                     ),
@@ -703,7 +722,16 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.start,
                         children: [
-                          Bandeira(j.team2, tamanho: 26),
+                          Container(
+                            width: 28,
+                            height: 28,
+                            clipBehavior: Clip.antiAlias,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white24,
+                            ),
+                            child: Bandeira(j.team2, tamanho: 28),
+                          ),
                           const SizedBox(width: 6),
                           Flexible(
                             child: Text(
