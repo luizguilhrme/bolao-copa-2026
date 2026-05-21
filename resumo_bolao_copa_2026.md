@@ -18,44 +18,46 @@
 ```
 C:\bolao\
   assets/
-    avatares/                   ← fotos dos jogadores para seleção de avatar
-      messi.jpg, cr7.jpg, mbappe.jpg, vinicius.jpg, neymar.jpg,
-      paqueta.jpg, haaland.jpg, bellingham.jpg, salah.jpg,
-      yamal.jpg, modric.jpg, ochoa.jpg
     dados/
-      jogos.json                ← 104 jogos da Copa 2026 (não declarado no pubspec.yaml;
-                                   mantido em disco como referência — dados já populados
-                                   no Firestore via WriteBatch. Declarar temporariamente
-                                   no pubspec.yaml quando precisar rodar popularJogosNoFirestore)
+      jogos.json              ← 104 jogos com datas reais da Copa 2026
+      jogos_teste.json        ← 104 jogos com datas deslocadas -25 dias;
+                                 jogos antes de 21/05/2026 já têm resultados
+    avatares/                 ← imagens dos jogadores para seleção de avatar
+  functions/
+    index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
+                                 calcularPontuacao, lembretesPalpite, recalcularTudo
   lib/
-    main.dart                   ← inicialização Firebase + roteamento por auth + perfil Firestore
-    firebase_options.dart       ← gerado automaticamente pelo FlutterFire CLI
+    main.dart                 ← Firebase init + FCM background handler + StreamBuilder de auth
+    firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
     models/
-      jogo.dart                 ← model com fromJson, fromMap, toMap e getter dataHora
-      usuario.dart              ← model com fromMap, toMap e copyWith; campo avatar nullable
-      palpite.dart              ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
+      jogo.dart               ← model com fromJson, fromMap, toMap e getter dataHora
+      usuario.dart            ← model com fromMap, toMap e copyWith
+      palpite.dart            ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
     screens/
-      menu_principal.dart       ← shell com drawer lateral, AppBar, IndexedStack, NavigationBar
-      tela_home.dart            ← jogos de hoje (Firestore) + bento grid de navegação
-      tela_login.dart           ← login e cadastro; cria conta Firebase antes de abrir setup
-      tela_setup_perfil.dart    ← escolha de nome e avatar no primeiro cadastro
-      tela_palpites.dart        ← duas abas: Próximos (com palpites) e Resultados
-      tela_ranking.dart         ← ranking em tempo real com pódio e lista
-      tela_tabela.dart          ← lista os 104 jogos com seções e tabs; nomes em português
-      tela_admin.dart           ← tela exclusiva do admin para inserir placares
-      tela_perfil.dart          ← perfil do usuário com edição de nome e avatar
-      tela_ajuda.dart           ← tela de Ajuda & FAQ com seção de pontuação e perguntas
+      menu_principal.dart     ← shell com drawer lateral, AppBar, IndexedStack, NavigationBar;
+                                 inicializa FCM; exibe SnackBar para mensagens em foreground
+      tela_home.dart          ← jogos de hoje (Firestore) + bento grid de navegação
+      tela_login.dart         ← login e cadastro; navegação por Enter entre campos
+      tela_setup_perfil.dart  ← seleção de avatar no primeiro acesso (pós-cadastro)
+      tela_perfil.dart        ← exibe/edita nome e avatar; alterar senha; excluir conta
+      tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
+      tela_palpites.dart      ← duas abas: Próximos (com palpites) e Resultados
+      tela_ranking.dart       ← ranking em tempo real com pódio e lista
+      tela_tabela.dart        ← lista os 104 jogos com seções e tabs
+      tela_admin.dart         ← inserção de placares; dialog Teste/Produção no popular jogos
+      tela_ajuda.dart         ← FAQ estático
     services/
-      jogo_service.dart         ← popularJogosNoFirestore, buscarTodos, buscarPorData
-      usuario_service.dart      ← criarPerfil, buscarPorUid, observarUsuario,
-                                   atualizarNome, atualizarAvatar
-      palpite_service.dart      ← salvar, buscarPorJogo, buscarTodosPorUsuario,
-                                   buscarPorUsuario, buscarTodosPorJogo
+      jogo_service.dart       ← popularJogosNoFirestore({bool teste}), buscarTodos, buscarPorData
+      usuario_service.dart    ← criarPerfil, buscarPorUid, observarUsuario,
+                                 atualizarNome, atualizarAvatar
+      palpite_service.dart    ← salvar, buscarPorJogo, buscarTodosPorUsuario,
+                                 buscarPorUsuario, buscarTodosPorJogo
+      notificacoes_service.dart ← inicializar FCM, salvar token, buscar/atualizar prefs
     utils/
-      cores.dart                ← constantes de cores (Cores.verdePrincipal etc)
-      biblioteca.dart           ← funções utilitárias top-level (flagDe, siglaDe,
-                                   nomePtDe, formatarData, mostrarMensagem)
-      avatares.dart             ← Jogador, kJogadores, WidgetAvatar, CardAvatar
+      cores.dart              ← constantes de cores (Cores.verdePrincipal etc)
+      biblioteca.dart         ← funções utilitárias top-level: flagDe, siglaDe, isoDe,
+                                 nomePtDe, formatarData, mostrarMensagem + widget Bandeira
+      avatares.dart           ← lista kJogadores + widgets WidgetAvatar e CardAvatar
   pubspec.yaml
 ```
 
@@ -70,9 +72,10 @@ C:\bolao\
 - IDs dos documentos Firestore sempre iguais ao identificador da entidade (UID do usuário, id do jogo) — garante idempotência e busca O(1)
 - Funções utilitárias compartilhadas são declaradas como funções top-level em `biblioteca.dart`, não como métodos `static` de uma classe wrapper — padrão idiomático em Dart
 - Comunicação de filho para pai via callback (`void Function(int)`) — o `MenuPrincipal` passa `onNavegar` para a `TelaHome`
-- Cálculo de pontuação feito no cliente (app), não em Cloud Functions — placares inseridos manualmente pelo admin via `tela_admin.dart`
+- Cálculo de pontuação feito na Cloud Function `calcularPontuacao` (trigger Firestore) — admin insere placar pelo app, função recalcula pontos e envia notificações de ranking
 - Palpites precarregados em lote (`buscarTodosPorUsuario`) ao abrir a tela, sem query individual por card
-- Widgets de avatar centralizados em `avatares.dart` (`WidgetAvatar`, `CardAvatar`) — reutilizados no drawer, perfil e setup
+- Notificações via FCM: `lembretesPalpite` (scheduled `*/30min`) + `calcularPontuacao` envia ranking change. Token salvo no campo `fcmToken` do documento do usuário
+- Bandeiras exibidas como imagens reais via pacote `country_flags` (não emojis); mapeamento de nome → ISO em `isoDe()`
 
 ---
 
@@ -113,7 +116,7 @@ Cores.outline                 = Color(0xFF6C7B6C)
 
 `MenuPrincipal` é um **shell** — só gerencia a navegação. Contém:
 
-- `Drawer` lateral com avatar do jogador, nome e pontuação via `StreamBuilder<Usuario?>`
+- `Drawer` lateral com perfil do usuário, menu e seção admin (condicional)
 - `AppBar` com ícone da bola (abre drawer) + título dinâmico + botão de regras
 - `IndexedStack` com as 4 telas como filhos (scroll preservado entre abas)
 - `NavigationBar` (Material 3) com 4 destinos
@@ -129,8 +132,8 @@ leading: Builder(
 ```
 
 ### Drawer lateral
-- Cabeçalho verde com `WidgetAvatar` (foto do jogador ou inicial do nome), nome e pontuação
-- Seção "CONTA": Meu Perfil → `TelaPerfil`, Notificações, Configurações
+- Cabeçalho verde com avatar do jogador selecionado, nome e pontuação via `StreamBuilder<Usuario?>`
+- Seção "CONTA": Meu Perfil → `TelaPerfil`; Notificações → `TelaNotificacoes`
 - Seção "ADMIN" (só para `isAdmin == true`): Atualizar Placares → navega para `TelaAdmin`
 - Seção "SUPORTE": Ajuda & FAQ → `TelaAjuda`
 - Rodapé: botão Sair que chama `FirebaseAuth.instance.signOut()`
@@ -145,32 +148,28 @@ if (doc.data()?['isAdmin'] == true) setState(() => _isAdmin = true);
 
 ---
 
-## Arquitetura de autenticação e roteamento
+## Arquitetura de autenticação
 
-O `main.dart` usa dois `StreamBuilder`s aninhados para rotear com base tanto no auth quanto na existência do perfil Firestore:
+O `main.dart` usa um `StreamBuilder` que ouve o `authStateChanges()` do Firebase Auth:
 
 ```dart
-StreamBuilder<User?>(               // 1º: estado de autenticação
+StreamBuilder<User?>(
   stream: FirebaseAuth.instance.authStateChanges(),
-  builder: (context, authSnapshot) {
-    if (!logado) return TelaLogin();
-    return StreamBuilder<Usuario?>(  // 2º: perfil Firestore
-      stream: UsuarioService().observarUsuario(uid),
-      builder: (context, perfilSnapshot) {
-        if (perfil != null) return MenuPrincipal();   // logado + perfil
-        return TelaSetupPerfil(user: firebaseUser);   // logado + sem perfil
-      },
-    );
+  builder: (context, snapshot) {
+    if (snapshot.connectionState == ConnectionState.waiting)
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (snapshot.hasData) return const MenuPrincipal(); // logado
+    return const TelaLogin();                           // deslogado
   },
 )
 ```
 
 ### Fluxo de cadastro
-1. `TelaLogin`: valida e chama `createUserWithEmailAndPassword` — erros de email duplicado aparecem aqui
-2. `authStateChanges` dispara → `main.dart` detecta usuário sem perfil → exibe `TelaSetupPerfil`
-3. `TelaSetupPerfil`: usuário escolhe nome e avatar, clica "Confirmar e entrar"
-4. `criarPerfil()` salva no Firestore → stream detecta perfil criado → `main.dart` exibe `MenuPrincipal`
-5. Botão de voltar no setup faz `signOut()` → stream detecta → retorna para `TelaLogin`
+1. `TelaLogin` valida e-mail + chama `createUserWithEmailAndPassword`
+2. `authStateChanges` dispara → `main.dart` roteia para `TelaSetupPerfil` automaticamente
+3. `TelaSetupPerfil`: usuário escolhe avatar, clica "Confirmar"
+4. `UsuarioService.atualizarAvatar` salva no Firestore → stream detecta perfil criado → `MenuPrincipal` abre
+5. Botão de voltar no setup faz `signOut()` → retorna para `TelaLogin`
 
 ---
 
@@ -204,6 +203,8 @@ firebase_core: ^3.6.0
 firebase_auth: ^5.3.1
 cloud_firestore: ^5.4.4
 cloud_functions: ^5.1.0
+firebase_messaging: ^15.1.0
+country_flags: ^2.0.0
 google_fonts: ^6.2.1
 intl: ^0.19.0
 ```
@@ -220,13 +221,16 @@ intl: ^0.19.0
 ID do documento = UID do Firebase Auth.
 
 ```
-uid         : String
-email       : String
-nome        : String    — definido pelo usuário no setup de perfil
-avatar      : String?   — id do jogador escolhido (ex: "messi"); null em contas antigas
-pontuacao   : Number    — começa em 0; atualizado via FieldValue.increment()
-criadoEm    : Timestamp
-isAdmin     : Boolean   — campo opcional; adicionado manualmente no Console
+uid             : String
+email           : String
+nome            : String    — parte antes do @ no cadastro
+pontuacao       : Number    — começa em 0; atualizado via FieldValue.increment()
+criadoEm        : Timestamp
+avatar          : String?   — id do jogador selecionado no setup de perfil
+isAdmin         : Boolean   — campo opcional; adicionado manualmente no Console
+fcmToken        : String?   — token FCM do dispositivo; salvo pelo NotificacoesService
+notifLembretes  : Boolean?  — padrão true quando ausente
+notifRanking    : Boolean?  — padrão true quando ausente
 ```
 
 ### `jogos`
@@ -280,7 +284,7 @@ int calcularPontos(int p1, int p2, int r1, int r2) {
 }
 ```
 
-Cores dos badges de pontuação:
+Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de resultado):
 - 10 pts → `Color(0xFF006D32)` verde escuro
 - 7 pts → `Color(0xFF1B7F3A)` verde médio
 - 5 pts → `Color(0xFF4CAF50)` verde claro
@@ -295,25 +299,25 @@ Cores dos badges de pontuação:
 - Card centralizado, fontes Anybody + Hanken Grotesk
 - Alterna entre login e cadastro com `AnimatedSwitcher`
 - Erros do Firebase Auth traduzidos para português
-- Cadastro: chama `createUserWithEmailAndPassword` (valida email aqui); roteamento para setup é automático via `main.dart`
+- Cadastro: cria conta no Auth + perfil no Firestore via `UsuarioService`
+- Navegação por Enter: Enter no e-mail move foco para senha; Enter na senha submete o formulário
 
 ### `tela_setup_perfil.dart` — implementada
-- Aberta automaticamente pelo `main.dart` quando usuário está logado mas sem perfil Firestore
-- Campo de nome (pré-preenchido com prefixo do e-mail)
-- Grade 3×4 de avatares com fotos dos jogadores e `errorBuilder` para fallback
-- "Confirmar e entrar" salva perfil → stream detecta → `MenuPrincipal` abre
-- Botão de voltar faz `signOut()` e retorna para `TelaLogin`
+- Exibida após cadastro, antes de entrar no app
+- Seleção de avatar obrigatória (grid de jogadores)
+- Salva `avatar` no Firestore via `UsuarioService.atualizarAvatar`
 
 ### `tela_home.dart` — implementada
 - Carrossel de jogos do dia (Firestore) com chip AO VIVO
 - Bento grid de navegação para Palpites, Ranking e Tabela
 - Callback `onNavegar` recebido do `MenuPrincipal`
+- Cards exibem bandeiras reais (`Bandeira`) e nome completo em português (`nomePtDe`)
 
 ### `tela_tabela.dart` — implementada
 - Tabs "Próximos" / "Resultados" com `AnimatedContainer`
 - `CustomScrollView` com slivers agrupados por seção
 - Chip AO VIVO com ponto pulsante via `AnimationController`
-- Nomes dos países em português via `nomePtDe()` de `biblioteca.dart`
+- Exibe bandeiras reais (`Bandeira`) e nomes em português (`nomePtDe`)
 
 ### `tela_palpites.dart` — implementada
 - Duas abas: **Próximos** e **Resultados**
@@ -322,6 +326,9 @@ Cores dos badges de pontuação:
 - **Aba Próximos:** jogos disponíveis para palpite (mais de 5 min antes do início); "Ver mais" carrega próxima data; trava impede salvar após o cutoff
 - **Aba Resultados:** chip "PRESTES A COMEÇAR" (amarelo, <5 min), "AO VIVO" (pulsante), ou horário; cards encerrados coloridos pela pontuação; badge de pontos; "Registrado em DD/MM às HHhMM"
 - Palpite precarregado pelo pai — `_CardPalpite` não faz query individual
+- Bandeiras reais (`Bandeira`) e nome completo em português nos cards de ambas as abas
+- **Navegação por Enter:** Enter no gol 1 → foco para gol 2; Enter no gol 2 → salva e move foco para o gol 1 do próximo card; sem próximo card → fecha teclado
+- `_AbaProximos` é `StatefulWidget` gerenciando lista de `FocusNode` (um por card visível); reconstruída ao mudar o número de cards (ex: "Ver mais")
 
 ### `tela_ranking.dart` — implementada
 - `StreamBuilder` direto no Firestore → ranking atualiza em tempo real
@@ -329,22 +336,41 @@ Cores dos badges de pontuação:
 - Lista para 4º em diante; usuário logado destacado com borda verde
 
 ### `tela_admin.dart` — implementada (acesso exclusivo via drawer)
-- Filtra jogos elegíveis: 105 min após o início (ou IDs de teste configurados em `_jogosTesteIds`)
-- Card com pré-preenchimento se já tiver placar (modo correção)
-- Ao salvar: `buscarTodosPorJogo` → calcula delta de pontos para cada palpite → `WriteBatch` atômico atualiza placar + pontuações de todos os participantes
-- Correção de placar: subtrai pontos antigos antes de adicionar os novos (evita dupla contagem)
-- Busca o documento do jogo por `where('id', isEqualTo: jogoId)` em vez de `.doc(id.toString())`
+- Filtra jogos elegíveis: 105 min após o início (IDs 1 e 2 sempre desbloqueados para teste)
+- Card com pré-preenchimento se já tiver placar (modo correção); exibe bandeiras reais e nomes em português
+- Ao salvar: atualiza `placar1`/`placar2` no Firestore → Cloud Function `calcularPontuacao` dispara automaticamente
+- Botão de popular jogos abre dialog pedindo **Teste** (`jogos_teste.json`) ou **Produção** (`jogos.json`)
+- Botão de recalcular chama a Cloud Function `recalcularTudo` (admin only)
 
 ### `tela_perfil.dart` — implementada
-- Avatar clicável com ícone de editar — toca para abrir `DraggableScrollableSheet` com grade de jogadores
-- Nome editável via diálogo com `TextField`
-- E-mail (read-only) e "Membro desde" (mês/ano calculado manualmente sem locale)
-- Card verde com pontuação total
-- Usa `StreamBuilder<Usuario?>` — atualiza automaticamente ao salvar
+- Exibe avatar do jogador com botão de troca (bottom sheet grid)
+- Edição de nome inline via dialog
+- Alterar senha: dialog com senha atual + nova senha + confirmação + reautenticação
+- Excluir conta: dialog com senha para confirmação; remove doc Firestore + conta Auth
+
+### `tela_notificacoes.dart` — implementada
+- Toggle **Lembrete de palpite**: notificação 30 min antes de jogos sem palpite
+- Toggle **Mudança no ranking**: notificação quando posição no ranking muda
+- Prefs salvas nos campos `notifLembretes` / `notifRanking` do documento do usuário
+- Auto-save a cada toggle
 
 ### `tela_ajuda.dart` — implementada
-- Seção "PONTUAÇÃO" com badges coloridos e exemplos para cada critério
-- Seção "PERGUNTAS FREQUENTES" com `ExpansionTile` para cada pergunta
+- FAQ estático com perguntas e respostas expansíveis
+- Seção de pontuação com badges coloridos e exemplos
+
+---
+
+## Cloud Functions — visão geral
+
+Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 22).
+
+| Função | Tipo | O que faz |
+|---|---|---|
+| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula delta de pontuação para cada palpite; envia FCM de ranking para quem mudou de posição |
+| `lembretesPalpite` | Schedule (`*/30 * * * *`) | Notifica usuários sem palpite em jogos que começam em ~30 min |
+| `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação de todos os usuários do zero |
+
+**FCM token management:** token salvo em `usuarios/{uid}.fcmToken`. Tokens inválidos são removidos automaticamente (`messaging/registration-token-not-registered`).
 
 ---
 
@@ -389,7 +415,7 @@ buscarTodosPorJogo(int jogoId)           // where(jogoId) — usado pelo admin
 O getter `dataHora` no `Jogo` usava `DateTime(...)` (local) antes de subtrair o offset UTC, causando dupla conversão. Corrigido com `DateTime.utc(...)`.
 
 ### Bug de exibição de horário
-`formatarData()` em `biblioteca.dart` formatava sem converter para local. Corrigido adicionando `final local = data.toLocal()` no início da função.
+`formatarData()` em `biblioteca.dart` formatava sem converter para local. Corrigido adicionando `final local = data.toLocal()` no início da função — todos os pontos de uso se beneficiam automaticamente.
 
 ### setState com Future
 `onSalvo: () => setState(() => _futureJogos = _carregarElegiveis())` retornava um `Future` para o `setState`. Corrigido com chaves: `setState(() { _futureJogos = _carregarElegiveis(); })`.
@@ -401,10 +427,7 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 `FieldValue.serverTimestamp()` chega como `null` no cache local antes de o servidor responder. Corrigido tornando `criadoEm` nullable (`DateTime?`) no model `Palpite`.
 
 ### Flash de MenuPrincipal durante cadastro
-`authStateChanges` disparava ao criar a conta Firebase, exibindo `MenuPrincipal` brevemente antes do setup. Corrigido fazendo `main.dart` rotear com base na existência do perfil Firestore (não só no auth).
-
-### Locale pt_BR não inicializado
-`DateFormat` com locale `pt_BR` para nomes de meses causava erro em runtime. Corrigido formatando datas manualmente com um array de nomes de meses em português, sem depender de `initializeDateFormatting`.
+`authStateChanges` disparava ao criar a conta Firebase, exibindo `MenuPrincipal` brevemente antes do setup. Corrigido fazendo o roteamento levar em conta a existência do perfil Firestore, não só o auth.
 
 ---
 
@@ -424,7 +447,6 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 - `AnimationController` + `SingleTickerProviderStateMixin` para animações imperativas
 - `AnimatedBuilder` para reconstruir só o trecho animado
 - `StreamBuilder` — authStateChanges, ranking em tempo real, dados do usuário no drawer
-- `StreamBuilder` aninhado — roteamento baseado em múltiplos estados (auth + perfil)
 - `FutureBuilder` — carregamento assíncrono com estados de loading/erro/dado
 - `Future.wait` — executa múltiplas Futures em paralelo
 - `Timer.periodic` — reclassificação automática de jogos por horário
@@ -448,12 +470,22 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 - `GridView.builder` com `SliverGridDelegateWithFixedCrossAxisCount`
 - `Image.asset` com `errorBuilder` para fallback quando imagem não existe
 - `ExpansionTile` para listas expansíveis (FAQ)
-- `Navigator.popUntil` para voltar a uma rota específica na pilha
+- `showDialog<T>` retornando valor via `Navigator.of(ctx).pop(valor)` — comunicação do dialog de volta ao chamador
+- `@pragma('vm:entry-point')` — necessário para funções top-level chamadas pelo runtime nativo (ex: handler de background do FCM)
+- `FirebaseMessaging.onBackgroundMessage` — registra handler para mensagens com app fechado; deve ser top-level
+- `FirebaseMessaging.onMessage` — stream de mensagens com app em foreground (não exibe notificação automaticamente)
+- `EmailAuthProvider.credential` + `reauthenticateWithCredential` — reautenticação necessária para operações sensíveis (updatePassword, delete)
+- Converter `StatelessWidget` em `StatefulWidget` — padrão quando um widget filho precisa de estado próprio
+- `FocusNode` + `FocusScope.of(context).requestFocus()` — navegação programática entre campos de texto
+- `TextInputAction.next` / `.done` + `onSubmitted` — ação do botão Enter no teclado virtual
+- `FocusNode` compartilhado entre pai e filho — pai cria o nó, filho usa como `focusNode` no `TextField`
+- Gerenciar lista de `FocusNode` em `StatefulWidget` com `didUpdateWidget` para recriar nós quando o número de itens muda
+- `CountryFlag.fromCountryCode(iso, height: h, width: w)` do pacote `country_flags` — renderiza bandeiras como imagens SVG por código ISO 3166-1 alpha-2; suporta subdivisões como `GB-ENG`, `GB-WLS`, `GB-SCT`
+- `Container.clipBehavior: Clip.antiAlias` com `BoxDecoration(shape: BoxShape.circle)` — recorta o filho em formato circular
 
 ---
 
 ## Próximos passos (na ordem recomendada)
 
 1. **Regras de segurança do Firestore** — substituir modo de teste por regras reais antes do lançamento (ex: usuário só lê/escreve seus próprios palpites; só admin escreve em jogos)
-2. **Remover IDs de teste** da `tela_admin.dart` (`_jogosTesteIds`) quando a Copa começar
-3. **Telas pendentes no drawer:** Notificações, Configurações
+2. **Popular com dados de produção** — clicar em Popular → Produção quando a Copa começar (11/jun)
