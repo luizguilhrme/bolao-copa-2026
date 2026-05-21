@@ -146,16 +146,43 @@ class _TelaHomeState extends State<TelaHome> {
                 );
               }
 
-              // Estado: tem jogos — renderiza o carrossel normalmente
-              return SizedBox(
-                height: 168,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  clipBehavior: Clip.none,
-                  itemCount: jogos.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
-                  itemBuilder: (context, i) => _CardJogo(jogo: jogos[i]),
-                ),
+              // Estado: tem jogos — ordena (encerrados por último) e renderiza
+              final jogosOrdenados = jogos.toList()
+                ..sort((a, b) {
+                  final aEnc = a.placar1 != null ? 1 : 0;
+                  final bEnc = b.placar1 != null ? 1 : 0;
+                  if (aEnc != bEnc) return aEnc - bEnc;
+                  return a.dataHora.compareTo(b.dataHora);
+                });
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 168,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      clipBehavior: Clip.none,
+                      itemCount: jogosOrdenados.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      itemBuilder: (context, i) =>
+                          _CardJogo(jogo: jogosOrdenados[i]),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded,
+                          size: 13, color: Cores.onSurfaceVariant),
+                      const SizedBox(width: 5),
+                      Text(
+                        'O placar é atualizado somente ao final da partida.',
+                        style: TextStyle(
+                            fontSize: 11.5, color: Cores.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ],
               );
             },
           ),
@@ -221,11 +248,10 @@ class _CardJogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Converte o dataHora (UTC) para o horário local do dispositivo
-    // e formata como "16:00" para exibir no chip.
     final horarioLocal = DateFormat('HH:mm').format(jogo.dataHora.toLocal());
     final agora = DateTime.now();
-    final aoVivo = jogo.placar1 == null && jogo.dataHora.toLocal().isBefore(agora);
+    final encerrado = jogo.placar1 != null;
+    final aoVivo = !encerrado && jogo.dataHora.toLocal().isBefore(agora);
 
     return Container(
       width: 272,
@@ -257,6 +283,7 @@ class _CardJogo extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               if (aoVivo) const _ChipAoVivo(),
+              if (encerrado) const _ChipEncerrado(),
             ],
           ),
           const SizedBox(height: 16),
@@ -266,24 +293,35 @@ class _CardJogo extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildTime(jogo.team1),
-              aoVivo
-                  ? Text(
-                '${jogo.placar1}  –  ${jogo.placar2}',
-                style: const TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: Cores.onSurface,
-                  letterSpacing: 2,
+              if (encerrado)
+                Text(
+                  '${jogo.placar1}  –  ${jogo.placar2}',
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: Cores.onSurface,
+                    letterSpacing: 2,
+                  ),
+                )
+              else if (aoVivo)
+                const Text(
+                  '0  –  0',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: Cores.onSurface,
+                    letterSpacing: 2,
+                  ),
+                )
+              else
+                Text(
+                  'VS',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Cores.onSurfaceVariant.withOpacity(0.5),
+                  ),
                 ),
-              )
-                  : Text(
-                'VS',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: Cores.onSurfaceVariant.withOpacity(0.5),
-                ),
-              ),
               _buildTime(jogo.team2),
             ],
           ),
@@ -381,6 +419,44 @@ class _ChipAoVivo extends StatelessWidget {
           const SizedBox(width: 5),
           const Text(
             'AO VIVO',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+              color: Cores.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChipEncerrado extends StatelessWidget {
+  const _ChipEncerrado();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Cores.surfaceVariant,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Cores.outlineVariant,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 5),
+          const Text(
+            'ENCERRADO',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
