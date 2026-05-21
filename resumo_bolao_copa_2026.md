@@ -330,6 +330,7 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - `CustomScrollView` com slivers agrupados por seção
 - Chip AO VIVO com ponto pulsante via `AnimationController`
 - Exibe bandeiras reais (`Bandeira`) e nomes em português (`nomePtDe`)
+- Tocar em um jogo encerrado na aba Resultados abre dialog com todos os palpites registrados, ordenados por pontuação; cada linha mostra posição, avatar, nome, palpite e badge de pontos
 
 ### `tela_palpites.dart` — implementada
 - Duas abas: **Próximos** e **Resultados**
@@ -346,6 +347,7 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - `StreamBuilder` direto no Firestore → ranking atualiza em tempo real
 - Pódio visual para top 3: avatar real (foto do jogador via `WidgetAvatar`); fundo do degrau dourado/prata (`Color(0xFFC0C0C0)`)/bronze (`Color(0xFFCD7F32)`); texto em `Cores.onSurface`
 - Lista para 4º em diante com avatar real; usuário logado destacado com borda verde
+- Tocar em qualquer card (pódio ou lista) abre dialog com palpites do usuário nos jogos encerrados, ordenados do mais recente para o mais antigo; cada linha mostra bandeiras + siglas + resultado, palpite e badge de pontos
 
 ### `tela_admin.dart` — implementada (acesso exclusivo via drawer)
 - Filtra jogos elegíveis: 105 min após o início (IDs 1 e 2 sempre desbloqueados para teste)
@@ -498,6 +500,8 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 - `Container.clipBehavior: Clip.antiAlias` com `BoxDecoration(shape: BoxShape.circle)` — recorta o filho em formato circular
 - `FittedBox(fit: BoxFit.cover, clipBehavior: Clip.hardEdge)` com `CountryFlag(width: tamanho * 2.2)` — força bandeira a preencher o círculo sem letterboxing (largura 2.2× garante que flags até 2:1 preencham a altura)
 - `FirebaseMessaging.onMessageOpenedApp` — stream disparado quando usuário toca na notificação com app em background; `getInitialMessage()` — recupera notificação que abriu o app quando estava fechado; usados juntos para deep linking FCM
+- `Flexible` dentro de `Row` — permite que o filho encolha e use `TextOverflow.ellipsis` sem estourar o layout; essencial em cabeçalhos de dialog com nomes longos ao lado de widgets de tamanho fixo (bandeiras, placar)
+- `calcularPontos()` em `biblioteca.dart` — função pública compartilhada; os dialogs de palpites a usam para calcular badges de pontuação
 - `kIsWeb` de `package:flutter/foundation.dart` — guard para código não suportado na web (ex: `FirebaseMessaging.onBackgroundMessage`, FCM token registration)
 - Flutter web: `flutter create --platforms web .` cria a pasta `web/` com boilerplate; `manifest.json` configura nome/ícone/tema; meta tags iOS habilitam "Adicionar à Tela de Início" no Safari
 - `firebase deploy --only hosting --project <id>` — deploya `build/web` no Firebase Hosting
