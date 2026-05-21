@@ -2,8 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/jogo.dart';
+import '../models/palpite.dart';
 import '../models/usuario.dart';
+import '../services/jogo_service.dart';
+import '../services/palpite_service.dart';
 import '../utils/avatares.dart';
+import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 
 class TelaRanking extends StatelessWidget {
@@ -218,7 +223,9 @@ class _ColunaPodio extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return GestureDetector(
+      onTap: () => _mostrarPalpitesUsuario(context, usuario),
+      child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         // Avatar com badge de posição
@@ -368,7 +375,8 @@ class _ColunaPodio extends StatelessWidget {
           ),
         ),
       ],
-    );
+    ), // Column
+    ); // GestureDetector
   }
 
 }
@@ -388,7 +396,9 @@ class _ItemRanking extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
+    return GestureDetector(
+      onTap: () => _mostrarPalpitesUsuario(context, usuario),
+      child: AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       decoration: BoxDecoration(
         color: euSou ? Cores.primaryContainer : Cores.surface,
@@ -470,6 +480,267 @@ class _ItemRanking extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    ), // AnimatedContainer
+    ); // GestureDetector
+  }
+}
+
+// ─── Diálogo: palpites de um usuário ─────────────────────────────────────────
+
+Future<void> _mostrarPalpitesUsuario(BuildContext context, Usuario usuario) {
+  return showDialog(
+    context: context,
+    builder: (_) => _DialogPalpitesUsuario(usuario: usuario),
+  );
+}
+
+class _ItemPalpiteUsuario {
+  const _ItemPalpiteUsuario(
+      {required this.jogo, required this.palpite, required this.pontos});
+  final Jogo jogo;
+  final Palpite palpite;
+  final int pontos;
+}
+
+class _DialogPalpitesUsuario extends StatefulWidget {
+  const _DialogPalpitesUsuario({required this.usuario});
+  final Usuario usuario;
+
+  @override
+  State<_DialogPalpitesUsuario> createState() => _DialogPalpitesUsuarioState();
+}
+
+class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
+  late final Future<List<_ItemPalpiteUsuario>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _carregar();
+  }
+
+  Future<List<_ItemPalpiteUsuario>> _carregar() async {
+    final results = await Future.wait([
+      PalpiteService().buscarTodosPorUsuario(widget.usuario.uid),
+      JogoService().buscarTodos(),
+    ]);
+    final palpites = results[0] as List<Palpite>;
+    final jogos = results[1] as List<Jogo>;
+
+    final palpitesMap = {for (final p in palpites) p.jogoId: p};
+
+    return jogos
+        .where((j) => j.placar1 != null && palpitesMap.containsKey(j.id))
+        .map((j) {
+          final p = palpitesMap[j.id]!;
+          return _ItemPalpiteUsuario(
+            jogo: j,
+            palpite: p,
+            pontos: calcularPontos(p.palpite1, p.palpite2, j.placar1!, j.placar2!),
+          );
+        })
+        .toList()
+      ..sort((a, b) => b.jogo.dataHora.compareTo(a.jogo.dataHora));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Cabeçalho verde
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+            color: Cores.verdePrincipal,
+            child: Row(
+              children: [
+                WidgetAvatar(
+                  avatarId: widget.usuario.avatar,
+                  nome: widget.usuario.nome,
+                  tamanho: 44,
+                  corFundo: Colors.white24,
+                  corTexto: Colors.white,
+                  borderColor: Colors.white,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.usuario.nome,
+                        style: GoogleFonts.anybody(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'Palpites nos jogos encerrados',
+                        style: GoogleFonts.hankenGrotesk(
+                          fontSize: 12,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Lista de palpites
+          FutureBuilder<List<_ItemPalpiteUsuario>>(
+            future: _future,
+            builder: (ctx, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(color: Cores.verdePrincipal),
+                );
+              }
+              final itens = snap.data ?? [];
+              if (itens.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Nenhum palpite registrado.',
+                    style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
+                  ),
+                );
+              }
+              return ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 420),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: itens.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1, color: Cores.outlineVariant),
+                  itemBuilder: (_, i) => _buildLinha(itens[i]),
+                ),
+              );
+            },
+          ),
+
+          // Botão fechar
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Cores.verdePrincipal,
+                  side: const BorderSide(color: Cores.verdePrincipal),
+                ),
+                child: Text('FECHAR',
+                    style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLinha(_ItemPalpiteUsuario item) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          // Times e resultado
+          Bandeira(item.jogo.team1, tamanho: 20),
+          const SizedBox(width: 5),
+          Text(
+            siglaDe(item.jogo.team1),
+            style: GoogleFonts.anybody(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Cores.onSurface,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            child: Text(
+              '${item.jogo.placar1}–${item.jogo.placar2}',
+              style: GoogleFonts.anybody(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Cores.verdePrincipal,
+              ),
+            ),
+          ),
+          Text(
+            siglaDe(item.jogo.team2),
+            style: GoogleFonts.anybody(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Cores.onSurface,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Bandeira(item.jogo.team2, tamanho: 20),
+
+          const Spacer(),
+
+          // Palpite do usuário
+          Text(
+            '${item.palpite.palpite1}–${item.palpite.palpite2}',
+            style: GoogleFonts.hankenGrotesk(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Cores.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Badge de pontos
+          _BadgePontos(item.pontos),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Badge de pontuação ───────────────────────────────────────────────────────
+
+class _BadgePontos extends StatelessWidget {
+  const _BadgePontos(this.pontos);
+  final int pontos;
+
+  Color get _cor {
+    switch (pontos) {
+      case 10: return const Color(0xFF006D32);
+      case 7:  return const Color(0xFF1B7F3A);
+      case 5:  return const Color(0xFF4CAF50);
+      case 4:  return const Color(0xFFFCD400);
+      default: return const Color(0xFFBBCBB9);
+    }
+  }
+
+  Color get _corTexto => pontos == 4 ? Cores.onSecondaryContainer : Colors.white;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: _cor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$pontos pts',
+        style: GoogleFonts.anybody(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: _corTexto,
+        ),
       ),
     );
   }

@@ -1,7 +1,12 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/jogo.dart';
+import '../models/palpite.dart';
+import '../models/usuario.dart';
 import '../services/jogo_service.dart';
+import '../services/palpite_service.dart';
+import '../utils/avatares.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 
@@ -247,7 +252,9 @@ class _CardJogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: _encerrado ? () => _mostrarPalpitesJogo(context, jogo) : null,
+      child: Container(
       decoration: BoxDecoration(
         color: Cores.surface,
         borderRadius: BorderRadius.circular(16),
@@ -289,8 +296,9 @@ class _CardJogo extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
+      ), // ClipRRect
+      ), // Container
+    ); // GestureDetector
   }
 
   // ── Cabeçalho: chip do grupo + horário ou badge AO VIVO ──────────────────
@@ -568,6 +576,289 @@ class _ChipAoVivoState extends State<_ChipAoVivo>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Diálogo: todos os palpites de um jogo ────────────────────────────────────
+
+Future<void> _mostrarPalpitesJogo(BuildContext context, Jogo jogo) {
+  return showDialog(
+    context: context,
+    builder: (_) => _DialogPalpitesJogo(jogo: jogo),
+  );
+}
+
+class _ItemPalpiteJogo {
+  const _ItemPalpiteJogo(
+      {required this.usuario, required this.palpite, required this.pontos});
+  final Usuario usuario;
+  final Palpite palpite;
+  final int pontos;
+}
+
+class _DialogPalpitesJogo extends StatefulWidget {
+  const _DialogPalpitesJogo({required this.jogo});
+  final Jogo jogo;
+
+  @override
+  State<_DialogPalpitesJogo> createState() => _DialogPalpitesJogoState();
+}
+
+class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
+  late final Future<List<_ItemPalpiteJogo>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _carregar();
+  }
+
+  Future<List<_ItemPalpiteJogo>> _carregar() async {
+    final palpites = await PalpiteService().buscarTodosPorJogo(widget.jogo.id);
+    if (palpites.isEmpty) return [];
+
+    final uids = palpites.map((p) => p.uid).toSet().toList();
+    final snap = await FirebaseFirestore.instance
+        .collection('usuarios')
+        .where(FieldPath.documentId, whereIn: uids)
+        .get();
+
+    final usuariosMap = {
+      for (final doc in snap.docs) doc.id: Usuario.fromMap(doc.data()),
+    };
+
+    return palpites
+        .where((p) => usuariosMap.containsKey(p.uid))
+        .map((p) {
+          final u = usuariosMap[p.uid]!;
+          return _ItemPalpiteJogo(
+            usuario: u,
+            palpite: p,
+            pontos: calcularPontos(
+              p.palpite1, p.palpite2,
+              widget.jogo.placar1!, widget.jogo.placar2!,
+            ),
+          );
+        })
+        .toList()
+      ..sort((a, b) => b.pontos.compareTo(a.pontos));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final j = widget.jogo;
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Cabeçalho verde com times e resultado
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+            color: Cores.verdePrincipal,
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Bandeira(j.team1, tamanho: 28),
+                    const SizedBox(width: 8),
+                    Text(
+                      nomePtDe(j.team1),
+                      style: GoogleFonts.anybody(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Text(
+                        '${j.placar1}  ×  ${j.placar2}',
+                        style: GoogleFonts.anybody(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      nomePtDe(j.team2),
+                      style: GoogleFonts.anybody(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Bandeira(j.team2, tamanho: 28),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Palpites registrados',
+                  style: GoogleFonts.hankenGrotesk(
+                    fontSize: 12,
+                    color: Colors.white70,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Lista de palpites
+          FutureBuilder<List<_ItemPalpiteJogo>>(
+            future: _future,
+            builder: (ctx, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(color: Cores.verdePrincipal),
+                );
+              }
+              final itens = snap.data ?? [];
+              if (itens.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Nenhum palpite registrado.',
+                    style: GoogleFonts.hankenGrotesk(
+                        color: Cores.onSurfaceVariant),
+                  ),
+                );
+              }
+              return ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 420),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: itens.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1, color: Cores.outlineVariant),
+                  itemBuilder: (_, i) => _buildLinha(itens[i], i + 1),
+                ),
+              );
+            },
+          ),
+
+          // Botão fechar
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Cores.verdePrincipal,
+                  side: const BorderSide(color: Cores.verdePrincipal),
+                ),
+                child: Text('FECHAR',
+                    style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLinha(_ItemPalpiteJogo item, int posicao) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          // Posição
+          SizedBox(
+            width: 20,
+            child: Text(
+              '$posicao',
+              style: GoogleFonts.anybody(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Cores.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Avatar
+          WidgetAvatar(
+            avatarId: item.usuario.avatar,
+            nome: item.usuario.nome,
+            tamanho: 32,
+            corFundo: Cores.surfaceContainerHigh,
+          ),
+          const SizedBox(width: 8),
+
+          // Nome
+          Expanded(
+            child: Text(
+              item.usuario.nome,
+              style: GoogleFonts.hankenGrotesk(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Cores.onSurface,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+
+          // Palpite
+          Text(
+            '${item.palpite.palpite1}–${item.palpite.palpite2}',
+            style: GoogleFonts.hankenGrotesk(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Cores.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Badge de pontos
+          _BadgePontos(item.pontos),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Badge de pontuação ───────────────────────────────────────────────────────
+
+class _BadgePontos extends StatelessWidget {
+  const _BadgePontos(this.pontos);
+  final int pontos;
+
+  Color get _cor {
+    switch (pontos) {
+      case 10: return const Color(0xFF006D32);
+      case 7:  return const Color(0xFF1B7F3A);
+      case 5:  return const Color(0xFF4CAF50);
+      case 4:  return const Color(0xFFFCD400);
+      default: return const Color(0xFFBBCBB9);
+    }
+  }
+
+  Color get _corTexto => pontos == 4 ? Cores.onSecondaryContainer : Colors.white;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: _cor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$pontos pts',
+        style: GoogleFonts.anybody(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: _corTexto,
+        ),
       ),
     );
   }

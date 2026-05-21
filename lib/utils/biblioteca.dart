@@ -290,6 +290,17 @@ class Bandeira extends StatelessWidget {
   }
 }
 
+/// Calcula os pontos de um palpite dado o resultado real.
+int calcularPontos(int p1, int p2, int r1, int r2) {
+  if (p1 == r1 && p2 == r2) return 10;
+  final sP = p1 - p2, sR = r1 - r2;
+  final vP = p1.compareTo(p2), vR = r1.compareTo(r2);
+  if (sP == sR && vP == vR) return 7;
+  if (vP == vR && vR != 0) return 5;
+  if (vP == 0 && vR == 0) return 4;
+  return 0;
+}
+
 /// Retorna a sigla de 3 letras correspondente ao nome completo do país.
 /// Para times não mapeados, usa as 3 primeiras letras do nome em maiúsculo
 /// como fallback — ex: "Vencedor 73" → "VEN".
