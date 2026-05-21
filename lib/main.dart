@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
 import 'models/usuario.dart';
 import 'screens/menu_principal.dart';
@@ -9,11 +10,16 @@ import 'screens/tela_setup_perfil.dart';
 import 'services/usuario_service.dart';
 import 'utils/cores.dart';
 
+// Deve ser top-level: o Flutter executa em isolate separado quando o app está fechado.
+@pragma('vm:entry-point')
+Future<void> _handleBackgroundMessage(RemoteMessage message) async {}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
   runApp(const MeuApp());
 }
 
