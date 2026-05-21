@@ -51,4 +51,15 @@ class UsuarioService {
   Future<void> atualizarAvatar(String uid, String avatarId) async {
     await _colecao.doc(uid).update({'avatar': avatarId});
   }
+
+  Future<void> salvarPalpiteEspecial({
+    required String uid,
+    required String campeao,
+    required String artilheiro,
+  }) async {
+    await _colecao.doc(uid).update({
+      'palpiteCampeao': campeao,
+      'palpiteArtilheiro': artilheiro,
+    });
+  }
 }

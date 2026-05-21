@@ -296,6 +296,35 @@ int calcularPontos(int p1, int p2, int r1, int r2) {
   return 0;
 }
 
+/// Lista dos 48 times da Copa 2026 (nomes em inglês, mesmos usados no Firestore).
+/// Usada no diálogo de palpite especial (seleção de campeão).
+const kTimesCopa2026 = [
+  // Grupo A
+  'Mexico', 'South Africa', 'South Korea', 'Czech Republic',
+  // Grupo B
+  'Canada', 'Bosnia & Herzegovina', 'Qatar', 'Switzerland',
+  // Grupo C
+  'Brazil', 'Morocco', 'Haiti', 'Scotland',
+  // Grupo D
+  'USA', 'Paraguay', 'Australia', 'Turkey',
+  // Grupo E
+  'Germany', 'Curaçao', 'Ivory Coast', 'Ecuador',
+  // Grupo F
+  'Netherlands', 'Japan', 'Sweden', 'Tunisia',
+  // Grupo G
+  'Belgium', 'Egypt', 'Iran', 'New Zealand',
+  // Grupo H
+  'Spain', 'Cape Verde', 'Saudi Arabia', 'Uruguay',
+  // Grupo I
+  'France', 'Senegal', 'Iraq', 'Norway',
+  // Grupo J
+  'Argentina', 'Algeria', 'Austria', 'Jordan',
+  // Grupo K
+  'Portugal', 'DR Congo', 'Uzbekistan', 'Colombia',
+  // Grupo L
+  'England', 'Croatia', 'Ghana', 'Panama',
+];
+
 /// Retorna a sigla de 3 letras correspondente ao nome completo do país.
 /// Para times não mapeados, usa as 3 primeiras letras do nome em maiúsculo
 /// como fallback — ex: "Vencedor 73" → "VEN".

@@ -1,8 +1,12 @@
 import 'package:bolao/utils/biblioteca.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../models/jogo.dart';
+import '../models/usuario.dart';
 import '../services/jogo_service.dart';
+import '../services/usuario_service.dart';
 import '../utils/cores.dart';
 
 // ─── Tela Home ────────────────────────────────────────────────────────────────
@@ -42,7 +46,7 @@ class _TelaHomeState extends State<TelaHome> {
         children: [
           _buildSecaoJogosDeHoje(),
           const SizedBox(height: 24),
-          _buildBentoGrid(),
+          _buildBentoGrid(context),
         ],
       ),
     );
@@ -194,7 +198,7 @@ class _TelaHomeState extends State<TelaHome> {
   // ── Bento Grid de navegação ─────────────────────────────────────────────────
   // Mantido exatamente igual — não depende de dados do Firestore
 
-  Widget _buildBentoGrid() {
+  Widget _buildBentoGrid(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -227,6 +231,13 @@ class _TelaHomeState extends State<TelaHome> {
                   ),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _CardPalpiteEspecial(
+            onTap: () => showDialog(
+              context: context,
+              builder: (_) => const _DialogPalpiteEspecial(),
             ),
           ),
           const SizedBox(height: 12),
@@ -558,6 +569,377 @@ class _CardNav extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ─── Card: Palpite Especial (Campeão & Artilheiro) ───────────────────────────
+
+class _CardPalpiteEspecial extends StatelessWidget {
+  const _CardPalpiteEspecial({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Cores.azulTerciario,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -8,
+                top: 0,
+                bottom: 0,
+                child: Icon(
+                  Icons.emoji_events,
+                  size: 100,
+                  color: Colors.white.withOpacity(0.1),
+                ),
+              ),
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'CAMPEÃO & ARTILHEIRO',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      fontStyle: FontStyle.italic,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Palpite no vencedor da Copa e no artilheiro.',
+                    style: TextStyle(fontSize: 13, color: Colors.white70),
+                  ),
+                  SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Text(
+                        'REGISTRAR PALPITE',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.4,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(Icons.arrow_forward, size: 14, color: Colors.white),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Diálogo: Palpite Especial ────────────────────────────────────────────────
+
+class _DialogPalpiteEspecial extends StatefulWidget {
+  const _DialogPalpiteEspecial();
+
+  @override
+  State<_DialogPalpiteEspecial> createState() => _DialogPalpiteEspecialState();
+}
+
+class _DialogPalpiteEspecialState extends State<_DialogPalpiteEspecial> {
+  final String _uid = FirebaseAuth.instance.currentUser!.uid;
+
+  bool _loading = true;
+  bool _salvando = false;
+  bool _bloqueado = false;
+
+  String? _campeaoSelecionado;
+  late final TextEditingController _ctrlArtilheiro;
+  String? _erro;
+
+  late final List<String> _timesSorted;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrlArtilheiro = TextEditingController();
+    _timesSorted = kTimesCopa2026.toList()
+      ..sort((a, b) => nomePtDe(a).compareTo(nomePtDe(b)));
+    _inicializar();
+  }
+
+  @override
+  void dispose() {
+    _ctrlArtilheiro.dispose();
+    super.dispose();
+  }
+
+  Future<void> _inicializar() async {
+    final results = await Future.wait([
+      UsuarioService().buscarPorUid(_uid),
+      JogoService().buscarTodos(),
+    ]);
+    if (!mounted) return;
+    final usuario = results[0] as Usuario?;
+    final jogos = results[1] as List<Jogo>;
+
+    String? campeao = usuario?.palpiteCampeao;
+    final artilheiro = usuario?.palpiteArtilheiro ?? '';
+    bool bloqueado = false;
+
+    if (jogos.isNotEmpty) {
+      jogos.sort((a, b) => a.dataHora.compareTo(b.dataHora));
+      bloqueado = DateTime.now().isAfter(jogos.first.dataHora);
+    }
+
+    setState(() {
+      _campeaoSelecionado = campeao;
+      _ctrlArtilheiro.text = artilheiro;
+      _bloqueado = bloqueado;
+      _loading = false;
+    });
+  }
+
+  Future<void> _salvar() async {
+    if (_campeaoSelecionado == null) {
+      setState(() => _erro = 'Selecione o campeão.');
+      return;
+    }
+    if (_ctrlArtilheiro.text.trim().isEmpty) {
+      setState(() => _erro = 'Digite o nome do artilheiro.');
+      return;
+    }
+    setState(() { _salvando = true; _erro = null; });
+    try {
+      await UsuarioService().salvarPalpiteEspecial(
+        uid: _uid,
+        campeao: _campeaoSelecionado!,
+        artilheiro: _ctrlArtilheiro.text.trim(),
+      );
+      if (mounted) Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) setState(() { _erro = 'Erro ao salvar. Tente novamente.'; _salvando = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        child: _loading
+            ? const SizedBox(
+                height: 200,
+                child: Center(child: CircularProgressIndicator(color: Cores.azulTerciario)),
+              )
+            : _buildContent(),
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Cabeçalho azul
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+          color: Cores.azulTerciario,
+          width: double.infinity,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.emoji_events, color: Colors.white, size: 26),
+                  const SizedBox(width: 10),
+                  Text(
+                    'PALPITES ESPECIAIS',
+                    style: GoogleFonts.anybody(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _bloqueado
+                    ? 'Bloqueado — a Copa já começou.'
+                    : 'Válidos até o início do primeiro jogo.',
+                style: GoogleFonts.hankenGrotesk(fontSize: 12, color: Colors.white70),
+              ),
+            ],
+          ),
+        ),
+
+        // Conteúdo rolável
+        Flexible(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Seção: Artilheiro
+                Text(
+                  'ARTILHEIRO',
+                  style: GoogleFonts.anybody(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: Cores.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _ctrlArtilheiro,
+                  enabled: !_bloqueado,
+                  decoration: InputDecoration(
+                    hintText: 'Nome do jogador',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Cores.azulTerciario, width: 2),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                  textCapitalization: TextCapitalization.words,
+                  style: GoogleFonts.hankenGrotesk(fontSize: 15),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Seção: Campeão
+                Text(
+                  'CAMPEÃO',
+                  style: GoogleFonts.anybody(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: Cores.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 6),
+
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Cores.outlineVariant),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: SizedBox(
+                    height: 280,
+                    child: ListView.builder(
+                      physics: const ClampingScrollPhysics(),
+                      itemCount: _timesSorted.length,
+                      itemBuilder: (_, i) {
+                        final time = _timesSorted[i];
+                        final selecionado = _campeaoSelecionado == time;
+                        return ListTile(
+                          dense: true,
+                          leading: Container(
+                            width: 32,
+                            height: 32,
+                            clipBehavior: Clip.antiAlias,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Cores.outlineVariant),
+                            ),
+                            child: Bandeira(time, tamanho: 32),
+                          ),
+                          title: Text(
+                            nomePtDe(time),
+                            style: GoogleFonts.hankenGrotesk(
+                              fontSize: 14,
+                              fontWeight: selecionado ? FontWeight.w700 : FontWeight.w400,
+                              color: selecionado ? Cores.azulTerciario : Cores.onSurface,
+                            ),
+                          ),
+                          trailing: selecionado
+                              ? const Icon(Icons.check_circle, color: Cores.azulTerciario, size: 20)
+                              : null,
+                          tileColor: selecionado
+                              ? Cores.azulTerciario.withOpacity(0.08)
+                              : null,
+                          onTap: _bloqueado ? null : () => setState(() => _campeaoSelecionado = time),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+
+                if (_erro != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _erro!,
+                    style: GoogleFonts.hankenGrotesk(
+                      fontSize: 13,
+                      color: const Color(0xFFE53935),
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+
+        // Botões
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Cores.azulTerciario,
+                    side: const BorderSide(color: Cores.azulTerciario),
+                  ),
+                  child: Text('FECHAR',
+                      style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+                ),
+              ),
+              if (!_bloqueado) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _salvando ? null : _salvar,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Cores.azulTerciario,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: _salvando
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2),
+                          )
+                        : Text('CONFIRMAR',
+                            style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

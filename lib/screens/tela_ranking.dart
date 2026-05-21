@@ -556,41 +556,118 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
           Container(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
             color: Cores.verdePrincipal,
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                WidgetAvatar(
-                  avatarId: widget.usuario.avatar,
-                  nome: widget.usuario.nome,
-                  tamanho: 44,
-                  corFundo: Colors.white24,
-                  corTexto: Colors.white,
-                  borderColor: Colors.white,
+                Row(
+                  children: [
+                    WidgetAvatar(
+                      avatarId: widget.usuario.avatar,
+                      nome: widget.usuario.nome,
+                      tamanho: 44,
+                      corFundo: Colors.white24,
+                      corTexto: Colors.white,
+                      borderColor: Colors.white,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.usuario.nome,
+                            style: GoogleFonts.anybody(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            'Palpites nos jogos encerrados',
+                            style: GoogleFonts.hankenGrotesk(
+                              fontSize: 12,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.usuario.nome,
-                        style: GoogleFonts.anybody(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        'Palpites nos jogos encerrados',
-                        style: GoogleFonts.hankenGrotesk(
-                          fontSize: 12,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ],
+                if (widget.usuario.palpiteCampeao != null ||
+                    widget.usuario.palpiteArtilheiro != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        if (widget.usuario.palpiteCampeao != null)
+                          Row(
+                            children: [
+                              const Icon(Icons.emoji_events,
+                                  size: 15, color: Colors.white70),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Campeão',
+                                style: GoogleFonts.hankenGrotesk(
+                                    fontSize: 12, color: Colors.white70),
+                              ),
+                              const Spacer(),
+                              Container(
+                                width: 20,
+                                height: 20,
+                                clipBehavior: Clip.antiAlias,
+                                decoration: const BoxDecoration(
+                                    shape: BoxShape.circle),
+                                child: Bandeira(widget.usuario.palpiteCampeao!,
+                                    tamanho: 20),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                nomePtDe(widget.usuario.palpiteCampeao!),
+                                style: GoogleFonts.hankenGrotesk(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        if (widget.usuario.palpiteCampeao != null &&
+                            widget.usuario.palpiteArtilheiro != null)
+                          const Divider(color: Colors.white24, height: 14),
+                        if (widget.usuario.palpiteArtilheiro != null)
+                          Row(
+                            children: [
+                              const Icon(Icons.sports_soccer,
+                                  size: 15, color: Colors.white70),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Artilheiro',
+                                style: GoogleFonts.hankenGrotesk(
+                                    fontSize: 12, color: Colors.white70),
+                              ),
+                              const Spacer(),
+                              Text(
+                                widget.usuario.palpiteArtilheiro!,
+                                style: GoogleFonts.hankenGrotesk(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
