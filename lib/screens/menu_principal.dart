@@ -523,6 +523,10 @@ class _DialogRegras extends StatelessWidget {
                 pontos: 0,
                 descricao: 'Errou tudo',
                 exemplo: 'Nenhum critério acima'),
+            const _ItemRegra(
+                pontos: -1,
+                descricao: 'Esqueceu de palpitar',
+                exemplo: 'Sem palpite registrado antes do jogo'),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
@@ -556,6 +560,7 @@ class _ItemRegra extends StatelessWidget {
   final String exemplo;
 
   Color get _corBadge {
+    if (pontos == -1) return const Color(0xFFE53935);
     if (pontos == 10) return const Color(0xFF006D32);
     if (pontos == 7) return const Color(0xFF1B7F3A);
     if (pontos == 5) return const Color(0xFF4CAF50);

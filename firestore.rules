@@ -3,44 +3,82 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Retorna true se o usuário autenticado tiver isAdmin == true no Firestore.
-    // Usa .get('isAdmin', false) para não falhar quando o campo não existe
-    // (acessar .data.isAdmin diretamente retorna null se o campo for ausente,
-    // e null == true é false — mas em alguns contextos pode causar erro de avaliação).
     function isAdmin() {
       return request.auth != null
         && get(/databases/$(database)/documents/usuarios/$(request.auth.uid))
              .data.get('isAdmin', false) == true;
     }
 
+    // Verifica se o jogo ainda não começou (request.time é UTC, igual ao dataHora).
+    // Usada nas regras de escrita de palpites para impedir alteração após o início,
+    // mesmo que alguém faça chamadas diretas à API do Firestore bypassando o app.
+    function jogoNaoComecou(jogoId) {
+      return request.time
+        < get(/databases/$(database)/documents/jogos/$(jogoId)).data.dataHora;
+    }
+
     // ── usuarios ─────────────────────────────────────────────────────────────
-    // Cada usuário lê e escreve apenas o próprio documento.
-    // O ranking (TelaRanking) precisa listar todos os usuários — por isso
-    // qualquer usuário autenticado pode ler a coleção inteira.
-    // O admin pode atualizar APENAS o campo pontuacao de qualquer usuário
-    // (necessário para o batch de recálculo em TelaAdmin).
+    //
+    // create: restringe o payload aos campos legítimos do cadastro e bloqueia
+    //   qualquer tentativa de se criar já como admin ou com pontuação inflada.
+    //   O campo 'uid' precisa estar no hasOnly porque toMap() o inclui.
+    //
+    // update: só os campos que o app permite editar; pontuacao, isAdmin,
+    //   criadoEm, email e uid nunca são alterados pelo cliente —
+    //   só a Cloud Function (Admin SDK) os toca, e Admin SDK ignora regras.
+    //
     match /usuarios/{uid} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == uid;
-      // pontuacao é atualizada pela Cloud Function (Admin SDK) — não precisa de regra aqui
+
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(
+             ['uid', 'email', 'nome', 'pontuacao', 'criadoEm', 'avatar'])
+        && request.resource.data.get('isAdmin', false) == false
+        && request.resource.data.get('pontuacao', 0) == 0;
+
+      allow update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['nome', 'avatar', 'fcmToken', 'notifLembretes', 'notifRanking']);
+
+      allow delete: if request.auth != null && request.auth.uid == uid;
     }
 
     // ── jogos ─────────────────────────────────────────────────────────────────
-    // Qualquer usuário autenticado pode ler jogos (TelaHome, TelaPalpites, etc.).
-    // Apenas o admin pode criar, atualizar ou deletar documentos de jogos.
     match /jogos/{jogoId} {
       allow read: if request.auth != null;
       allow write: if isAdmin();
     }
 
     // ── palpites ──────────────────────────────────────────────────────────────
-    // Usuário lê e escreve apenas os próprios palpites.
-    // Admin pode ler qualquer palpite para calcular pontuação (TelaAdmin).
+    //
+    // create: usuário é dono do palpite + jogo ainda não começou.
+    //
+    // update: todas as condições numa regra só (múltiplos allow são OR — colocar
+    //   em blocos separados faria qualquer um poder alterar palpite alheio).
+    //   Além de ser o dono e o jogo não ter começado, uid e jogoId não podem
+    //   ser trocados (garante que o documento não é "reatribuído").
+    //
+    // Leitura aberta para autenticados: necessário para os dialogs de palpites
+    //   na TelaTabela e TelaRanking. Restringir leitura a jogos encerrados
+    //   exigiria salvar dataHoraJogo em cada palpite — complexidade não
+    //   justificada para um bolão entre amigos.
+    //
     match /palpites/{palpiteId} {
-      allow read: if request.auth != null
-        && (request.auth.uid == resource.data.uid || isAdmin());
-      allow write: if request.auth != null
-        && request.auth.uid == request.resource.data.uid;
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.uid
+        && jogoNaoComecou(request.resource.data.jogoId);
+
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.jogoId == resource.data.jogoId
+        && jogoNaoComecou(resource.data.jogoId);
+
+      allow delete: if false;
     }
   }
 }

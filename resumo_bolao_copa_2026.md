@@ -294,12 +294,15 @@ int calcularPontos(int p1, int p2, int r1, int r2) {
 }
 ```
 
+Regra extra: −1 pt para quem esqueceu de palpitar em jogo disputado após o `criadoEm` do usuário. Jogos anteriores ao cadastro não geram penalidade.
+
 Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de resultado):
 - 10 pts → `Color(0xFF006D32)` verde escuro
 - 7 pts → `Color(0xFF1B7F3A)` verde médio
 - 5 pts → `Color(0xFF4CAF50)` verde claro
 - 4 pts → `Color(0xFFFCD400)` amarelo (texto: `Cores.onSecondaryContainer`)
 - 0 pts → `Color(0xFFBBCBB9)` cinza
+- −1 pt → `Color(0xFFE53935)` vermelho
 
 ---
 
@@ -334,10 +337,11 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 
 ### `tela_palpites.dart` — implementada
 - Duas abas: **Próximos** e **Resultados**
-- `Future.wait` carrega jogos + palpites em paralelo — sem N queries por card
+- `Future.wait` carrega jogos + palpites + perfil do usuário (para `criadoEm`) em paralelo
 - `Timer.periodic(30s)` reclassifica jogos entre abas automaticamente
 - **Aba Próximos:** jogos disponíveis para palpite (mais de 5 min antes do início); "Ver mais" carrega próxima data; trava impede salvar após o cutoff
 - **Aba Resultados:** chip "PRESTES A COMEÇAR" (amarelo, <5 min), "AO VIVO" (pulsante), ou horário; cards encerrados coloridos pela pontuação; badge de pontos; "Registrado em DD/MM às HHhMM"
+- **Regra −1:** jogo encerrado sem palpite cujo `dataHora > criadoEm` do usuário → `pontos = -1`; card com borda/fundo vermelhos; badge vermelho "−1 pt". Jogos anteriores ao cadastro ficam sem penalidade (badge cinza "Sem palpite")
 - Palpite precarregado pelo pai — `_CardPalpite` não faz query individual
 - Bandeiras reais (`Bandeira`) e nome completo em português nos cards de ambas as abas
 - **Navegação por Enter:** Enter no gol 1 → foco para gol 2; Enter no gol 2 → salva e move foco para o gol 1 do próximo card; sem próximo card → fecha teclado
@@ -380,9 +384,9 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 
 | Função | Tipo | O que faz |
 |---|---|---|
-| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula delta de pontuação para cada palpite; envia FCM de ranking para quem mudou de posição |
+| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula delta de pontuação para cada palpite; na primeira inserção de resultado aplica −1 para usuários sem palpite registrados antes do jogo; envia FCM de ranking para quem mudou de posição |
 | `lembretesPalpite` | Schedule (`*/30 * * * *`) | Notifica usuários sem palpite em jogos que começam em ~30 min |
-| `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação de todos os usuários do zero |
+| `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação de todos os usuários do zero, incluindo a penalidade de −1 por ausência de palpite |
 
 **FCM token management:** token salvo em `usuarios/{uid}.fcmToken`. Tokens inválidos são removidos automaticamente (`messaging/registration-token-not-registered`).
 
@@ -421,7 +425,7 @@ buscarPorUsuario(String uid)             // where(uid) + orderBy(jogoId) — req
 buscarTodosPorJogo(int jogoId)           // where(jogoId) — usado pelo admin
 ```
 
-**Nota sobre índices:** `buscarPorUsuario` usa `where + orderBy` em campos diferentes → Firestore exige índice composto. Na primeira execução, o log mostra um link para criar o índice automaticamente.
+**Nota sobre índices:** `buscarPorUsuario` usa `where + orderBy` em campos diferentes → Firestore exige índice composto. O índice está versionado em `firestore.indexes.json` e é deployado com `firebase deploy --only firestore`.
 
 ---
 
@@ -508,8 +512,33 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 
 ---
 
+## Segurança do Firestore
+
+Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deploy: `firebase deploy --only firestore --project bolaodasoci2026`.
+
+**`usuarios`**
+- `read`: qualquer autenticado (ranking, drawer, dialogs)
+- `create`: só o próprio usuário; payload restrito a `['uid', 'email', 'nome', 'pontuacao', 'criadoEm', 'avatar']`; `isAdmin` e `pontuacao` devem ser `false`/`0` — impede escalada de privilégio
+- `update`: só campos `['nome', 'avatar', 'fcmToken', 'notifLembretes', 'notifRanking']`; `pontuacao`, `isAdmin`, `criadoEm`, `email`, `uid` protegidos (alterados apenas pelo Admin SDK da Cloud Function)
+- `delete`: só o próprio usuário (exclusão de conta)
+
+**`jogos`**
+- `read`: qualquer autenticado
+- `write`: só admin (verificado via `get()` no documento do usuário)
+
+**`palpites`**
+- `read`: qualquer autenticado (necessário para dialogs de TelaTabela e TelaRanking)
+- `create`: dono do palpite + `request.time < jogo.dataHora` (cutoff no backend, não só no frontend)
+- `update`: dono + `uid`/`jogoId` imutáveis + jogo não iniciado
+- `delete`: bloqueado
+
+**Decisões conscientes:**
+- Email visível a todos os autenticados: aceitável para bolão de amigos; mudar exigiria refatoração de arquitetura
+- Palpites de jogos futuros legíveis: restringir exigiria `dataHoraJogo` em cada palpite + migração de dados; não vale para grupo de amigos
+
+---
+
 ## Próximos passos (na ordem recomendada)
 
-1. **Regras de segurança do Firestore** — substituir modo de teste por regras reais antes do lançamento (ex: usuário só lê/escreve seus próprios palpites; só admin escreve em jogos)
-2. **Google Play Internal Testing** — conta Play Console aguardando verificação de identidade; quando aprovada: criar keystore, configurar signing no `build.gradle.kts`, build AAB, upload no Play Console
-3. **Popular com dados de produção** — clicar em Popular → Produção quando a Copa começar (11/jun)
+1. **Google Play Internal Testing** — conta Play Console aguardando verificação de identidade; quando aprovada: criar keystore, configurar signing no `build.gradle.kts`, build AAB, upload no Play Console
+2. **Popular com dados de produção** — clicar em Popular → Produção quando a Copa começar (11/jun)
