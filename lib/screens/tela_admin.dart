@@ -95,6 +95,7 @@ class _TelaAdminState extends State<TelaAdmin> {
     final times = jogos
         .expand((j) => [j.team1, j.team2])
         .toSet()
+        .where((t) => !t.contains(RegExp(r'\d')))
         .toList()
       ..sort((a, b) => nomePtDe(a).compareTo(nomePtDe(b)));
     if (!mounted) return;
