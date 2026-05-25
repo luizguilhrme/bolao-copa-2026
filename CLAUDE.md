@@ -422,6 +422,7 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 
 ### `tela_tabela.dart` — implementada
 - Tabs "Próximos" / "Resultados" com `AnimatedContainer`
+- Chips horizontais roláveis abaixo das tabs: **Todos** + **A** a **L** (grupos da Copa); filtro derivado dos dados do Firestore; combinado com a aba ativa — ex: "Resultados + Grupo B" mostra só jogos encerrados do Grupo B; eliminatórias (sem `group`) só aparecem em "Todos"
 - `CustomScrollView` com slivers agrupados por seção
 - Chip AO VIVO com ponto pulsante via `AnimationController`
 - Exibe bandeiras reais (`Bandeira`) em círculo e nomes em português (`nomePtDe`)
