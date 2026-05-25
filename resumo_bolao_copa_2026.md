@@ -619,4 +619,4 @@ Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deplo
 
 ## Próximos passos (na ordem recomendada)
 
-1. **Google Play Internal Testing** — ✓ conta verificada, Internal Testing configurado no Play Console, e-mails de testadores já inseridos. Próximo: divulgar o link de opt-in do Internal Testing para os testadores e acompanhar instalações.
+1. **Google Play Internal Testing** — ✓ conta verificada, Internal Testing configurado, testadores adicionados, versão 1.0.0+2 publicada no Play Console. Testadores podem instalar/atualizar via Play Store.
