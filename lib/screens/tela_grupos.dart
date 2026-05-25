@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/grupo.dart';
+import '../models/usuario.dart';
 import '../services/grupo_service.dart';
+import '../utils/avatares.dart';
 import '../utils/cores.dart';
 
 class TelaGrupos extends StatefulWidget {
@@ -16,6 +18,20 @@ class TelaGrupos extends StatefulWidget {
 class _TelaGruposState extends State<TelaGrupos> {
   final _uid = FirebaseAuth.instance.currentUser!.uid;
   final _service = GrupoService();
+
+  void _abrirDetalhes(Grupo grupo) {
+    showDialog(
+      context: context,
+      builder: (_) => _DialogDetalhesGrupo(grupo: grupo, uid: _uid),
+    );
+  }
+
+  void _abrirEditarNome(Grupo grupo) {
+    showDialog(
+      context: context,
+      builder: (_) => _DialogEditarNome(grupo: grupo),
+    );
+  }
 
   void _abrirCriarGrupo() {
     showDialog(context: context, builder: (_) => _DialogCriarGrupo(uid: _uid));
@@ -154,6 +170,8 @@ class _TelaGruposState extends State<TelaGrupos> {
                         child: _CardGrupo(
                           grupo: grupos[i],
                           isDono: grupos[i].donoUid == _uid,
+                          onTap: () => _abrirDetalhes(grupos[i]),
+                          onEditar: () => _abrirEditarNome(grupos[i]),
                           onSair: () => _confirmarSaida(grupos[i]),
                         ),
                       ),
@@ -175,16 +193,22 @@ class _CardGrupo extends StatelessWidget {
   const _CardGrupo({
     required this.grupo,
     required this.isDono,
+    required this.onTap,
+    required this.onEditar,
     required this.onSair,
   });
 
   final Grupo grupo;
   final bool isDono;
+  final VoidCallback onTap;
+  final VoidCallback onEditar;
   final VoidCallback onSair;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       decoration: BoxDecoration(
         color: Cores.surface,
         border: Border.all(color: Cores.outlineVariant),
@@ -215,7 +239,7 @@ class _CardGrupo extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (isDono)
+              if (isDono) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8, vertical: 3),
@@ -232,6 +256,16 @@ class _CardGrupo extends StatelessWidget {
                     ),
                   ),
                 ),
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: onEditar,
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.edit_outlined,
+                        size: 18, color: Cores.onSurfaceVariant),
+                  ),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 12),
@@ -325,6 +359,272 @@ class _CardGrupo extends StatelessWidget {
           ),
         ],
       ),
+    )); // Container + GestureDetector
+  }
+}
+
+// ─── Dialog: detalhes do grupo ────────────────────────────────────────────────
+
+class _DialogDetalhesGrupo extends StatelessWidget {
+  const _DialogDetalhesGrupo({required this.grupo, required this.uid});
+  final Grupo grupo;
+  final String uid;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Cores.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Cabeçalho verde
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            decoration: const BoxDecoration(
+              color: Cores.verdePrincipal,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  grupo.nome,
+                  style: GoogleFonts.anybody(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: grupo.codigo));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('Código copiado!',
+                          style: GoogleFonts.hankenGrotesk()),
+                      backgroundColor: Cores.verdePrincipal,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 2),
+                    ));
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.content_copy_rounded,
+                            size: 13, color: Colors.white70),
+                        const SizedBox(width: 8),
+                        Text(
+                          grupo.codigo,
+                          style: GoogleFonts.anybody(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 5,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Cabeçalho da lista
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '${grupo.membros.length} ${grupo.membros.length == 1 ? 'membro' : 'membros'}',
+                style: GoogleFonts.hankenGrotesk(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Cores.onSurfaceVariant),
+              ),
+            ),
+          ),
+
+          // Lista de membros
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 300),
+            child: FutureBuilder<List<Usuario>>(
+              future: GrupoService().buscarMembros(grupo.membros),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Center(
+                        child: CircularProgressIndicator(
+                            color: Cores.verdePrincipal)),
+                  );
+                }
+                final membros = List<Usuario>.from(snapshot.data ?? [])
+                  ..sort((a, b) => a.uid == grupo.donoUid
+                      ? -1
+                      : (b.uid == grupo.donoUid ? 1 : 0));
+                return ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: membros.length,
+                  itemBuilder: (context, i) {
+                    final u = membros[i];
+                    final ehDono = u.uid == grupo.donoUid;
+                    return ListTile(
+                      leading: WidgetAvatar(
+                          avatarId: u.avatar, nome: u.nome, tamanho: 44),
+                      title: Text(u.nome,
+                          style: GoogleFonts.anybody(
+                              fontWeight: FontWeight.w600,
+                              color: Cores.onSurface)),
+                      trailing: ehDono
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Cores.verdePrincipal,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text('ADMIN',
+                                  style: GoogleFonts.anybody(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white)),
+                            )
+                          : null,
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+
+          // Botão fechar
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: FilledButton.styleFrom(
+                    backgroundColor: Cores.verdePrincipal,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10))),
+                child: Text('FECHAR',
+                    style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Dialog: editar nome do grupo ─────────────────────────────────────────────
+
+class _DialogEditarNome extends StatefulWidget {
+  const _DialogEditarNome({required this.grupo});
+  final Grupo grupo;
+
+  @override
+  State<_DialogEditarNome> createState() => _DialogEditarNomeState();
+}
+
+class _DialogEditarNomeState extends State<_DialogEditarNome> {
+  late final TextEditingController _controller;
+  bool _salvando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.grupo.nome);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _salvar() async {
+    final nome = _controller.text.trim();
+    if (nome.isEmpty || nome == widget.grupo.nome) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() => _salvando = true);
+    try {
+      await GrupoService().editarNome(widget.grupo.id, nome);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _salvando = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Erro ao salvar: $e',
+            style: GoogleFonts.hankenGrotesk()),
+        backgroundColor: const Color(0xFFBA1A1A),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Cores.surface,
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text('Editar nome',
+          style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.words,
+        decoration: InputDecoration(
+          labelText: 'Nome do grupo',
+          border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide:
+                const BorderSide(color: Cores.verdePrincipal, width: 2),
+          ),
+        ),
+        onSubmitted: (_) => _salvar(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('CANCELAR',
+              style: GoogleFonts.anybody(color: Cores.onSurfaceVariant)),
+        ),
+        FilledButton(
+          onPressed: _salvando ? null : _salvar,
+          style:
+              FilledButton.styleFrom(backgroundColor: Cores.verdePrincipal),
+          child: _salvando
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+              : Text('SALVAR',
+                  style:
+                      GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+        ),
+      ],
     );
   }
 }

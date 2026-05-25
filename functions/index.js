@@ -246,6 +246,100 @@ exports.recalcularTudo = onCall(
   }
 );
 
+// Dispara quando alguém entra em um grupo. Notifica o dono do grupo.
+exports.membroEntrou = onDocumentUpdated(
+  { document: 'grupos/{grupoId}', region: 'southamerica-east1' },
+  async (event) => {
+    const antes = event.data.before.data();
+    const depois = event.data.after.data();
+
+    const membrosAntes = antes.membros || [];
+    const membrosDepois = depois.membros || [];
+    const novosMembros = membrosDepois.filter(uid => !membrosAntes.includes(uid));
+    if (novosMembros.length === 0) return null;
+
+    const novoUid = novosMembros[0];
+    if (novoUid === depois.donoUid) return null; // o dono criou o grupo, não notifica
+
+    const db = getFirestore();
+    const messaging = getMessaging();
+
+    const [donoDoc, membroDoc] = await Promise.all([
+      db.collection('usuarios').doc(depois.donoUid).get(),
+      db.collection('usuarios').doc(novoUid).get(),
+    ]);
+
+    if (!donoDoc.exists) return null;
+    const donoData = donoDoc.data();
+    if (!donoData.fcmToken) return null;
+
+    const membroNome = membroDoc.exists ? membroDoc.data().nome : 'Alguém';
+
+    await _enviarNotificacao(messaging, db, depois.donoUid, donoData.fcmToken, {
+      title: '👥 Novo membro!',
+      body: `${membroNome} entrou no grupo "${depois.nome}".`,
+      data: { tela: 'grupos' },
+    });
+
+    return null;
+  }
+);
+
+// Calcula pontuação dos palpites especiais (campeão e artilheiro).
+// Lê config/copa2026 para obter os resultados reais e aplica +50 / +25
+// para cada usuário que acertou. Só pode ser executada uma vez (flag no config).
+exports.calcularPalpitesEspeciais = onCall(
+  { region: 'southamerica-east1' },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Não autenticado.');
+    }
+
+    const db = getFirestore();
+    const userDoc = await db.collection('usuarios').doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data().isAdmin !== true) {
+      throw new HttpsError('permission-denied', 'Acesso restrito ao admin.');
+    }
+
+    const configDoc = await db.collection('config').doc('copa2026').get();
+    if (!configDoc.exists) {
+      throw new HttpsError('not-found', 'Configuração não encontrada.');
+    }
+
+    const { campeaoReal, artilheiroReal, palpitesEspeciaisCalculados } = configDoc.data();
+
+    if (palpitesEspeciaisCalculados) {
+      throw new HttpsError('already-exists', 'Pontuação especial já foi calculada.');
+    }
+    if (!campeaoReal && !artilheiroReal) {
+      throw new HttpsError('failed-precondition', 'Defina o campeão e/ou artilheiro antes de calcular.');
+    }
+
+    const usuariosSnap = await db.collection('usuarios').get();
+    const batch = db.batch();
+    let atualizados = 0;
+
+    usuariosSnap.forEach((doc) => {
+      const data = doc.data();
+      let bonus = 0;
+      if (campeaoReal && data.palpiteCampeao === campeaoReal) bonus += 50;
+      if (artilheiroReal && data.palpiteArtilheiro &&
+          data.palpiteArtilheiro.toLowerCase().trim() === artilheiroReal.toLowerCase().trim()) {
+        bonus += 25;
+      }
+      if (bonus > 0) {
+        batch.update(doc.ref, { pontuacao: FieldValue.increment(bonus) });
+        atualizados++;
+      }
+    });
+
+    batch.update(configDoc.ref, { palpitesEspeciaisCalculados: true });
+    await batch.commit();
+
+    return { atualizados };
+  }
+);
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Envia notificação FCM e remove o token inválido do Firestore se necessário.

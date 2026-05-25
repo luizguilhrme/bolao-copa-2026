@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/grupo.dart';
+import '../models/usuario.dart';
 
 class GrupoService {
   final CollectionReference _colecao =
@@ -46,6 +47,21 @@ class GrupoService {
     });
     final atualizado = await doc.reference.get();
     return Grupo.fromMap(atualizado.id, atualizado.data() as Map<String, dynamic>);
+  }
+
+  Future<void> editarNome(String grupoId, String novoNome) async {
+    await _colecao.doc(grupoId).update({'nome': novoNome});
+  }
+
+  Future<List<Usuario>> buscarMembros(List<String> uids) async {
+    if (uids.isEmpty) return [];
+    final docs = await Future.wait(
+      uids.map((uid) => FirebaseFirestore.instance.collection('usuarios').doc(uid).get()),
+    );
+    return docs
+        .where((d) => d.exists)
+        .map((d) => Usuario.fromMap(d.data()!))
+        .toList();
   }
 
   Future<void> sairDoGrupo(String grupoId, String uid) async {

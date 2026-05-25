@@ -20,10 +20,143 @@ class _TelaAdminState extends State<TelaAdmin> {
   bool _populando = false;
   bool _recalculando = false;
 
+  // Palpites especiais
+  String? _campeaoReal;
+  String? _artilheiroReal;
+  bool _palpitesCalculados = false;
+  bool _carregandoConfig = true;
+  bool _salvandoConfig = false;
+  bool _calculando = false;
+  final _ctrlArtilheiro = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     _futureJogos = _carregarElegiveis();
+    _carregarConfig();
+  }
+
+  @override
+  void dispose() {
+    _ctrlArtilheiro.dispose();
+    super.dispose();
+  }
+
+  Future<void> _carregarConfig() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('config')
+          .doc('copa2026')
+          .get();
+      if (doc.exists && mounted) {
+        final data = doc.data()!;
+        setState(() {
+          _campeaoReal = data['campeaoReal'] as String?;
+          _artilheiroReal = data['artilheiroReal'] as String?;
+          _palpitesCalculados =
+              data['palpitesEspeciaisCalculados'] == true;
+          if (_artilheiroReal != null) {
+            _ctrlArtilheiro.text = _artilheiroReal!;
+          }
+        });
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _carregandoConfig = false);
+    }
+  }
+
+  Future<void> _salvarConfig() async {
+    setState(() => _salvandoConfig = true);
+    try {
+      final artilheiro = _ctrlArtilheiro.text.trim();
+      await FirebaseFirestore.instance
+          .collection('config')
+          .doc('copa2026')
+          .set({
+        'campeaoReal': _campeaoReal,
+        'artilheiroReal': artilheiro.isEmpty ? null : artilheiro,
+        'palpitesEspeciaisCalculados': _palpitesCalculados,
+      }, SetOptions(merge: true));
+      if (mounted) {
+        setState(() =>
+            _artilheiroReal = artilheiro.isEmpty ? null : artilheiro);
+        mostrarMensagem(context, 'Configuração salva!');
+      }
+    } catch (e) {
+      if (mounted) mostrarMensagem(context, 'Erro ao salvar: $e');
+    } finally {
+      if (mounted) setState(() => _salvandoConfig = false);
+    }
+  }
+
+  Future<void> _abrirSeletorCampeao() async {
+    final jogos = await JogoService().buscarTodos();
+    final times = jogos
+        .expand((j) => [j.team1, j.team2])
+        .toSet()
+        .toList()
+      ..sort((a, b) => nomePtDe(a).compareTo(nomePtDe(b)));
+    if (!mounted) return;
+    final selecionado = await showDialog<String>(
+      context: context,
+      builder: (_) =>
+          _DialogSeletorTime(times: times, selecionado: _campeaoReal),
+    );
+    if (selecionado != null && mounted) {
+      setState(() => _campeaoReal = selecionado);
+    }
+  }
+
+  Future<void> _calcularPalpitesEspeciais() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Cores.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Calcular pontuação especial?',
+            style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+        content: Text(
+          'Acertos de campeão (+50 pts) e artilheiro (+25 pts) serão aplicados.\n\nEsta ação não pode ser desfeita.',
+          style: GoogleFonts.hankenGrotesk(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('CANCELAR',
+                style: GoogleFonts.anybody(color: Cores.onSurfaceVariant)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(
+                backgroundColor: Cores.verdePrincipal),
+            child: Text('CALCULAR',
+                style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+
+    setState(() => _calculando = true);
+    try {
+      final fn =
+          FirebaseFunctions.instanceFor(region: 'southamerica-east1');
+      final result =
+          await fn.httpsCallable('calcularPalpitesEspeciais').call();
+      final atualizados = result.data['atualizados'];
+      if (mounted) {
+        setState(() => _palpitesCalculados = true);
+        mostrarMensagem(
+          context,
+          'Pontuação especial calculada! $atualizados usuário(s) acertaram.',
+        );
+      }
+    } catch (e) {
+      if (mounted) mostrarMensagem(context, 'Erro: $e');
+    } finally {
+      if (mounted) setState(() => _calculando = false);
+    }
   }
 
   Future<void> _popularJogos() async {
@@ -122,66 +255,336 @@ class _TelaAdminState extends State<TelaAdmin> {
                 ),
         ],
       ),
-      body: FutureBuilder<List<Jogo>>(
-        future: _futureJogos,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: Column(
+        children: [
+          _buildCardPalpitesEspeciais(),
+          Expanded(
+            child: FutureBuilder<List<Jogo>>(
+              future: _futureJogos,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text('Erro ao carregar jogos.',
+                        style: GoogleFonts.hankenGrotesk(
+                            color: Cores.onSurfaceVariant)),
+                  );
+                }
+                final jogos = snapshot.data ?? [];
+                if (jogos.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.schedule_rounded,
+                            size: 64, color: Cores.outlineVariant),
+                        const SizedBox(height: 16),
+                        Text('Nenhum jogo disponível',
+                            style: GoogleFonts.anybody(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Cores.onSurface)),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Os jogos aparecem aqui\n105 minutos após o início.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.hankenGrotesk(
+                              fontSize: 14,
+                              color: Cores.onSurfaceVariant,
+                              height: 1.5),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                  itemCount: jogos.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 16),
+                  itemBuilder: (_, i) => _CardAdmin(
+                    jogo: jogos[i],
+                    onSalvo: () =>
+                        setState(() { _futureJogos = _carregarElegiveis(); }),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Text(
-                'Erro ao carregar jogos.',
-                style: GoogleFonts.hankenGrotesk(
-                    color: Cores.onSurfaceVariant),
-              ),
-            );
-          }
+  Widget _buildCardPalpitesEspeciais() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      decoration: BoxDecoration(
+        color: Cores.surface,
+        border: Border.all(color: Cores.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Cabeçalho
+          Container(
+            width: double.infinity,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: const BoxDecoration(
+              color: Cores.surfaceContainer,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.star_rounded,
+                  size: 15, color: Cores.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Text('PALPITES ESPECIAIS',
+                  style: GoogleFonts.hankenGrotesk(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Cores.onSurfaceVariant)),
+              if (_palpitesCalculados) ...[
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                      color: Cores.verdePrincipal,
+                      borderRadius: BorderRadius.circular(999)),
+                  child: Text('CALCULADO',
+                      style: GoogleFonts.anybody(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white)),
+                ),
+              ],
+            ]),
+          ),
 
-          final jogos = snapshot.data ?? [];
-
-          if (jogos.isEmpty) {
-            return Center(
+          // Conteúdo
+          if (_carregandoConfig)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(
+                  child:
+                      CircularProgressIndicator(color: Cores.verdePrincipal)),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.all(16),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.schedule_rounded,
-                      size: 64, color: Cores.outlineVariant),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Nenhum jogo disponível',
-                    style: GoogleFonts.anybody(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Cores.onSurface,
-                    ),
-                  ),
+                  // Campeão
+                  Text('Campeão (+50 pts)',
+                      style: GoogleFonts.hankenGrotesk(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Cores.onSurfaceVariant)),
                   const SizedBox(height: 8),
-                  Text(
-                    'Os jogos aparecem aqui\n105 minutos após o início.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.hankenGrotesk(
-                      fontSize: 14,
-                      color: Cores.onSurfaceVariant,
-                      height: 1.5,
+                  InkWell(
+                    onTap: _palpitesCalculados ? null : _abrirSeletorCampeao,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                            color: _palpitesCalculados
+                                ? Cores.outlineVariant
+                                : Cores.verdePrincipal
+                                    .withValues(alpha: 0.5)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(children: [
+                        if (_campeaoReal != null) ...[
+                          Container(
+                            width: 28,
+                            height: 28,
+                            clipBehavior: Clip.antiAlias,
+                            decoration:
+                                const BoxDecoration(shape: BoxShape.circle),
+                            child: Bandeira(_campeaoReal!, tamanho: 28),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(nomePtDe(_campeaoReal!),
+                              style: GoogleFonts.anybody(
+                                  fontWeight: FontWeight.w700,
+                                  color: Cores.onSurface)),
+                        ] else
+                          Text('Toque para selecionar',
+                              style: GoogleFonts.hankenGrotesk(
+                                  color: Cores.onSurfaceVariant)),
+                        const Spacer(),
+                        if (!_palpitesCalculados)
+                          const Icon(Icons.arrow_drop_down_rounded,
+                              color: Cores.onSurfaceVariant),
+                      ]),
                     ),
                   ),
+
+                  const SizedBox(height: 16),
+
+                  // Artilheiro
+                  Text('Artilheiro (+25 pts)',
+                      style: GoogleFonts.hankenGrotesk(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Cores.onSurfaceVariant)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _ctrlArtilheiro,
+                    enabled: !_palpitesCalculados,
+                    textCapitalization: TextCapitalization.words,
+                    style: GoogleFonts.hankenGrotesk(fontSize: 15),
+                    decoration: InputDecoration(
+                      hintText: 'Nome do artilheiro',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                            color: Cores.verdePrincipal, width: 2),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                    ),
+                  ),
+
+                  if (!_palpitesCalculados) ...[
+                    const SizedBox(height: 16),
+                    Row(children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _salvandoConfig ? null : _salvarConfig,
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(
+                                color: Cores.verdePrincipal),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: _salvandoConfig
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Cores.verdePrincipal))
+                              : Text('SALVAR',
+                                  style: GoogleFonts.anybody(
+                                      fontWeight: FontWeight.w700,
+                                      color: Cores.verdePrincipal)),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _calculando ? null : _calcularPalpitesEspeciais,
+                          style: FilledButton.styleFrom(
+                              backgroundColor: Cores.verdePrincipal,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10))),
+                          child: _calculando
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : Text('CALCULAR',
+                                  style: GoogleFonts.anybody(
+                                      fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                    ]),
+                  ],
                 ],
               ),
-            );
-          }
-
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-            itemCount: jogos.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 16),
-            itemBuilder: (_, i) => _CardAdmin(
-              jogo: jogos[i],
-              onSalvo: () => setState(() { _futureJogos = _carregarElegiveis(); }),
             ),
-          );
-        },
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Seletor de time (campeão real) ──────────────────────────────────────────
+
+class _DialogSeletorTime extends StatelessWidget {
+  const _DialogSeletorTime(
+      {required this.times, this.selecionado});
+  final List<String> times;
+  final String? selecionado;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Cores.surface,
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+            child: Text('Selecionar campeão',
+                style: GoogleFonts.anybody(
+                    fontWeight: FontWeight.w700, fontSize: 18)),
+          ),
+          SizedBox(
+            height: 400,
+            child: ListView.builder(
+              itemCount: times.length,
+              itemBuilder: (context, i) {
+                final time = times[i];
+                final sel = time == selecionado;
+                return ListTile(
+                  leading: Container(
+                    width: 36,
+                    height: 36,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border:
+                            Border.all(color: Cores.outlineVariant)),
+                    child: Bandeira(time, tamanho: 36),
+                  ),
+                  title: Text(
+                    nomePtDe(time),
+                    style: GoogleFonts.anybody(
+                        fontWeight: sel
+                            ? FontWeight.w700
+                            : FontWeight.w400,
+                        color: sel
+                            ? Cores.verdePrincipal
+                            : Cores.onSurface),
+                  ),
+                  trailing: sel
+                      ? const Icon(Icons.check_circle_rounded,
+                          color: Cores.verdePrincipal)
+                      : null,
+                  onTap: () => Navigator.of(context).pop(time),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('CANCELAR',
+                  style: GoogleFonts.anybody(
+                      color: Cores.onSurfaceVariant)),
+            ),
+          ),
+        ],
       ),
     );
   }
