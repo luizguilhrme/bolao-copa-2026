@@ -91,13 +91,23 @@ class _TelaAdminState extends State<TelaAdmin> {
   }
 
   Future<void> _abrirSeletorCampeao() async {
+    String semAcento(String s) => s
+        .toLowerCase()
+        .replaceAll(RegExp(r'[áàãâä]'), 'a')
+        .replaceAll(RegExp(r'[éèêë]'), 'e')
+        .replaceAll(RegExp(r'[íìîï]'), 'i')
+        .replaceAll(RegExp(r'[óòõôö]'), 'o')
+        .replaceAll(RegExp(r'[úùûü]'), 'u')
+        .replaceAll('ç', 'c')
+        .replaceAll('ñ', 'n');
+
     final jogos = await JogoService().buscarTodos();
     final times = jogos
         .expand((j) => [j.team1, j.team2])
         .toSet()
         .where((t) => !t.contains(RegExp(r'\d')))
         .toList()
-      ..sort((a, b) => nomePtDe(a).compareTo(nomePtDe(b)));
+      ..sort((a, b) => semAcento(nomePtDe(a)).compareTo(semAcento(nomePtDe(b))));
     if (!mounted) return;
     final selecionado = await showDialog<String>(
       context: context,
@@ -210,6 +220,7 @@ class _TelaAdminState extends State<TelaAdmin> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: Cores.background,
       appBar: AppBar(
         backgroundColor: Cores.surface,
