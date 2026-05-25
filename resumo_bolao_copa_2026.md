@@ -25,7 +25,8 @@ C:\bolao\
     avatares/                 ← imagens dos jogadores para seleção de avatar
   functions/
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
-                                 calcularPontuacao, lembretesPalpite, recalcularTudo
+                                 calcularPontuacao, lembretesPalpite, recalcularTudo,
+                                 membroEntrou, calcularPalpitesEspeciais
   lib/
     main.dart                 ← Firebase init + FCM background handler + StreamBuilder de auth
     firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
@@ -45,9 +46,13 @@ C:\bolao\
       tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
       tela_palpites.dart      ← duas abas: Próximos (com palpites) e Resultados
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos
-      tela_grupos.dart        ← lista grupos do usuário; criar grupo (código único); entrar com código; sair
+      tela_grupos.dart        ← lista grupos do usuário; criar grupo (código único); entrar com código; sair;
+                                 tocar no card abre dialog de detalhes com membros e avatares;
+                                 ícone de lápis (só dono) edita o nome do grupo
       tela_tabela.dart        ← lista os 104 jogos com seções e tabs
-      tela_admin.dart         ← inserção de placares; dialog Teste/Produção no popular jogos
+      tela_admin.dart         ← inserção de placares; dialog Teste/Produção no popular jogos;
+                                 seção Palpites Especiais: seletor de campeão (com bandeiras),
+                                 campo artilheiro, salvar config e calcular pontuação especial
       tela_ajuda.dart         ← FAQ estático
     services/
       jogo_service.dart       ← popularJogosNoFirestore({bool teste}), buscarTodos, buscarPorData
@@ -57,7 +62,8 @@ C:\bolao\
                                  buscarPorUsuario, buscarTodosPorJogo
       notificacoes_service.dart ← inicializar FCM, salvar token, buscar/atualizar prefs
       grupo_service.dart      ← criarGrupo, entrarComCodigo, buscarGruposDoUsuario,
-                                 sairDoGrupo; código único gerado com loop anti-colisão
+                                 sairDoGrupo, editarNome, buscarMembros;
+                                 código único gerado com loop anti-colisão
     utils/
       cores.dart              ← constantes de cores (Cores.verdePrincipal etc)
       biblioteca.dart         ← funções utilitárias top-level (flagDe, siglaDe,
@@ -325,6 +331,15 @@ criadoEm    : Timestamp — serverTimestamp(); nullable no cache local → model
 
 **Busca de grupos do usuário:** `where('membros', arrayContains: uid)` — sem índice composto necessário (sem orderBy). Ordenação feita client-side por `criadoEm`.
 
+### `config`
+ID do documento = `copa2026` (documento único).
+
+```
+campeaoReal                  : String?   — nome em inglês do campeão real (ex: "Brazil")
+artilheiroReal               : String?   — nome do artilheiro real (comparação case-insensitive)
+palpitesEspeciaisCalculados  : Boolean   — true após executar calcularPalpitesEspeciais; impede execução dupla
+```
+
 ---
 
 ## Regras de pontuação
@@ -415,6 +430,8 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 ### `tela_grupos.dart` — implementada (acesso via drawer → GRUPOS → Meus Grupos)
 - `StreamBuilder` em `GrupoService().buscarGruposDoUsuario(uid)` → lista reativa de grupos
 - Cada card: nome, código de 6 chars (toque copia para clipboard), nº de membros, badge "ADMIN" se for o dono
+- **Tocar no card** abre `_DialogDetalhesGrupo`: cabeçalho verde com nome e código copiável; lista de membros com `WidgetAvatar` + nome; dono aparece primeiro com badge "ADMIN"; `FutureBuilder` em `GrupoService().buscarMembros(uids)`
+- **Ícone de lápis** no card (só visível para o dono) abre `_DialogEditarNome` pré-preenchido; chama `GrupoService.editarNome`
 - Dois botões no topo: **Criar grupo** e **Entrar com código**
 - **Criar grupo**: dialog com campo nome → `GrupoService.criarGrupo` → dialog exibe o código gerado (copiável)
 - **Entrar com código**: dialog com campo de 6 chars → `GrupoService.entrarComCodigo` → SnackBar verde (sucesso), vermelho (não encontrado) ou azul (já é membro)
@@ -426,6 +443,7 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - Ao salvar: atualiza `placar1`/`placar2` no Firestore → Cloud Function `calcularPontuacao` dispara automaticamente
 - Botão de popular jogos abre dialog pedindo **Teste** (`jogos_teste.json`) ou **Produção** (`jogos.json`)
 - Botão de recalcular chama a Cloud Function `recalcularTudo` (admin only)
+- **Seção Palpites Especiais** no topo: seletor de campeão real com bandeiras e nomes em PT (filtra placeholders com dígitos, ordena ignorando acentos); campo de artilheiro (texto livre); botão SALVAR grava em `config/copa2026`; botão CALCULAR chama `calcularPalpitesEspeciais` (irreversível, desabilitado após execução); `resizeToAvoidBottomInset: false` evita overflow ao abrir teclado
 
 ### `tela_perfil.dart` — implementada
 - Exibe avatar do jogador com botão de troca (bottom sheet grid)
@@ -578,10 +596,12 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 | `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula delta de pontuação para cada palpite; na primeira inserção de resultado aplica −1 para usuários sem palpite registrados antes do jogo; envia FCM de ranking para quem mudou de posição |
 | `lembretesPalpite` | Schedule (`*/30 * * * *`) | Notifica usuários sem palpite em jogos que começam em ~30 min |
 | `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação de todos os usuários do zero, incluindo a penalidade de −1 por ausência de palpite |
+| `membroEntrou` | Firestore trigger (`grupos/{grupoId}`) | Detecta novo membro no array `membros` e envia FCM para o dono do grupo |
+| `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Lê `config/copa2026` (campeaoReal + artilheiroReal) e aplica +50 / +25 pts para cada usuário que acertou; marca `palpitesEspeciaisCalculados: true` para evitar execução dupla |
 
 **FCM token management:** token salvo em `usuarios/{uid}.fcmToken`. Tokens inválidos são removidos automaticamente (`messaging/registration-token-not-registered`).
 
-**Deep linking via notificação:** payload FCM inclui `data: { tela: 'palpites' }` (lembrete) ou `data: { tela: 'ranking' }` (ranking). `MenuPrincipal` lê esse campo em `onMessageOpenedApp`, `getInitialMessage` e no `onMessage` (SnackBar com botão VER) para navegar para a aba correta.
+**Deep linking via notificação:** payload FCM inclui `data: { tela: 'palpites' }` (lembrete), `data: { tela: 'ranking' }` (ranking) ou `data: { tela: 'grupos' }` (novo membro). `MenuPrincipal` lê esse campo em `onMessageOpenedApp`, `getInitialMessage` e no `onMessage` (SnackBar com botão VER) para navegar para a aba correta.
 
 ---
 
@@ -605,10 +625,14 @@ Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deplo
 - `update`: dono + `uid`/`jogoId` imutáveis + jogo não iniciado
 - `delete`: bloqueado
 
+**`config`**
+- `read`: qualquer autenticado
+- `write`: só admin — usado para gravar `campeaoReal`, `artilheiroReal` e `palpitesEspeciaisCalculados` em `config/copa2026`
+
 **`grupos`**
 - `read`: qualquer autenticado
 - `create`: qualquer autenticado (cria seu próprio grupo)
-- `update`: só membros do grupo (`request.auth.uid in resource.data.membros`)
+- `update`: membro do grupo (sair/editar) OU usuário adicionando apenas a si mesmo ao array `membros` (entrar com código)
 - `delete`: só o dono (`request.auth.uid == resource.data.donoUid`)
 
 **Decisões conscientes:**
