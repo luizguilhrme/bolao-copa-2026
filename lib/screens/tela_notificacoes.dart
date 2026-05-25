@@ -1,4 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart';
+﻿import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/notificacoes_service.dart';
@@ -160,8 +160,8 @@ class _TileNotificacao extends StatelessWidget {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: valor
-                    ? Cores.verdePrincipal.withOpacity(0.1)
-                    : Cores.surfaceVariant.withOpacity(0.5),
+                    ? Cores.verdePrincipal.withValues(alpha: 0.1)
+                    : Cores.surfaceVariant.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
@@ -200,7 +200,7 @@ class _TileNotificacao extends StatelessWidget {
               value: valor,
               onChanged: onChanged,
               activeColor: Cores.verdePrincipal,
-              activeTrackColor: Cores.verdePrincipal.withOpacity(0.3),
+              activeTrackColor: Cores.verdePrincipal.withValues(alpha: 0.3),
             ),
           ],
         ),

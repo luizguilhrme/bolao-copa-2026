@@ -1,142 +1,311 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/grupo.dart';
 import '../models/jogo.dart';
 import '../models/palpite.dart';
 import '../models/usuario.dart';
+import '../services/grupo_service.dart';
 import '../services/jogo_service.dart';
 import '../services/palpite_service.dart';
 import '../utils/avatares.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 
-class TelaRanking extends StatelessWidget {
+class TelaRanking extends StatefulWidget {
   const TelaRanking({super.key});
 
-  // Stream do Firestore — emite nova lista sempre que alguma pontuação mudar.
-  // orderBy direto aqui dispensa um método extra no UsuarioService.
-  Stream<List<Usuario>> get _streamRanking => FirebaseFirestore.instance
+  @override
+  State<TelaRanking> createState() => _TelaRankingState();
+}
+
+class _TelaRankingState extends State<TelaRanking> {
+  final _uidAtual = FirebaseAuth.instance.currentUser!.uid;
+
+  // null = sem seleção explícita (usa o primeiro grupo disponível)
+  Grupo? _grupoSelecionado;
+
+  final Stream<List<Usuario>> _streamRanking = FirebaseFirestore.instance
       .collection('usuarios')
       .orderBy('pontuacao', descending: true)
       .snapshots()
-      .map((snap) =>
-      snap.docs.map((d) => Usuario.fromMap(d.data())).toList());
+      .map((snap) => snap.docs.map((d) => Usuario.fromMap(d.data())).toList());
 
   @override
   Widget build(BuildContext context) {
-    final uidAtual = FirebaseAuth.instance.currentUser!.uid;
-
-    return StreamBuilder<List<Usuario>>(
-      stream: _streamRanking,
-      builder: (context, snapshot) {
-        // ── Carregando ──────────────────────────────────────────────────────
-        if (snapshot.connectionState == ConnectionState.waiting) {
+    return StreamBuilder<List<Grupo>>(
+      stream: GrupoService().buscarGruposDoUsuario(_uidAtual),
+      builder: (context, snapGrupos) {
+        // Ainda carregando grupos — espera antes de mostrar qualquer coisa
+        if (snapGrupos.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        // ── Erro ────────────────────────────────────────────────────────────
-        if (snapshot.hasError) {
-          return Center(
-            child: Text('Erro ao carregar ranking.',
-                style: GoogleFonts.hankenGrotesk(
-                    color: Cores.onSurfaceVariant)),
-          );
-        }
+        final grupos = snapGrupos.data ?? [];
 
-        final usuarios = snapshot.data ?? [];
-
-        // ── Vazio ────────────────────────────────────────────────────────────
-        if (usuarios.isEmpty) {
+        // Sem grupos: orienta o usuário a criar ou entrar em um
+        if (grupos.isEmpty) {
           return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.leaderboard_outlined,
-                    size: 64, color: Cores.outlineVariant),
-                const SizedBox(height: 16),
-                Text('Nenhum participante ainda.',
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.group_outlined,
+                      size: 64, color: Cores.outlineVariant),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Você não está em nenhum grupo.',
                     style: GoogleFonts.anybody(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: Cores.onSurface)),
-              ],
-            ),
-          );
-        }
-
-        return CustomScrollView(
-          slivers: [
-            // Cabeçalho
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    Text(
-                      'CLASSIFICAÇÃO',
-                      style: GoogleFonts.anybody(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Cores.onSurface,
-                      ),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Cores.onSurface,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Ranking geral do bolão',
-                      style: GoogleFonts.hankenGrotesk(
-                        fontSize: 15,
-                        color: Cores.onSurfaceVariant,
-                      ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Acesse Meus Grupos no menu para criar ou entrar em um grupo.',
+                    style: GoogleFonts.hankenGrotesk(
+                      fontSize: 14,
+                      color: Cores.onSurfaceVariant,
                     ),
-                  ],
-                ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
+          );
+        }
 
-            // Pódio (só aparece com 3 ou mais participantes)
-            if (usuarios.length >= 3)
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 32, 16, 8),
-                sliver: SliverToBoxAdapter(
-                  child: _Podio(
-                    primeiro: usuarios[0],
-                    segundo: usuarios[1],
-                    terceiro: usuarios[2],
-                    uidAtual: uidAtual,
+        // Se o grupo selecionado foi removido da lista (ex: usuário saiu),
+        // volta para o primeiro grupo disponível.
+        final grupoEfetivo = (_grupoSelecionado != null &&
+                grupos.any((g) => g.id == _grupoSelecionado!.id))
+            ? _grupoSelecionado!
+            : grupos.first;
+
+        return StreamBuilder<List<Usuario>>(
+          stream: _streamRanking,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(
+                child: Text('Erro ao carregar ranking.',
+                    style: GoogleFonts.hankenGrotesk(
+                        color: Cores.onSurfaceVariant)),
+              );
+            }
+
+            final todosUsuarios = snapshot.data ?? [];
+            final usuarios = todosUsuarios
+                .where((u) => grupoEfetivo.membros.contains(u.uid))
+                .toList();
+
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                usuarios.isEmpty) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            // Sem membros no grupo ainda
+            if (usuarios.isEmpty) {
+              return Column(
+                children: [
+                  if (grupos.length > 1)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: _SeletorGrupo(
+                        grupos: grupos,
+                        selecionado: grupoEfetivo,
+                        onSelecionar: (g) =>
+                            setState(() => _grupoSelecionado = g),
+                      ),
+                    ),
+                  Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.leaderboard_outlined,
+                              size: 64, color: Cores.outlineVariant),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Nenhum membro neste grupo ainda.',
+                            style: GoogleFonts.anybody(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Cores.onSurface),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return CustomScrollView(
+              slivers: [
+                // Cabeçalho
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      children: [
+                        Text(
+                          'CLASSIFICAÇÃO',
+                          style: GoogleFonts.anybody(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            color: Cores.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          grupoEfetivo.nome,
+                          style: GoogleFonts.hankenGrotesk(
+                            fontSize: 15,
+                            color: Cores.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
 
-            // Lista (4º em diante, ou todos se < 3)
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                      (context, i) {
-                    // Se tem pódio, começa do índice 3; senão, do 0
-                    final indiceReal =
-                    usuarios.length >= 3 ? i + 3 : i;
-                    if (indiceReal >= usuarios.length) return null;
-                    final usuario = usuarios[indiceReal];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _ItemRanking(
-                        posicao: indiceReal + 1,
-                        usuario: usuario,
-                        euSou: usuario.uid == uidAtual,
+                // Seletor de grupo (só aparece com 2 ou mais grupos)
+                if (grupos.length > 1)
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    sliver: SliverToBoxAdapter(
+                      child: _SeletorGrupo(
+                        grupos: grupos,
+                        selecionado: grupoEfetivo,
+                        onSelecionar: (g) =>
+                            setState(() => _grupoSelecionado = g),
                       ),
-                    );
-                  },
-                  childCount: usuarios.length >= 3
-                      ? usuarios.length - 3
-                      : usuarios.length,
+                    ),
+                  ),
+
+                // Pódio (só aparece com 3 ou mais participantes)
+                if (usuarios.length >= 3)
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 32, 16, 8),
+                    sliver: SliverToBoxAdapter(
+                      child: _Podio(
+                        primeiro: usuarios[0],
+                        segundo: usuarios[1],
+                        terceiro: usuarios[2],
+                        uidAtual: _uidAtual,
+                      ),
+                    ),
+                  ),
+
+                // Lista (4º em diante, ou todos se < 3)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) {
+                        final indiceReal =
+                            usuarios.length >= 3 ? i + 3 : i;
+                        if (indiceReal >= usuarios.length) return null;
+                        final usuario = usuarios[indiceReal];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _ItemRanking(
+                            posicao: indiceReal + 1,
+                            usuario: usuario,
+                            euSou: usuario.uid == _uidAtual,
+                          ),
+                        );
+                      },
+                      childCount: usuarios.length >= 3
+                          ? usuarios.length - 3
+                          : usuarios.length,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         );
       },
+    );
+  }
+}
+
+// ─── Seletor de grupo (chips) ─────────────────────────────────────────────────
+
+class _SeletorGrupo extends StatelessWidget {
+  const _SeletorGrupo({
+    required this.grupos,
+    required this.selecionado,
+    required this.onSelecionar,
+  });
+
+  final List<Grupo> grupos;
+  final Grupo selecionado;
+  final ValueChanged<Grupo> onSelecionar;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: grupos
+            .map((g) => Padding(
+                  padding: EdgeInsets.only(
+                      left: g == grupos.first ? 0 : 8),
+                  child: _Chip(
+                    label: g.nome,
+                    selecionado: selecionado.id == g.id,
+                    onTap: () => onSelecionar(g),
+                  ),
+                ))
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip({
+    required this.label,
+    required this.selecionado,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selecionado;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: selecionado ? Cores.verdePrincipal : Cores.surfaceContainer,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color:
+                selecionado ? Cores.verdePrincipal : Cores.outlineVariant,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.anybody(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: selecionado ? Colors.white : Cores.onSurfaceVariant,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
     );
   }
 }
@@ -237,7 +406,7 @@ class _ColunaPodio extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: corBorda.withOpacity(0.4),
+                    color: corBorda.withValues(alpha: 0.4),
                     blurRadius: posicao == 1 ? 16 : 8,
                   ),
                 ],
@@ -246,7 +415,7 @@ class _ColunaPodio extends StatelessWidget {
                 avatarId: usuario.avatar,
                 nome: usuario.nome,
                 tamanho: _tamanhoAvatar,
-                corFundo: corBorda.withOpacity(0.2),
+                corFundo: corBorda.withValues(alpha: 0.2),
                 borderColor: corBorda,
                 borderWidth: posicao == 1 ? 4 : 3,
               ),
@@ -267,7 +436,7 @@ class _ColunaPodio extends StatelessWidget {
                       color: Cores.surface, width: 2),
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
+                        color: Colors.black.withValues(alpha: 0.15),
                         blurRadius: 4)
                   ],
                 ),
@@ -410,8 +579,8 @@ class _ItemRanking extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: euSou
-                ? Cores.verdePrincipal.withOpacity(0.15)
-                : Colors.black.withOpacity(0.05),
+                ? Cores.verdePrincipal.withValues(alpha: 0.15)
+                : Colors.black.withValues(alpha: 0.05),
             blurRadius: euSou ? 12 : 4,
             offset: const Offset(0, 2),
           ),
@@ -602,7 +771,7 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.12),
+                      color: Colors.white.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(

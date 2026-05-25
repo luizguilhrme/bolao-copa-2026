@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -416,7 +416,7 @@ class _ItemAcao extends StatelessWidget {
                 ),
               ),
             ),
-            Icon(Icons.chevron_right_rounded, size: 20, color: color.withOpacity(0.5)),
+            Icon(Icons.chevron_right_rounded, size: 20, color: color.withValues(alpha: 0.5)),
           ],
         ),
       ),
