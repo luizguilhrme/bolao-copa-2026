@@ -34,9 +34,9 @@ class _TelaTabelaState extends State<TelaTabela> {
   // 0 = Próximos  |  1 = Resultados
   int _abaAtiva = 0;
 
-  // Guardamos o Future no initState, não dentro do build().
-  // Se ficasse dentro do build(), um novo Future seria criado a cada setState
-  // (ex: trocar de aba), causando um reload desnecessário do Firestore.
+  // null = Todos; preenchido = filtra pelo grupo da Copa (ex: "Grupo A")
+  String? _filtroGrupo;
+
   late Future<List<Jogo>> _futureJogos;
 
   @override
@@ -72,10 +72,18 @@ class _TelaTabelaState extends State<TelaTabela> {
         // ── Dados prontos ───────────────────────────────────────────────────
         final todos = snapshot.data ?? [];
 
-        // Column ocupa a tela toda: tabs fixas no topo + lista rolável embaixo
+        // Extrai grupos únicos da Copa presentes nos dados, em ordem alfabética
+        final gruposCopa = todos
+            .map((j) => j.group)
+            .whereType<String>()
+            .toSet()
+            .toList()
+          ..sort();
+
         return Column(
           children: [
             _buildTabs(),
+            _buildFiltroGrupos(gruposCopa),
             Expanded(child: _buildLista(todos)),
           ],
         );
@@ -146,17 +154,71 @@ class _TelaTabelaState extends State<TelaTabela> {
   }
 
   // ---------------------------------------------------------------------------
+  // Chips de filtro por grupo da Copa
+  // ---------------------------------------------------------------------------
+
+  Widget _buildFiltroGrupos(List<String> grupos) {
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          _buildChipFiltro(label: 'Todos', valor: null),
+          ...grupos.map((g) => Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: _buildChipFiltro(
+                  label: g.replaceFirst('Grupo ', ''),
+                  valor: g,
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChipFiltro({required String label, required String? valor}) {
+    final selecionado = _filtroGrupo == valor;
+    return GestureDetector(
+      onTap: () => setState(() => _filtroGrupo = valor),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selecionado ? Cores.verdePrincipal : Cores.surfaceContainer,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selecionado ? Cores.verdePrincipal : Cores.outlineVariant,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.anybody(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: selecionado ? Colors.white : Cores.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Lista principal — agrupa jogos por seção e monta os slivers
   // ---------------------------------------------------------------------------
 
   Widget _buildLista(List<Jogo> todos) {
     final agora = DateTime.now();
 
-    // Filtra de acordo com a aba ativa
+    // Aplica filtro de aba e de grupo da Copa
     final filtrados = todos.where((j) {
-      return _abaAtiva == 0
+      final passaAba = _abaAtiva == 0
           ? j.placar1 == null // Próximos: sem placar (inclui os ao vivo)
           : j.placar1 != null; // Resultados: com placar
+      final passaGrupo =
+          _filtroGrupo == null || j.group == _filtroGrupo;
+      return passaAba && passaGrupo;
     }).toList()
       ..sort((a, b) => a.dataHora.compareTo(b.dataHora)); // ordena por horário
 
