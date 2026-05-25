@@ -31,7 +31,7 @@ To populate Firestore with the 104 games, use the upload button in TelaAdmin (ad
 
 **Auth routing:** `main.dart` wraps the app in a `StreamBuilder<User?>` on `FirebaseAuth.instance.authStateChanges()`. Logged-in users go to `MenuPrincipal`; logged-out users go to `TelaLogin`.
 
-**Admin access:** Gated by `isAdmin: true` in the user's Firestore document. Checked once at session start in `MenuPrincipal._verificarAdmin()`. Admin screen (`TelaAdmin`) lets the admin enter final scores; saving a score triggers the `calcularPontuacao` Cloud Function which recalculates `pontuacao` for every user who palpited that game, then sends FCM ranking-change notifications.
+**Admin access:** Gated by `isAdmin: true` in the user's Firestore document. Checked once at session start in `MenuPrincipal._verificarAdmin()`. Admin screen (`TelaAdmin`) lets the admin enter final scores; saving a score triggers the `calcularPontuacao` Cloud Function which recalculates `pontuacao` for every user who palpited that game, then sends FCM ranking-change notifications. There is a dedicated test admin account (`teste@teste.com`) with `isAdmin: true` in Firestore, used for Google Play Console review.
 
 **Scoring (implemented in `tela_palpites.dart` and Cloud Function `calcularPontuacao`/`recalcularTudo`):**
 - 10 pts — exact score
@@ -673,6 +673,13 @@ Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deplo
 
 ---
 
+## Google Play — status de publicação
+
+- **Internal Testing** — ✓ v1.0.0+2 publicada; testadores adicionados por e-mail e podem instalar via Play Store
+- **Closed Testing** — em configuração; usuário de revisão: `teste@teste.com` (isAdmin: true no Firestore)
+- **Política de privacidade** — ✓ publicada em `https://bolaodasoci2026.web.app/privacy`
+- **Segurança dos dados** — em preenchimento no Play Console
+
 ## Próximos passos (na ordem recomendada)
 
-1. **Google Play Internal Testing** — ✓ conta verificada, Internal Testing configurado, testadores adicionados, versão 1.0.0+2 publicada no Play Console. Testadores podem instalar/atualizar via Play Store.
+1. **Concluir Segurança dos dados** no Play Console (Closed Testing) e publicar.

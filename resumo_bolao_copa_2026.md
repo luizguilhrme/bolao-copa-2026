@@ -617,6 +617,13 @@ Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deplo
 
 ---
 
+## Google Play — status de publicação
+
+- **Internal Testing** — ✓ v1.0.0+2 publicada; testadores adicionados por e-mail e podem instalar via Play Store
+- **Closed Testing** — em configuração; usuário de revisão: `teste@teste.com` (isAdmin: true no Firestore)
+- **Política de privacidade** — ✓ publicada em `https://bolaodasoci2026.web.app/privacy`
+- **Segurança dos dados** — em preenchimento no Play Console
+
 ## Próximos passos (na ordem recomendada)
 
-1. **Google Play Internal Testing** — ✓ conta verificada, Internal Testing configurado, testadores adicionados, versão 1.0.0+2 publicada no Play Console. Testadores podem instalar/atualizar via Play Store.
+1. **Concluir Segurança dos dados** no Play Console (Closed Testing) e publicar.
