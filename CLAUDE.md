@@ -23,10 +23,11 @@ To populate Firestore with the 104 games, use the upload button in TelaAdmin (ad
 
 **Pattern:** screen → service → Firestore. No state management library — state is handled with `setState` and `StreamBuilder` directly.
 
-**Three Firestore collections:**
+**Four Firestore collections:**
 - `usuarios` — document ID = Firebase Auth UID
 - `jogos` — document ID = game integer ID (string-cast). Populated once from `assets/dados/jogos.json`.
 - `palpites` — document ID = `{uid}_{jogoId}`
+- `grupos` — document ID = auto-ID. Stores bolão groups with a unique 6-char code.
 
 **Auth routing:** `main.dart` wraps the app in a `StreamBuilder<User?>` on `FirebaseAuth.instance.authStateChanges()`. Logged-in users go to `MenuPrincipal`; logged-out users go to `TelaLogin`.
 
@@ -88,6 +89,7 @@ C:\bolao\
       jogo.dart               ← model com fromJson, fromMap, toMap e getter dataHora
       usuario.dart            ← model com fromMap, toMap e copyWith
       palpite.dart            ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
+      grupo.dart              ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
     screens/
       menu_principal.dart     ← shell com drawer lateral, AppBar, IndexedStack, NavigationBar;
                                  inicializa FCM; deep linking via notificação (onMessageOpenedApp,
@@ -98,7 +100,8 @@ C:\bolao\
       tela_perfil.dart        ← exibe/edita nome e avatar; alterar senha; excluir conta
       tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
       tela_palpites.dart      ← duas abas: Próximos (com palpites) e Resultados
-      tela_ranking.dart       ← ranking em tempo real com pódio e lista
+      tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos
+      tela_grupos.dart        ← lista grupos do usuário; criar grupo (código único); entrar com código; sair
       tela_tabela.dart        ← lista os 104 jogos com seções e tabs
       tela_admin.dart         ← inserção de placares; dialog Teste/Produção no popular jogos
       tela_ajuda.dart         ← FAQ estático
@@ -109,6 +112,8 @@ C:\bolao\
       palpite_service.dart    ← salvar, buscarPorJogo, buscarTodosPorUsuario,
                                  buscarPorUsuario, buscarTodosPorJogo
       notificacoes_service.dart ← inicializar FCM, salvar token, buscar/atualizar prefs
+      grupo_service.dart      ← criarGrupo, entrarComCodigo, buscarGruposDoUsuario,
+                                 sairDoGrupo; código único gerado com loop anti-colisão
     utils/
       cores.dart              ← constantes de cores (Cores.verdePrincipal etc)
       biblioteca.dart         ← funções utilitárias top-level (flagDe, siglaDe,
@@ -195,6 +200,7 @@ leading: Builder(
 ### Drawer lateral
 - Cabeçalho verde com avatar do jogador selecionado, nome e pontuação via `StreamBuilder<Usuario?>`
 - Seção "CONTA": Meu Perfil → `TelaPerfil`; Notificações → `TelaNotificacoes`
+- Seção "GRUPOS": Meus Grupos → `TelaGrupos`
 - Seção "ADMIN" (só para `isAdmin == true`): Atualizar Placares → navega para `TelaAdmin`
 - Seção "SUPORTE": Ajuda & FAQ → `TelaAjuda`
 - Rodapé: botão Sair que chama `FirebaseAuth.instance.signOut()`
@@ -267,8 +273,35 @@ intl: ^0.19.0
 ```
 
 ### Serviços ativados no Firebase Console
-- **Firestore Database** — modo de teste (substituir por regras reais antes do lançamento)
+- **Firestore Database** — regras de produção ativas (ver abaixo)
 - **Authentication** — provedor E-mail/senha ativado
+
+### Regras do Firestore
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /usuarios/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.uid == uid;
+    }
+    match /jogos/{jogoId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    match /palpites/{palpiteId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    match /grupos/{grupoId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid in resource.data.membros;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.donoUid;
+    }
+  }
+}
+```
 
 ---
 
@@ -326,6 +359,19 @@ criadoEm    : Timestamp  — serverTimestamp(); atualizado a cada save
 ```
 
 `criadoEm` chega como `null` no cache local antes de o servidor responder → model usa `DateTime?`.
+
+### `grupos`
+ID do documento = auto-ID gerado pelo Firestore.
+
+```
+nome        : String
+codigo      : String    — 6 chars maiúsculos/números; único; gerado com loop anti-colisão
+donoUid     : String    — UID de quem criou o grupo
+membros     : Array<String>  — lista de UIDs; gerenciado via arrayUnion / arrayRemove
+criadoEm    : Timestamp — serverTimestamp(); nullable no cache local → model usa DateTime?
+```
+
+**Busca de grupos do usuário:** `where('membros', arrayContains: uid)` — sem índice composto necessário (sem orderBy). Ordenação feita client-side por `criadoEm`.
 
 ---
 
@@ -393,12 +439,24 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - `_AbaProximos` é `StatefulWidget` gerenciando uma lista de `FocusNode` (um por card visível); reconstruída ao mudar o número de cards visíveis (ex: "Ver mais")
 
 ### `tela_ranking.dart` — implementada
-- `StreamBuilder` direto no Firestore → ranking atualiza em tempo real
+- Ranking filtrado por grupo — não existe ranking global
+- `StatefulWidget` com dois `StreamBuilder` aninhados: grupos do usuário (outer) + todos os usuários ordenados por pontuação (inner); filtragem client-side por `grupo.membros`
+- Usuário sem grupos → mensagem orientando a criar/entrar via Meus Grupos
+- Usuário com 1 grupo → ranking desse grupo, sem seletor
+- Usuário com 2+ grupos → chips no topo para alternar; seleção explícita em `_grupoSelecionado`; se grupo selecionado sair da lista, volta automaticamente para o primeiro
 - Pódio visual para top 3: avatar real (foto do jogador via `WidgetAvatar`); fundo do degrau dourado/prata (`Color(0xFFC0C0C0)`)/bronze (`Color(0xFFCD7F32)`)
 - Lista para 4º em diante com avatar real; usuário logado destacado com borda verde
 - Tocar em qualquer card (pódio ou lista) abre `_DialogPalpitesUsuario`:
   - Cabeçalho verde com avatar + nome; se o usuário tiver palpiteCampeao/palpiteArtilheiro, exibe em destaque (container semitransparente) com bandeira do campeão e nome do artilheiro
   - Lista dos palpites nos jogos encerrados, ordenados do mais recente para o mais antigo; cada linha mostra bandeiras + siglas + resultado, palpite e badge de pontos
+
+### `tela_grupos.dart` — implementada (acesso via drawer → GRUPOS → Meus Grupos)
+- `StreamBuilder` em `GrupoService().buscarGruposDoUsuario(uid)` → lista reativa de grupos
+- Cada card: nome, código de 6 chars (toque copia para clipboard), nº de membros, badge "ADMIN" se for o dono
+- Dois botões no topo: **Criar grupo** e **Entrar com código**
+- **Criar grupo**: dialog com campo nome → `GrupoService.criarGrupo` → dialog exibe o código gerado (copiável)
+- **Entrar com código**: dialog com campo de 6 chars → `GrupoService.entrarComCodigo` → SnackBar verde (sucesso), vermelho (não encontrado) ou azul (já é membro)
+- **Sair do grupo**: botão no card com dialog de confirmação; grupo é deletado automaticamente se ficar sem membros
 
 ### `tela_admin.dart` — implementada (acesso exclusivo via drawer)
 - Filtra jogos elegíveis: 105 min após o início
@@ -458,7 +516,7 @@ O getter `dataHora` no `Jogo` usava `DateTime(...)` (local) antes de subtrair o 
 O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Firestore bate com o campo `id`. Corrigido com `.where('id', isEqualTo: jogoId).limit(1).get()` + `.docs.first.reference`.
 
 ### criadoEm null no cache local
-`FieldValue.serverTimestamp()` chega como `null` no cache local antes de o servidor responder. Corrigido tornando `criadoEm` nullable (`DateTime?`) no model `Palpite`.
+`FieldValue.serverTimestamp()` chega como `null` no cache local antes de o servidor responder. Corrigido tornando `criadoEm` nullable (`DateTime?`) no model `Palpite`. O mesmo padrão foi aplicado em `Grupo.fromMap` com fallback para `DateTime.now()`.
 
 ---
 
@@ -516,6 +574,10 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 - `kIsWeb` de `package:flutter/foundation.dart` — guard para código não suportado na web (ex: `FirebaseMessaging.onBackgroundMessage`, FCM token registration)
 - Flutter web: `flutter create --platforms web .` cria a pasta `web/` com boilerplate; `manifest.json` configura nome/ícone/tema; meta tags iOS habilitam "Adicionar à Tela de Início" no Safari
 - `firebase deploy --only hosting --project <id>` — deploya `build/web` no Firebase Hosting
+- `FieldValue.arrayUnion([value])` / `arrayRemove([value])` — adiciona/remove elemento de array no Firestore de forma atômica, sem sobrescrever o array inteiro; idempotente (arrayUnion não duplica)
+- `Color.withValues(alpha: x)` — substituto de `withOpacity(x)` a partir do Flutter 3.27; opera em precisão de ponto flutuante completa em vez de converter para 8 bits
+- Catch genérico `catch (_)` engole exceções silenciosamente — usar `catch (e)` e exibir `$e` no SnackBar durante desenvolvimento para ver o erro real
+- `Exception('ja_membro')` + `e.toString().contains('ja_membro')` — padrão simples para distinguir casos de erro sem criar classes de exceção customizadas
 
 ---
 
@@ -537,5 +599,4 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 
 ## Próximos passos (na ordem recomendada)
 
-1. **Google Play Internal Testing** — conta Play Console aguardando verificação de identidade; quando aprovada: criar keystore, configurar signing no `build.gradle.kts`, build AAB, upload no Play Console
-2. **Popular com dados de produção** — clicar em Popular → Produção quando a Copa começar (11/jun)
+1. **Google Play Internal Testing** — conta Play Console aguardando verificação de identidade; quando aprovada: criar keystore (já configurada no `build.gradle.kts`), build AAB (`flutter build appbundle`), upload no Play Console
