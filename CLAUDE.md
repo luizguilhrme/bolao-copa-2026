@@ -141,7 +141,8 @@ C:\bolao\
 - Comunicação de filho para pai via callback (`void Function(int)`) — o `MenuPrincipal` passa `onNavegar` para a `TelaHome`
 - Cálculo de pontuação feito na Cloud Function `calcularPontuacao` (trigger Firestore) — admin insere placar pelo app, função recalcula pontos e envia notificações de ranking
 - Palpites precarregados em lote (`buscarTodosPorUsuario`) ao abrir a tela, sem query individual por card
-- Notificações via FCM: `lembretesPalpite` (scheduled */30min) + `calcularPontuacao` envia ranking change. Token salvo no campo `fcmToken` do documento do usuário
+- Notificações via FCM: `lembretesPalpite` (scheduled `*/30min`) + `calcularPontuacao` envia ranking change. Token salvo no campo `fcmToken` do documento do usuário
+- Bandeiras exibidas como imagens reais via pacote `country_flags` (não emojis); mapeamento de nome → ISO em `isoDe()`
 
 ---
 
@@ -230,6 +231,13 @@ StreamBuilder<User?>(
   },
 )
 ```
+
+### Fluxo de cadastro
+1. `TelaLogin` valida e-mail + chama `createUserWithEmailAndPassword`
+2. `authStateChanges` dispara → `main.dart` roteia para `TelaSetupPerfil` automaticamente
+3. `TelaSetupPerfil`: usuário escolhe avatar, clica "Confirmar"
+4. `UsuarioService.atualizarAvatar` salva no Firestore → stream detecta perfil criado → `MenuPrincipal` abre
+5. Botão de voltar no setup faz `signOut()` → retorna para `TelaLogin`
 
 ---
 
@@ -389,12 +397,15 @@ int calcularPontos(int p1, int p2, int r1, int r2) {
 }
 ```
 
+Regra extra: −1 pt para quem esqueceu de palpitar em jogo disputado após o `criadoEm` do usuário. Jogos anteriores ao cadastro não geram penalidade.
+
 Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de resultado):
 - 10 pts → `Color(0xFF006D32)` verde escuro
 - 7 pts → `Color(0xFF1B7F3A)` verde médio
 - 5 pts → `Color(0xFF4CAF50)` verde claro
 - 4 pts → `Color(0xFFFCD400)` amarelo (texto: `Cores.onSecondaryContainer`)
 - 0 pts → `Color(0xFFBBCBB9)` cinza
+- −1 pt → `Color(0xFFE53935)` vermelho
 
 ---
 
@@ -406,6 +417,11 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - Erros do Firebase Auth traduzidos para português
 - Cadastro: cria conta no Auth + perfil no Firestore via `UsuarioService`
 - Navegação por Enter: Enter no e-mail move o foco para a senha; Enter na senha submete o formulário
+
+### `tela_setup_perfil.dart` — implementada
+- Exibida após cadastro, antes de entrar no app
+- Seleção de avatar obrigatória (grid de jogadores)
+- Salva `avatar` no Firestore via `UsuarioService.atualizarAvatar`
 
 ### `tela_home.dart` — implementada
 - Carrossel de jogos do dia (Firestore) com chip AO VIVO
@@ -430,14 +446,15 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 
 ### `tela_palpites.dart` — implementada
 - Duas abas: **Próximos** e **Resultados**
-- `Future.wait` carrega jogos + palpites em paralelo — sem N queries por card
+- `Future.wait` carrega jogos + palpites + perfil do usuário (para `criadoEm`) em paralelo
 - `Timer.periodic(30s)` reclassifica jogos entre abas automaticamente
 - **Aba Próximos:** jogos disponíveis para palpite (mais de 5 min antes do início); "Ver mais" carrega próxima data; trava impede salvar após o cutoff
 - **Aba Resultados:** chip "PRESTES A COMEÇAR" (amarelo, <5 min), "AO VIVO" (pulsante), ou horário; cards encerrados coloridos pela pontuação; badge de pontos; "Registrado em DD/MM às HHhMM"
+- **Regra −1:** jogo encerrado sem palpite cujo `dataHora > criadoEm` do usuário → `pontos = -1`; card com borda/fundo vermelhos; badge vermelho "−1 pt". Jogos anteriores ao cadastro ficam sem penalidade (badge cinza "Sem palpite")
 - Palpite precarregado pelo pai — `_CardPalpite` não faz query individual
 - Bandeiras reais (`Bandeira`) e nome completo em português nos cards de ambas as abas
-- **Navegação por Enter:** Enter no gol 1 → foco para gol 2; Enter no gol 2 → salva o palpite e move o foco para o gol 1 do próximo card; se não houver próximo card, fecha o teclado
-- `_AbaProximos` é `StatefulWidget` gerenciando uma lista de `FocusNode` (um por card visível); reconstruída ao mudar o número de cards visíveis (ex: "Ver mais")
+- **Navegação por Enter:** Enter no gol 1 → foco para gol 2; Enter no gol 2 → salva e move foco para o gol 1 do próximo card; sem próximo card → fecha teclado
+- `_AbaProximos` é `StatefulWidget` gerenciando lista de `FocusNode` (um por card visível); reconstruída ao mudar o número de cards (ex: "Ver mais")
 
 ### `tela_ranking.dart` — implementada
 - Ranking filtrado por grupo — não existe ranking global
@@ -460,7 +477,7 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - **Sair do grupo**: botão no card com dialog de confirmação; grupo é deletado automaticamente se ficar sem membros
 
 ### `tela_admin.dart` — implementada (acesso exclusivo via drawer)
-- Filtra jogos elegíveis: 105 min após o início
+- Filtra jogos elegíveis: 105 min após o início (IDs 1 e 2 sempre desbloqueados para teste)
 - Card com pré-preenchimento se já tiver placar (modo correção); exibe bandeiras reais e nomes em português
 - Ao salvar: atualiza `placar1`/`placar2` no Firestore → Cloud Function `calcularPontuacao` dispara automaticamente
 - Botão de popular jogos abre dialog pedindo **Teste** (`jogos_teste.json`) ou **Produção** (`jogos.json`)
@@ -478,13 +495,30 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - Prefs salvas nos campos `notifLembretes` / `notifRanking` do documento do usuário
 - Auto-save a cada toggle
 
-### `tela_setup_perfil.dart` — implementada
-- Exibida após cadastro, antes de entrar no app
-- Seleção de avatar obrigatória (grid de jogadores)
-- Salva `avatar` no Firestore via `UsuarioService.atualizarAvatar`
-
 ### `tela_ajuda.dart` — implementada
 - FAQ estático com perguntas e respostas expansíveis
+- Seção de pontuação com badges coloridos e exemplos
+
+---
+
+## avatares.dart — widgets e dados compartilhados
+
+```dart
+// Lista dos 12 jogadores disponíveis como avatar
+const kJogadores = [
+  Jogador('messi', 'Messi', 'Argentina'),
+  Jogador('cr7', 'Cristiano Ronaldo', 'Portugal'),
+  // ... 10 mais
+];
+
+// Exibe foto do jogador em círculo; fallback: inicial do nome
+WidgetAvatar(avatarId: usuario.avatar, nome: usuario.nome, tamanho: 64)
+
+// Card de seleção com borda verde e check quando selecionado
+CardAvatar(jogador: jogador, selecionado: true, onTap: () { ... })
+```
+
+`WidgetAvatar` aceita `corFundo`, `corTexto`, `borderColor` e `borderWidth` para se adaptar ao drawer (fundo verde-claro) e ao perfil (fundo verde-escuro).
 
 ---
 
@@ -498,7 +532,7 @@ buscarPorUsuario(String uid)             // where(uid) + orderBy(jogoId) — req
 buscarTodosPorJogo(int jogoId)           // where(jogoId) — usado pelo admin
 ```
 
-**Nota sobre índices:** `buscarPorUsuario` usa `where + orderBy` em campos diferentes → Firestore exige índice composto. Na primeira execução, o log mostra um link para criar o índice automaticamente. Os demais métodos usam apenas um `where()` e não precisam de índice.
+**Nota sobre índices:** `buscarPorUsuario` usa `where + orderBy` em campos diferentes → Firestore exige índice composto. O índice está versionado em `firestore.indexes.json` e é deployado com `firebase deploy --only firestore`.
 
 ---
 
@@ -518,6 +552,9 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 
 ### criadoEm null no cache local
 `FieldValue.serverTimestamp()` chega como `null` no cache local antes de o servidor responder. Corrigido tornando `criadoEm` nullable (`DateTime?`) no model `Palpite`. O mesmo padrão foi aplicado em `Grupo.fromMap` com fallback para `DateTime.now()`.
+
+### Flash de MenuPrincipal durante cadastro
+`authStateChanges` disparava ao criar a conta Firebase, exibindo `MenuPrincipal` brevemente antes do setup. Corrigido fazendo o roteamento levar em conta a existência do perfil Firestore, não só o auth.
 
 ---
 
@@ -556,6 +593,10 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 - `Builder` widget para acessar o `Scaffold` correto dentro do `AppBar`
 - `addPostFrameCallback` para executar código após o frame atual terminar
 - `.clamp(min, max)` para limitar valores numéricos
+- `showModalBottomSheet` + `DraggableScrollableSheet` para sheets scrolláveis
+- `GridView.builder` com `SliverGridDelegateWithFixedCrossAxisCount`
+- `Image.asset` com `errorBuilder` para fallback quando imagem não existe
+- `ExpansionTile` para listas expansíveis (FAQ)
 - `WidgetsBinding.instance.addPostFrameCallback` para evitar conflito de setState
 - `@pragma('vm:entry-point')` — necessário para funções top-level chamadas pelo runtime nativo (ex: handler de background do FCM)
 - `FirebaseMessaging.onBackgroundMessage` — registra handler para mensagens com app fechado; deve ser top-level
@@ -570,11 +611,13 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 - `CountryFlag.fromCountryCode(iso, height: h, width: w)` do pacote `country_flags` — renderiza bandeiras como imagens SVG por código ISO 3166-1 alpha-2; suporta subdivisões como `GB-ENG`, `GB-WLS`, `GB-SCT`
 - `Container.clipBehavior: Clip.antiAlias` com `BoxDecoration(shape: BoxShape.circle)` — recorta o filho (ex: imagem de bandeira) em formato circular
 - `country_flags 4.x`: API mudou — tamanho agora vai dentro de `ImageTheme(width, height)` em vez de parâmetros diretos; suporta nativamente subdivisões do Reino Unido (`GB-ENG`, `GB-SCT`, `GB-WLS`); não precisa mais de `FittedBox` com zoom
+- `FittedBox(fit: BoxFit.cover, clipBehavior: Clip.hardEdge)` com `CountryFlag(width: tamanho * 2.2)` — força bandeira a preencher o círculo sem letterboxing (largura 2.2× garante que flags até 2:1 preencham a altura)
 - `FirebaseMessaging.onMessageOpenedApp` — stream disparado quando usuário toca na notificação com app em background; `getInitialMessage()` — recupera notificação que abriu o app quando estava fechado; usados juntos para deep linking FCM
 - `Flexible` dentro de `Row` — permite que o filho encolha e use `TextOverflow.ellipsis` sem estourar o layout; essencial em cabeçalhos de dialog com nomes longos ao lado de widgets de tamanho fixo (bandeiras, placar)
 - `kIsWeb` de `package:flutter/foundation.dart` — guard para código não suportado na web (ex: `FirebaseMessaging.onBackgroundMessage`, FCM token registration)
 - Flutter web: `flutter create --platforms web .` cria a pasta `web/` com boilerplate; `manifest.json` configura nome/ícone/tema; meta tags iOS habilitam "Adicionar à Tela de Início" no Safari
 - `firebase deploy --only hosting --project <id>` — deploya `build/web` no Firebase Hosting
+- `calcularPontos()` em `biblioteca.dart` — função pública compartilhada; os dialogs de palpites a usam para calcular badges de pontuação
 - `FieldValue.arrayUnion([value])` / `arrayRemove([value])` — adiciona/remove elemento de array no Firestore de forma atômica, sem sobrescrever o array inteiro; idempotente (arrayUnion não duplica)
 - `Color.withValues(alpha: x)` — substituto de `withOpacity(x)` a partir do Flutter 3.27; opera em precisão de ponto flutuante completa em vez de converter para 8 bits
 - Catch genérico `catch (_)` engole exceções silenciosamente — usar `catch (e)` e exibir `$e` no SnackBar durante desenvolvimento para ver o erro real
@@ -588,13 +631,45 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 
 | Função | Tipo | O que faz |
 |---|---|---|
-| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula delta de pontuação para cada palpite; envia FCM de ranking para quem mudou de posição |
+| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula delta de pontuação para cada palpite; na primeira inserção de resultado aplica −1 para usuários sem palpite registrados antes do jogo; envia FCM de ranking para quem mudou de posição |
 | `lembretesPalpite` | Schedule (`*/30 * * * *`) | Notifica usuários sem palpite em jogos que começam em ~30 min |
-| `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação de todos os usuários do zero |
+| `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação de todos os usuários do zero, incluindo a penalidade de −1 por ausência de palpite |
 
 **FCM token management:** token salvo em `usuarios/{uid}.fcmToken`. Tokens inválidos são removidos automaticamente (`messaging/registration-token-not-registered`).
 
 **Deep linking via notificação:** payload FCM inclui `data: { tela: 'palpites' }` (lembrete) ou `data: { tela: 'ranking' }` (ranking). `MenuPrincipal` lê esse campo em `onMessageOpenedApp`, `getInitialMessage` e no `onMessage` (SnackBar com botão VER) para navegar para a aba correta.
+
+---
+
+## Segurança do Firestore
+
+Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deploy: `firebase deploy --only firestore --project bolaodasoci2026`.
+
+**`usuarios`**
+- `read`: qualquer autenticado (ranking, drawer, dialogs)
+- `create`: só o próprio usuário; payload restrito a `['uid', 'email', 'nome', 'pontuacao', 'criadoEm', 'avatar']`; `isAdmin` e `pontuacao` devem ser `false`/`0` — impede escalada de privilégio
+- `update`: só campos `['nome', 'avatar', 'fcmToken', 'notifLembretes', 'notifRanking', 'palpiteCampeao', 'palpiteArtilheiro']`; `pontuacao`, `isAdmin`, `criadoEm`, `email`, `uid` protegidos (alterados apenas pelo Admin SDK da Cloud Function)
+- `delete`: só o próprio usuário (exclusão de conta)
+
+**`jogos`**
+- `read`: qualquer autenticado
+- `write`: só admin (verificado via `get()` no documento do usuário)
+
+**`palpites`**
+- `read`: qualquer autenticado (necessário para dialogs de TelaTabela e TelaRanking)
+- `create`: dono do palpite + `request.time < jogo.dataHora` (cutoff no backend, não só no frontend)
+- `update`: dono + `uid`/`jogoId` imutáveis + jogo não iniciado
+- `delete`: bloqueado
+
+**`grupos`**
+- `read`: qualquer autenticado
+- `create`: qualquer autenticado (cria seu próprio grupo)
+- `update`: só membros do grupo (`request.auth.uid in resource.data.membros`)
+- `delete`: só o dono (`request.auth.uid == resource.data.donoUid`)
+
+**Decisões conscientes:**
+- Email visível a todos os autenticados: aceitável para bolão de amigos; mudar exigiria refatoração de arquitetura
+- Palpites de jogos futuros legíveis: restringir exigiria `dataHoraJogo` em cada palpite + migração de dados; não vale para grupo de amigos
 
 ---
 
