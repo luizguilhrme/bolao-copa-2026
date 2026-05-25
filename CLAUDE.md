@@ -676,10 +676,19 @@ Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deplo
 ## Google Play — status de publicação
 
 - **Internal Testing** — ✓ v1.0.0+2 publicada; testadores adicionados por e-mail e podem instalar via Play Store
-- **Closed Testing** — em configuração; usuário de revisão: `teste@teste.com` (isAdmin: true no Firestore)
+- **Closed Testing (Alpha)** — ✓ v1.0.0 (build 2) enviada para revisão; em análise pelo Google
 - **Política de privacidade** — ✓ publicada em `https://bolaodasoci2026.web.app/privacy`
-- **Segurança dos dados** — em preenchimento no Play Console
+- **Exclusão de conta** — ✓ publicada em `https://bolaodasoci2026.web.app/delete`
+- **Segurança dos dados** — ✓ questionário completo enviado no Play Console
+- **Classificação de conteúdo** — ✓ questionário enviado
+- **Público-alvo** — ✓ 13 anos ou mais
+- **Declaração de anúncios** — ✓ sem anúncios
+- **Página da loja** — ✓ ícone, elemento gráfico, descrição breve e completa configurados (pt-BR)
+- **Categoria** — ✓ App de Esportes
+- **Usuário de revisão** — `teste@teste.com` (isAdmin: true no Firestore)
 
 ## Próximos passos (na ordem recomendada)
 
-1. **Concluir Segurança dos dados** no Play Console (Closed Testing) e publicar.
+1. Aguardar aprovação da revisão do Google (1–7 dias úteis).
+2. Após aprovação: retomar a faixa (botão "Retomar faixa" no Play Console) para liberar aos testadores.
+3. Coletar feedback dos testadores e evoluir o app.
