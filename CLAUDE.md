@@ -675,4 +675,4 @@ Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deplo
 
 ## Próximos passos (na ordem recomendada)
 
-1. **Google Play Internal Testing** — conta Play Console aguardando verificação de identidade; quando aprovada: criar keystore (já configurada no `build.gradle.kts`), build AAB (`flutter build appbundle`), upload no Play Console
+1. **Google Play Internal Testing** — ✓ conta verificada, Internal Testing configurado no Play Console, e-mails de testadores já inseridos. Próximo: divulgar o link de opt-in do Internal Testing para os testadores e acompanhar instalações.
