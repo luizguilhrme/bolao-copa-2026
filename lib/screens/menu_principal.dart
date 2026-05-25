@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +10,7 @@ import '../utils/avatares.dart';
 import '../utils/cores.dart';
 import 'tela_admin.dart';
 import 'tela_ajuda.dart';
+import 'tela_grupos.dart';
 import 'tela_home.dart';
 import 'tela_notificacoes.dart';
 import 'tela_perfil.dart';
@@ -287,6 +288,24 @@ class _DrawerNav extends StatelessWidget {
                   },
                 ),
 
+                const Divider(
+                  indent: 16,
+                  endIndent: 16,
+                  color: Cores.outlineVariant,
+                  height: 24,
+                ),
+                _LabelSecao('GRUPOS'),
+                _ItemDrawer(
+                  icone: Icons.group_outlined,
+                  label: 'Meus Grupos',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const TelaGrupos()),
+                    );
+                  },
+                ),
+
                 // Seção admin — só visível para o administrador
                 if (isAdmin) ...[
                   const Divider(
@@ -427,7 +446,7 @@ class _LabelSecao extends StatelessWidget {
         style: GoogleFonts.hankenGrotesk(
           fontSize: 11,
           fontWeight: FontWeight.w700,
-          color: Cores.onSurfaceVariant.withOpacity(0.6),
+          color: Cores.onSurfaceVariant.withValues(alpha: 0.6),
           letterSpacing: 0.8,
         ),
       ),
@@ -596,7 +615,7 @@ class _ItemRegra extends StatelessWidget {
                     style: GoogleFonts.hankenGrotesk(
                         fontSize: 9,
                         fontWeight: FontWeight.w600,
-                        color: _corTexto.withOpacity(0.8),
+                        color: _corTexto.withValues(alpha: 0.8),
                         height: 1.2)),
               ],
             ),

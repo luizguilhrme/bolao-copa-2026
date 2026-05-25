@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -56,12 +56,12 @@ String _formatarCriadoEm(DateTime? dt) {
 
 Color _corFundo(int? pontos) {
   if (pontos == null) return Cores.surface;
-  if (pontos == -1) return const Color(0xFFE53935).withOpacity(0.08);
-  if (pontos == 10) return const Color(0xFF006D32).withOpacity(0.08);
-  if (pontos == 7) return const Color(0xFF1B7F3A).withOpacity(0.08);
-  if (pontos == 5) return const Color(0xFF4CAF50).withOpacity(0.08);
-  if (pontos == 4) return const Color(0xFFFCD400).withOpacity(0.12);
-  return const Color(0xFFBBCBB9).withOpacity(0.2);
+  if (pontos == -1) return const Color(0xFFE53935).withValues(alpha: 0.08);
+  if (pontos == 10) return const Color(0xFF006D32).withValues(alpha: 0.08);
+  if (pontos == 7) return const Color(0xFF1B7F3A).withValues(alpha: 0.08);
+  if (pontos == 5) return const Color(0xFF4CAF50).withValues(alpha: 0.08);
+  if (pontos == 4) return const Color(0xFFFCD400).withValues(alpha: 0.12);
+  return const Color(0xFFBBCBB9).withValues(alpha: 0.2);
 }
 
 Color _corBorda(int? pontos) {
@@ -336,7 +336,7 @@ class _BotaoAba extends StatelessWidget {
                 const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: ativo
-                      ? Colors.white.withOpacity(0.25)
+                      ? Colors.white.withValues(alpha: 0.25)
                       : Cores.outlineVariant,
                   borderRadius: BorderRadius.circular(999),
                 ),
@@ -668,7 +668,7 @@ class _CardPalpiteState extends State<_CardPalpite> {
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withValues(alpha: 0.06),
                   blurRadius: 8,
                   offset: const Offset(0, 2))
             ],
@@ -778,7 +778,7 @@ class _CardResultado extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 6,
               offset: const Offset(0, 2))
         ],
@@ -840,7 +840,7 @@ class _CardResultado extends StatelessWidget {
                 if (encerrado && jogo.placar1 != null) ...[
                   const SizedBox(height: 8),
                   Divider(
-                      color: _corBorda(pontos).withOpacity(0.3),
+                      color: _corBorda(pontos).withValues(alpha: 0.3),
                       height: 1),
                   const SizedBox(height: 8),
                   Row(
@@ -907,10 +907,10 @@ class _ChipStatus extends StatelessWidget {
           padding:
           const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
-            color: const Color(0xFFFCD400).withOpacity(0.2),
+            color: const Color(0xFFFCD400).withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-                color: const Color(0xFFFCD400).withOpacity(0.6)),
+                color: const Color(0xFFFCD400).withValues(alpha: 0.6)),
           ),
           child: Text(
             'PRESTES A COMEÇAR',
@@ -962,7 +962,7 @@ class _ChipAoVivoState extends State<_ChipAoVivo>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Cores.primaryContainer.withOpacity(0.15),
+        color: Cores.primaryContainer.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: Cores.primaryContainer),
       ),
@@ -977,7 +977,7 @@ class _ChipAoVivoState extends State<_ChipAoVivo>
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Cores.verdePrincipal
-                    .withOpacity(0.4 + 0.6 * _ctrl.value),
+                    .withValues(alpha: 0.4 + 0.6 * _ctrl.value),
               ),
             ),
           ),

@@ -1,4 +1,4 @@
-import 'package:bolao/utils/biblioteca.dart';
+﻿import 'package:bolao/utils/biblioteca.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -330,7 +330,7 @@ class _CardJogo extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: Cores.onSurfaceVariant.withOpacity(0.5),
+                    color: Cores.onSurfaceVariant.withValues(alpha: 0.5),
                   ),
                 ),
               _buildTime(jogo.team2),
@@ -516,7 +516,7 @@ class _CardNav extends StatelessWidget {
                 right: -8,
                 bottom: -8,
                 child:
-                Icon(icone, size: 80, color: corTexto.withOpacity(0.15)),
+                Icon(icone, size: 80, color: corTexto.withValues(alpha: 0.15)),
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -536,14 +536,14 @@ class _CardNav extends StatelessWidget {
                   Text(
                     subtitulo,
                     style: TextStyle(
-                        fontSize: 12, color: corTexto.withOpacity(0.85)),
+                        fontSize: 12, color: corTexto.withValues(alpha: 0.85)),
                   ),
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: corTexto.withOpacity(0.18),
+                      color: corTexto.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Row(
@@ -598,7 +598,7 @@ class _CardPalpiteEspecial extends StatelessWidget {
                 child: Icon(
                   Icons.emoji_events,
                   size: 100,
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                 ),
               ),
               const Column(
@@ -873,7 +873,7 @@ class _DialogPalpiteEspecialState extends State<_DialogPalpiteEspecial> {
                               ? const Icon(Icons.check_circle, color: Cores.azulTerciario, size: 20)
                               : null,
                           tileColor: selecionado
-                              ? Cores.azulTerciario.withOpacity(0.08)
+                              ? Cores.azulTerciario.withValues(alpha: 0.08)
                               : null,
                           onTap: _bloqueado ? null : () => setState(() => _campeaoSelecionado = time),
                         );
@@ -972,7 +972,7 @@ class _CardNavLargo extends StatelessWidget {
                 child: Icon(
                   Icons.calendar_month,
                   size: 100,
-                  color: Cores.onSurface.withOpacity(0.08),
+                  color: Cores.onSurface.withValues(alpha: 0.08),
                 ),
               ),
               const Column(

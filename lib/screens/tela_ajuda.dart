@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/cores.dart';
 
@@ -191,7 +191,7 @@ class _ItemPontuacao extends StatelessWidget {
                   style: GoogleFonts.hankenGrotesk(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
-                    color: _corTexto.withOpacity(0.8),
+                    color: _corTexto.withValues(alpha: 0.8),
                     height: 1.2,
                   ),
                 ),
