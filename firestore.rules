@@ -81,5 +81,28 @@ service cloud.firestore {
 
       allow delete: if false;
     }
+
+    // ── grupos ────────────────────────────────────────────────────────────────
+    //
+    // update tem dois casos permitidos:
+    //   1. Usuário já é membro (sair do grupo via arrayRemove).
+    //   2. Usuário está entrando: só o campo 'membros' muda, todos os membros
+    //      anteriores permanecem e o uid do solicitante entra na nova lista.
+    //
+    // delete: só o dono — ou o último membro ao sair (que por construção é o dono).
+    //
+    match /grupos/{grupoId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && (
+        request.auth.uid in resource.data.membros ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membros']) &&
+          request.resource.data.membros.hasAll(resource.data.membros) &&
+          request.auth.uid in request.resource.data.membros
+        )
+      );
+      allow delete: if request.auth != null && request.auth.uid == resource.data.donoUid;
+    }
   }
 }
