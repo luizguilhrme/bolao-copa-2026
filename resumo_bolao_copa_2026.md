@@ -644,7 +644,7 @@ Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deplo
 ## Google Play — status de publicação
 
 - **Internal Testing** — ✓ v1.0.0+2 publicada; testadores adicionados por e-mail e podem instalar via Play Store
-- **Closed Testing (Alpha)** — ✓ v1.0.0+3 (build 3) gerada com detalhes de grupo, editar nome, notif de membro e palpites especiais; fazer upload no Play Console
+- **Closed Testing (Alpha)** — ✓ v1.0.0+3 (build 3) publicada; inclui detalhes de grupo, editar nome, notif de membro e palpites especiais
 - **Política de privacidade** — ✓ publicada em `https://bolaodasoci2026.web.app/privacy`
 - **Exclusão de conta** — ✓ publicada em `https://bolaodasoci2026.web.app/delete`
 - **Segurança dos dados** — ✓ questionário completo enviado no Play Console
