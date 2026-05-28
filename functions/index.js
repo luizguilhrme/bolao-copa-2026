@@ -4,6 +4,7 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
+const { getAuth } = require('firebase-admin/auth');
 
 initializeApp();
 
@@ -337,6 +338,72 @@ exports.calcularPalpitesEspeciais = onCall(
     await batch.commit();
 
     return { atualizados };
+  }
+);
+
+// Remove documentos de `usuarios` e `palpites` cujas contas Firebase Auth
+// foram deletadas. Também remove palpites órfãos cujo uid não existe mais
+// em `usuarios` (cobre casos onde o doc de usuário já foi deletado antes).
+exports.limparUsuariosOrfaos = onCall(
+  { region: 'southamerica-east1' },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Não autenticado.');
+    }
+
+    const db = getFirestore();
+    const auth = getAuth();
+
+    const userDoc = await db.collection('usuarios').doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data().isAdmin !== true) {
+      throw new HttpsError('permission-denied', 'Acesso restrito ao admin.');
+    }
+
+    // Coleta todos os UIDs existentes no Firebase Auth (paginado)
+    const uidsAuth = new Set();
+    let pageToken;
+    do {
+      const result = await auth.listUsers(1000, pageToken);
+      result.users.forEach((u) => uidsAuth.add(u.uid));
+      pageToken = result.pageToken;
+    } while (pageToken);
+
+    // UIDs com documento em `usuarios`
+    const usuariosSnap = await db.collection('usuarios').get();
+    const uidsFirestore = new Set(usuariosSnap.docs.map((d) => d.id));
+
+    // Docs de `usuarios` sem conta Auth correspondente
+    const usuariosOrfaos = usuariosSnap.docs.filter((d) => !uidsAuth.has(d.id));
+    const uidsSemAuth = new Set(usuariosOrfaos.map((d) => d.id));
+
+    // UIDs válidos = têm conta Auth E documento em usuarios
+    const uidsValidos = new Set([...uidsFirestore].filter((uid) => uidsAuth.has(uid)));
+
+    // Coleta UIDs únicos presentes nos palpites
+    const palpitesSnap = await db.collection('palpites').get();
+    const uidsPalpites = new Set(palpitesSnap.docs.map((d) => d.data().uid));
+
+    // Palpites cujo uid não está entre os válidos
+    const palpitesOrfaos = palpitesSnap.docs.filter((d) => !uidsValidos.has(d.data().uid));
+
+    // Deleta palpites órfãos em lotes de 500
+    for (let i = 0; i < palpitesOrfaos.length; i += 500) {
+      const batch = db.batch();
+      palpitesOrfaos.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+
+    // Deleta docs de usuarios sem Auth
+    for (let i = 0; i < usuariosOrfaos.length; i += 500) {
+      const batch = db.batch();
+      usuariosOrfaos.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+
+    return {
+      usuariosRemovidos: usuariosOrfaos.length,
+      palpitesRemovidos: palpitesOrfaos.length,
+    };
   }
 );
 
