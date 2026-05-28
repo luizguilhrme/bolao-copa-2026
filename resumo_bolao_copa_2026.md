@@ -26,7 +26,8 @@ C:\bolao\
   functions/
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
                                  calcularPontuacao, lembretesPalpite, recalcularTudo,
-                                 membroEntrou, calcularPalpitesEspeciais
+                                 membroEntrou, calcularPalpitesEspeciais,
+                                 limparUsuariosOrfaos
   lib/
     main.dart                 ← Firebase init + FCM background handler + StreamBuilder de auth
     firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
@@ -443,6 +444,7 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - Ao salvar: atualiza `placar1`/`placar2` no Firestore → Cloud Function `calcularPontuacao` dispara automaticamente
 - Botão de popular jogos abre dialog pedindo **Teste** (`jogos_teste.json`) ou **Produção** (`jogos.json`)
 - Botão de recalcular chama a Cloud Function `recalcularTudo` (admin only)
+- Botão de vassoura (`delete_sweep`) chama `limparUsuariosOrfaos`: remove docs `usuarios` sem conta Auth + palpites cujo uid não existe em `usuarios`; exibe contagem de usuários e palpites removidos
 - **Seção Palpites Especiais** no topo: seletor de campeão real com bandeiras e nomes em PT (filtra placeholders com dígitos, ordena ignorando acentos); campo de artilheiro (texto livre); botão SALVAR grava em `config/copa2026`; botão CALCULAR chama `calcularPalpitesEspeciais` (irreversível, desabilitado após execução); `resizeToAvoidBottomInset: false` evita overflow ao abrir teclado
 
 ### `tela_perfil.dart` — implementada
@@ -598,6 +600,7 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 | `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação de todos os usuários do zero, incluindo a penalidade de −1 por ausência de palpite |
 | `membroEntrou` | Firestore trigger (`grupos/{grupoId}`) | Detecta novo membro no array `membros` e envia FCM para o dono do grupo |
 | `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Lê `config/copa2026` (campeaoReal + artilheiroReal) e aplica +50 / +25 pts para cada usuário que acertou; marca `palpitesEspeciaisCalculados: true` para evitar execução dupla |
+| `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` cujo UID não tem conta Auth + todos os `palpites` cujo uid não existe em `usuarios`; cobre casos onde o doc de usuário já foi deletado antes |
 
 **FCM token management:** token salvo em `usuarios/{uid}.fcmToken`. Tokens inválidos são removidos automaticamente (`messaging/registration-token-not-registered`).
 
