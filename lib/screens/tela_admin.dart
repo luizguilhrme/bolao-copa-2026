@@ -19,6 +19,7 @@ class _TelaAdminState extends State<TelaAdmin> {
   late Future<List<Jogo>> _futureJogos;
   bool _populando = false;
   bool _recalculando = false;
+  bool _limpando = false;
 
   // Palpites especiais
   String? _campeaoReal;
@@ -170,6 +171,49 @@ class _TelaAdminState extends State<TelaAdmin> {
     }
   }
 
+  Future<void> _limparOrfaos() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Cores.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Limpar dados órfãos?',
+            style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+        content: Text(
+          'Remove documentos de usuários e palpites de contas que foram deletadas do Firebase Auth.',
+          style: GoogleFonts.hankenGrotesk(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('CANCELAR',
+                style: GoogleFonts.anybody(color: Cores.onSurfaceVariant)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Cores.verdePrincipal),
+            child: Text('LIMPAR',
+                style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+
+    setState(() => _limpando = true);
+    try {
+      final fn = FirebaseFunctions.instanceFor(region: 'southamerica-east1');
+      final result = await fn.httpsCallable('limparUsuariosOrfaos').call();
+      final usuarios = result.data['usuariosRemovidos'];
+      final palpites = result.data['palpitesRemovidos'];
+      if (mounted) mostrarMensagem(context, 'Limpeza concluída: $usuarios usuário(s) e $palpites palpite(s) órfão(s) removido(s).');
+    } catch (e) {
+      if (mounted) mostrarMensagem(context, 'Erro: $e');
+    } finally {
+      if (mounted) setState(() => _limpando = false);
+    }
+  }
+
   Future<void> _popularJogos() async {
     final ambiente = await showDialog<String>(
       context: context,
@@ -242,6 +286,17 @@ class _TelaAdminState extends State<TelaAdmin> {
         ),
         centerTitle: true,
         actions: [
+          _limpando
+              ? const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.delete_sweep_rounded, color: Cores.verdePrincipal),
+                  tooltip: 'Limpar dados órfãos',
+                  onPressed: _limparOrfaos,
+                ),
           _recalculando
               ? const Padding(
                   padding: EdgeInsets.all(14),
