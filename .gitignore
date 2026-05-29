@@ -46,3 +46,7 @@ app.*.map.json
 
 # Claude Code local settings (personal, não versionado)
 .claude/settings.local.json
+
+# Firebase / Google credentials — não versionar em repo público
+android/app/google-services.json
+lib/firebase_options.dart
