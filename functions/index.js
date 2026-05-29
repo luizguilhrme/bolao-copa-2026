@@ -8,9 +8,48 @@ const { getAuth } = require('firebase-admin/auth');
 
 initializeApp();
 
+// ─── Helpers de pontuação ─────────────────────────────────────────────────────
+
+// Retorna pontos BASE (sem multiplicador de fase).
+// Espelha exatamente a lógica do Flutter (_calcularPontos em tela_palpites.dart).
+function calcularPontos(p1, p2, r1, r2) {
+  if (p1 === r1 && p2 === r2) return 100; // placar exato
+  const sP = p1 - p2, sR = r1 - r2;
+  const vP = Math.sign(p1 - p2), vR = Math.sign(r1 - r2);
+  if (vP !== vR) return 0; // errou o vencedor
+  if (vP !== 0) {
+    if (sP === sR) return 70;              // vencedor + saldo de gols
+    if (p1 === r1 || p2 === r2) return 60; // vencedor + gols exatos de um time
+    return 50;                             // só o vencedor
+  }
+  return 50; // empate certo, placar errado
+}
+
+// Multiplicador por fase — idêntico ao Flutter (_multiplicador em tela_palpites.dart).
+function multiplicador(round) {
+  switch (round) {
+    case '16 avos de Final':    return 1.2;
+    case 'Oitavas de Final':    return 1.4;
+    case 'Quartas de Final':    return 1.6;
+    case 'Semifinal':
+    case 'Disputa de 3º Lugar': return 1.8;
+    case 'Final':               return 2.0;
+    default:                    return 1.0; // Fase de Grupos
+  }
+}
+
+// Pontos reais considerando a fase do jogo.
+function calcularPontosComFase(p1, p2, r1, r2, round) {
+  const base = calcularPontos(p1, p2, r1, r2);
+  if (base === 0) return 0;
+  return Math.round(base * multiplicador(round));
+}
+
+// ─── calcularPontuacao ────────────────────────────────────────────────────────
 // Dispara quando o admin insere ou corrige um placar em /jogos/{jogoId}.
 // Recalcula e aplica o delta de pontuação para cada participante que fez
 // palpite nesse jogo. Após o commit, envia notificações de mudança de ranking.
+
 exports.calcularPontuacao = onDocumentUpdated(
   { document: 'jogos/{jogoId}', region: 'southamerica-east1' },
   async (event) => {
@@ -22,6 +61,7 @@ exports.calcularPontuacao = onDocumentUpdated(
 
     const db = getFirestore();
     const jogoId = depois.id;
+    const round = depois.round || 'Fase de Grupos';
 
     const palpitesSnap = await db
       .collection('palpites')
@@ -37,21 +77,20 @@ exports.calcularPontuacao = onDocumentUpdated(
       pontuacaoAtual[doc.id] = doc.data().pontuacao || 0;
     });
 
-    // Calcula deltas e acumula por uid (um usuário pode ter feito palpites em
-    // múltiplos jogos afetados pela mesma correção de placar, embora raro)
+    // Calcula deltas: subtrai pontuação anterior e adiciona a nova
     const deltasPorUid = {};
     palpitesSnap.forEach((doc) => {
       const p = doc.data();
       let delta = 0;
       if (antes.placar1 != null && antes.placar2 != null) {
-        delta -= calcularPontos(p.palpite1, p.palpite2, antes.placar1, antes.placar2);
+        delta -= calcularPontosComFase(p.palpite1, p.palpite2, antes.placar1, antes.placar2, round);
       }
-      delta += calcularPontos(p.palpite1, p.palpite2, depois.placar1, depois.placar2);
+      delta += calcularPontosComFase(p.palpite1, p.palpite2, depois.placar1, depois.placar2, round);
       if (delta !== 0) deltasPorUid[p.uid] = (deltasPorUid[p.uid] || 0) + delta;
     });
 
-    // Regra −1: na primeira vez que o resultado é inserido, penaliza usuários
-    // sem palpite que criaram conta antes do início do jogo.
+    // Regra −10: na primeira inserção de placar, penaliza usuários sem palpite
+    // que criaram conta antes do início do jogo.
     const primeiraVez = antes.placar1 == null || antes.placar2 == null;
     if (primeiraVez) {
       const comPalpite = new Set(palpitesSnap.docs.map((d) => d.data().uid));
@@ -61,41 +100,40 @@ exports.calcularPontuacao = onDocumentUpdated(
           if (comPalpite.has(doc.id)) return;
           const criadoEm = doc.data().criadoEm?.toDate?.();
           if (!criadoEm || criadoEm >= gameDataHora) return;
-          deltasPorUid[doc.id] = (deltasPorUid[doc.id] || 0) - 1;
+          deltasPorUid[doc.id] = (deltasPorUid[doc.id] || 0) - 10;
         });
       }
     }
 
-    // Propagar vencedor/perdedor para o próximo jogo da chave
-    // (deve acontecer antes do early return por ausência de palpites)
+    // Propagar vencedor/perdedor para o próximo jogo da chave eliminatória
     const progressao = {
-      73: [{dest: 90, campo: 'team1', tipo: 'v'}],
-      74: [{dest: 89, campo: 'team1', tipo: 'v'}],
-      75: [{dest: 90, campo: 'team2', tipo: 'v'}],
-      76: [{dest: 91, campo: 'team1', tipo: 'v'}],
-      77: [{dest: 89, campo: 'team2', tipo: 'v'}],
-      78: [{dest: 91, campo: 'team2', tipo: 'v'}],
-      79: [{dest: 92, campo: 'team1', tipo: 'v'}],
-      80: [{dest: 92, campo: 'team2', tipo: 'v'}],
-      81: [{dest: 94, campo: 'team1', tipo: 'v'}],
-      82: [{dest: 94, campo: 'team2', tipo: 'v'}],
-      83: [{dest: 93, campo: 'team1', tipo: 'v'}],
-      84: [{dest: 93, campo: 'team2', tipo: 'v'}],
-      85: [{dest: 96, campo: 'team1', tipo: 'v'}],
-      86: [{dest: 95, campo: 'team1', tipo: 'v'}],
-      87: [{dest: 96, campo: 'team2', tipo: 'v'}],
-      88: [{dest: 95, campo: 'team2', tipo: 'v'}],
-      89: [{dest: 97, campo: 'team1', tipo: 'v'}],
-      90: [{dest: 97, campo: 'team2', tipo: 'v'}],
-      91: [{dest: 99, campo: 'team1', tipo: 'v'}],
-      92: [{dest: 99, campo: 'team2', tipo: 'v'}],
-      93: [{dest: 98, campo: 'team1', tipo: 'v'}],
-      94: [{dest: 98, campo: 'team2', tipo: 'v'}],
-      95: [{dest: 100, campo: 'team1', tipo: 'v'}],
-      96: [{dest: 100, campo: 'team2', tipo: 'v'}],
-      97: [{dest: 101, campo: 'team1', tipo: 'v'}],
-      98: [{dest: 101, campo: 'team2', tipo: 'v'}],
-      99: [{dest: 102, campo: 'team1', tipo: 'v'}],
+      73:  [{dest: 90, campo: 'team1', tipo: 'v'}],
+      74:  [{dest: 89, campo: 'team1', tipo: 'v'}],
+      75:  [{dest: 90, campo: 'team2', tipo: 'v'}],
+      76:  [{dest: 91, campo: 'team1', tipo: 'v'}],
+      77:  [{dest: 89, campo: 'team2', tipo: 'v'}],
+      78:  [{dest: 91, campo: 'team2', tipo: 'v'}],
+      79:  [{dest: 92, campo: 'team1', tipo: 'v'}],
+      80:  [{dest: 92, campo: 'team2', tipo: 'v'}],
+      81:  [{dest: 94, campo: 'team1', tipo: 'v'}],
+      82:  [{dest: 94, campo: 'team2', tipo: 'v'}],
+      83:  [{dest: 93, campo: 'team1', tipo: 'v'}],
+      84:  [{dest: 93, campo: 'team2', tipo: 'v'}],
+      85:  [{dest: 96, campo: 'team1', tipo: 'v'}],
+      86:  [{dest: 95, campo: 'team1', tipo: 'v'}],
+      87:  [{dest: 96, campo: 'team2', tipo: 'v'}],
+      88:  [{dest: 95, campo: 'team2', tipo: 'v'}],
+      89:  [{dest: 97, campo: 'team1', tipo: 'v'}],
+      90:  [{dest: 97, campo: 'team2', tipo: 'v'}],
+      91:  [{dest: 99, campo: 'team1', tipo: 'v'}],
+      92:  [{dest: 99, campo: 'team2', tipo: 'v'}],
+      93:  [{dest: 98, campo: 'team1', tipo: 'v'}],
+      94:  [{dest: 98, campo: 'team2', tipo: 'v'}],
+      95:  [{dest: 100, campo: 'team1', tipo: 'v'}],
+      96:  [{dest: 100, campo: 'team2', tipo: 'v'}],
+      97:  [{dest: 101, campo: 'team1', tipo: 'v'}],
+      98:  [{dest: 101, campo: 'team2', tipo: 'v'}],
+      99:  [{dest: 102, campo: 'team1', tipo: 'v'}],
       100: [{dest: 102, campo: 'team2', tipo: 'v'}],
       101: [
         {dest: 104, campo: 'team1', tipo: 'v'},
@@ -113,11 +151,9 @@ exports.calcularPontuacao = onDocumentUpdated(
       let vencedor, perdedor;
 
       if (p1 > p2) {
-        vencedor = depois.team1;
-        perdedor = depois.team2;
+        vencedor = depois.team1; perdedor = depois.team2;
       } else if (p2 > p1) {
-        vencedor = depois.team2;
-        perdedor = depois.team1;
+        vencedor = depois.team2; perdedor = depois.team1;
       } else if (depois.vencedor) {
         vencedor = depois.vencedor;
         perdedor = depois.vencedor === depois.team1 ? depois.team2 : depois.team1;
@@ -146,7 +182,7 @@ exports.calcularPontuacao = onDocumentUpdated(
     }
     await batch.commit();
 
-    // Projeta novo ranking em memória (evita segunda leitura do Firestore)
+    // Projeta novo ranking em memória para envio de notificações
     const novaPontuacao = { ...pontuacaoAtual };
     for (const [uid, delta] of Object.entries(deltasPorUid)) {
       novaPontuacao[uid] = (novaPontuacao[uid] || 0) + delta;
@@ -155,7 +191,6 @@ exports.calcularPontuacao = onDocumentUpdated(
       .sort((a, b) => novaPontuacao[b] - novaPontuacao[a])
       .reduce((acc, uid, idx) => { acc[uid] = idx + 1; return acc; }, {});
 
-    // Envia notificações para quem mudou de posição e tem notifRanking ativo
     const messaging = getMessaging();
     const usuariosData = {};
     usuariosSnap.docs.forEach((doc) => { usuariosData[doc.id] = doc.data(); });
@@ -169,7 +204,7 @@ exports.calcularPontuacao = onDocumentUpdated(
       if (!userData?.fcmToken) continue;
       if (userData.notifRanking === false) continue;
 
-      const delta = posAntes - posDepois; // positivo = subiu, negativo = desceu
+      const delta = posAntes - posDepois;
       const abs = Math.abs(delta);
       const pos = `${posDepois}º lugar`;
       const body = delta > 0
@@ -187,8 +222,10 @@ exports.calcularPontuacao = onDocumentUpdated(
   }
 );
 
+// ─── lembretesPalpite ─────────────────────────────────────────────────────────
 // Roda a cada 30 minutos e notifica usuários que ainda não palpitaram em jogos
-// que começam em ~30 minutos.
+// que começam em ~30 minutos. Ignora jogos com times placeholder.
+
 exports.lembretesPalpite = onSchedule(
   { schedule: '*/30 * * * *', region: 'southamerica-east1', timeZone: 'America/Sao_Paulo' },
   async () => {
@@ -196,7 +233,6 @@ exports.lembretesPalpite = onSchedule(
     const messaging = getMessaging();
     const agora = new Date();
 
-    // Janela: jogos que começam entre 25 e 35 minutos a partir de agora
     const inicio = new Date(agora.getTime() + 25 * 60 * 1000);
     const fim = new Date(agora.getTime() + 35 * 60 * 1000);
 
@@ -207,9 +243,16 @@ exports.lembretesPalpite = onSchedule(
 
     if (jogosSnap.empty) return null;
 
-    const jogoIds = jogosSnap.docs.map((d) => d.data().id);
+    // Filtra jogos com times ainda não definidos (placeholders de eliminatórias)
+    const jogosValidos = jogosSnap.docs.filter((d) => {
+      const { team1, team2 } = d.data();
+      return !_ehPlaceholder(team1) && !_ehPlaceholder(team2);
+    });
 
-    // Palpites já registrados nesses jogos
+    if (jogosValidos.length === 0) return null;
+
+    const jogoIds = jogosValidos.map((d) => d.data().id);
+
     const palpitesSnap = await db.collection('palpites')
       .where('jogoId', 'in', jogoIds)
       .get();
@@ -221,7 +264,6 @@ exports.lembretesPalpite = onSchedule(
       palpitadosPorJogo[p.jogoId].add(p.uid);
     });
 
-    // Todos os usuários — trata ausência de notifLembretes como true (padrão)
     const usuariosSnap = await db.collection('usuarios').get();
 
     for (const userDoc of usuariosSnap.docs) {
@@ -230,7 +272,7 @@ exports.lembretesPalpite = onSchedule(
       if (!userData.fcmToken) continue;
       if (userData.notifLembretes === false) continue;
 
-      const jogosSemPalpite = jogosSnap.docs.filter((jDoc) => {
+      const jogosSemPalpite = jogosValidos.filter((jDoc) => {
         const jId = jDoc.data().id;
         return !palpitadosPorJogo[jId]?.has(uid);
       });
@@ -254,9 +296,11 @@ exports.lembretesPalpite = onSchedule(
   }
 );
 
+// ─── recalcularTudo ───────────────────────────────────────────────────────────
 // Recalcula pontuação de TODOS os usuários do zero, a partir dos placares
-// e palpites atuais. Útil para corrigir inconsistências geradas em testes.
-// Só pode ser chamada por um usuário com isAdmin == true no Firestore.
+// e palpites atuais. Aplica multiplicadores de fase e penalidade −10.
+// Só pode ser chamada por admin. NÃO reaplica pontos de palpites especiais.
+
 exports.recalcularTudo = onCall(
   { region: 'southamerica-east1' },
   async (request) => {
@@ -287,7 +331,7 @@ exports.recalcularTudo = onCall(
       const p = doc.data();
       const jogo = jogosPorId[p.jogoId];
       if (!jogo) return;
-      const pts = calcularPontos(p.palpite1, p.palpite2, jogo.placar1, jogo.placar2);
+      const pts = calcularPontosComFase(p.palpite1, p.palpite2, jogo.placar1, jogo.placar2, jogo.round || 'Fase de Grupos');
       pontuacaoPorUid[p.uid] = (pontuacaoPorUid[p.uid] || 0) + pts;
       if (!palpitesPorJogo[p.jogoId]) palpitesPorJogo[p.jogoId] = new Set();
       palpitesPorJogo[p.jogoId].add(p.uid);
@@ -295,7 +339,7 @@ exports.recalcularTudo = onCall(
 
     const usuariosSnap = await db.collection('usuarios').get();
 
-    // Regra −1: penaliza ausência de palpite em jogos após o cadastro do usuário
+    // Regra −10: penaliza ausência de palpite em jogos após o cadastro
     usuariosSnap.forEach((doc) => {
       const criadoEm = doc.data().criadoEm?.toDate?.();
       if (!criadoEm) return;
@@ -303,7 +347,7 @@ exports.recalcularTudo = onCall(
         if (palpitesPorJogo[jogoId]?.has(doc.id)) continue;
         const gameDataHora = jogo.dataHora?.toDate?.();
         if (!gameDataHora || criadoEm >= gameDataHora) continue;
-        pontuacaoPorUid[doc.id] = (pontuacaoPorUid[doc.id] || 0) - 1;
+        pontuacaoPorUid[doc.id] = (pontuacaoPorUid[doc.id] || 0) - 10;
       }
     });
 
@@ -317,7 +361,9 @@ exports.recalcularTudo = onCall(
   }
 );
 
+// ─── membroEntrou ─────────────────────────────────────────────────────────────
 // Dispara quando alguém entra em um grupo. Notifica o dono do grupo.
+
 exports.membroEntrou = onDocumentUpdated(
   { document: 'grupos/{grupoId}', region: 'southamerica-east1' },
   async (event) => {
@@ -330,7 +376,7 @@ exports.membroEntrou = onDocumentUpdated(
     if (novosMembros.length === 0) return null;
 
     const novoUid = novosMembros[0];
-    if (novoUid === depois.donoUid) return null; // o dono criou o grupo, não notifica
+    if (novoUid === depois.donoUid) return null;
 
     const db = getFirestore();
     const messaging = getMessaging();
@@ -356,9 +402,18 @@ exports.membroEntrou = onDocumentUpdated(
   }
 );
 
-// Calcula pontuação dos palpites especiais (campeão e artilheiro).
-// Lê config/copa2026 para obter os resultados reais e aplica +50 / +25
-// para cada usuário que acertou. Só pode ser executada uma vez (flag no config).
+// ─── calcularPalpitesEspeciais ────────────────────────────────────────────────
+// Calcula pontuação dos 6 palpites especiais. Lê config/copa2026 para obter
+// os resultados reais. Só pode ser executada uma vez (flag no config).
+//
+// Pontuações:
+//   Campeão           → +500
+//   Artilheiro        → +300
+//   Melhor Jogador    → +300
+//   Melhor Goleiro    → +300
+//   Mais Goleadora    → +200
+//   Menos Vazada      → +200
+
 exports.calcularPalpitesEspeciais = onCall(
   { region: 'southamerica-east1' },
   async (request) => {
@@ -377,27 +432,50 @@ exports.calcularPalpitesEspeciais = onCall(
       throw new HttpsError('not-found', 'Configuração não encontrada.');
     }
 
-    const { campeaoReal, artilheiroReal, palpitesEspeciaisCalculados } = configDoc.data();
+    const config = configDoc.data();
 
-    if (palpitesEspeciaisCalculados) {
+    if (config.palpitesEspeciaisCalculados) {
       throw new HttpsError('already-exists', 'Pontuação especial já foi calculada.');
     }
-    if (!campeaoReal && !artilheiroReal) {
-      throw new HttpsError('failed-precondition', 'Defina o campeão e/ou artilheiro antes de calcular.');
+
+    const {
+      campeaoReal,
+      artilheiroReal,
+      melhorJogadorFinalReal,
+      melhorGoleiroReal,
+      maisGoleadoraReal,
+      maisVazadaReal,
+    } = config;
+
+    const temAlgumResultado = campeaoReal || artilheiroReal || melhorJogadorFinalReal
+      || melhorGoleiroReal || maisGoleadoraReal || maisVazadaReal;
+
+    if (!temAlgumResultado) {
+      throw new HttpsError('failed-precondition', 'Defina ao menos um resultado real antes de calcular.');
     }
+
+    // Comparação de texto livre: case-insensitive + trim
+    const textoIgual = (a, b) =>
+      a && b && a.toLowerCase().trim() === b.toLowerCase().trim();
 
     const usuariosSnap = await db.collection('usuarios').get();
     const batch = db.batch();
     let atualizados = 0;
 
     usuariosSnap.forEach((doc) => {
-      const data = doc.data();
+      const d = doc.data();
       let bonus = 0;
-      if (campeaoReal && data.palpiteCampeao === campeaoReal) bonus += 50;
-      if (artilheiroReal && data.palpiteArtilheiro &&
-          data.palpiteArtilheiro.toLowerCase().trim() === artilheiroReal.toLowerCase().trim()) {
-        bonus += 25;
-      }
+
+      // Times (comparação exata de nome em inglês)
+      if (campeaoReal        && d.palpiteCampeao      === campeaoReal)     bonus += 500;
+      if (maisGoleadoraReal  && d.palpiteMaisGoleadora === maisGoleadoraReal) bonus += 200;
+      if (maisVazadaReal     && d.palpiteMenosVazada   === maisVazadaReal)  bonus += 200;
+
+      // Pessoas (comparação flexível de texto livre)
+      if (artilheiroReal         && textoIgual(d.palpiteArtilheiro,    artilheiroReal))         bonus += 300;
+      if (melhorJogadorFinalReal && textoIgual(d.palpiteMelhorJogador, melhorJogadorFinalReal)) bonus += 300;
+      if (melhorGoleiroReal      && textoIgual(d.palpiteGoleiro,       melhorGoleiroReal))      bonus += 300;
+
       if (bonus > 0) {
         batch.update(doc.ref, { pontuacao: FieldValue.increment(bonus) });
         atualizados++;
@@ -411,9 +489,10 @@ exports.calcularPalpitesEspeciais = onCall(
   }
 );
 
+// ─── limparUsuariosOrfaos ─────────────────────────────────────────────────────
 // Remove documentos de `usuarios` e `palpites` cujas contas Firebase Auth
-// foram deletadas. Também remove palpites órfãos cujo uid não existe mais
-// em `usuarios` (cobre casos onde o doc de usuário já foi deletado antes).
+// foram deletadas.
+
 exports.limparUsuariosOrfaos = onCall(
   { region: 'southamerica-east1' },
   async (request) => {
@@ -429,7 +508,6 @@ exports.limparUsuariosOrfaos = onCall(
       throw new HttpsError('permission-denied', 'Acesso restrito ao admin.');
     }
 
-    // Coleta todos os UIDs existentes no Firebase Auth (paginado)
     const uidsAuth = new Set();
     let pageToken;
     do {
@@ -438,32 +516,21 @@ exports.limparUsuariosOrfaos = onCall(
       pageToken = result.pageToken;
     } while (pageToken);
 
-    // UIDs com documento em `usuarios`
     const usuariosSnap = await db.collection('usuarios').get();
     const uidsFirestore = new Set(usuariosSnap.docs.map((d) => d.id));
 
-    // Docs de `usuarios` sem conta Auth correspondente
     const usuariosOrfaos = usuariosSnap.docs.filter((d) => !uidsAuth.has(d.id));
-    const uidsSemAuth = new Set(usuariosOrfaos.map((d) => d.id));
-
-    // UIDs válidos = têm conta Auth E documento em usuarios
     const uidsValidos = new Set([...uidsFirestore].filter((uid) => uidsAuth.has(uid)));
 
-    // Coleta UIDs únicos presentes nos palpites
     const palpitesSnap = await db.collection('palpites').get();
-    const uidsPalpites = new Set(palpitesSnap.docs.map((d) => d.data().uid));
-
-    // Palpites cujo uid não está entre os válidos
     const palpitesOrfaos = palpitesSnap.docs.filter((d) => !uidsValidos.has(d.data().uid));
 
-    // Deleta palpites órfãos em lotes de 500
     for (let i = 0; i < palpitesOrfaos.length; i += 500) {
       const batch = db.batch();
       palpitesOrfaos.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
       await batch.commit();
     }
 
-    // Deleta docs de usuarios sem Auth
     for (let i = 0; i < usuariosOrfaos.length; i += 500) {
       const batch = db.batch();
       usuariosOrfaos.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
@@ -477,31 +544,9 @@ exports.limparUsuariosOrfaos = onCall(
   }
 );
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-// Envia notificação FCM e remove o token inválido do Firestore se necessário.
-async function _enviarNotificacao(messaging, db, uid, token, { title, body, data = {} }) {
-  try {
-    await messaging.send({
-      token,
-      notification: { title, body },
-      data,
-      android: {
-        notification: {
-          channelId: 'bolao_alertas',
-          priority: 'high',
-        },
-      },
-    });
-  } catch (error) {
-    if (error.code === 'messaging/registration-token-not-registered') {
-      await db.collection('usuarios').doc(uid).update({ fcmToken: FieldValue.delete() });
-    }
-  }
-}
-
+// ─── limparDadosTeste ─────────────────────────────────────────────────────────
 // Reseta todos os dados de teste: placares, times eliminatórias, config e pontuações.
-// Só pode ser chamada por admin. Usada para limpar um ciclo de testes completo.
+
 exports.limparDadosTeste = onCall(
   { region: 'southamerica-east1' },
   async (request) => {
@@ -512,7 +557,6 @@ exports.limparDadosTeste = onCall(
       throw new HttpsError('permission-denied', 'Acesso restrito ao admin.');
     }
 
-    // Placeholders originais para restaurar times das eliminatórias
     const placeholders = {
       73:  { team1: '2A',          team2: '2B'           },
       74:  { team1: '1E',          team2: '3°'           },
@@ -557,7 +601,6 @@ exports.limparDadosTeste = onCall(
       }
     }
 
-    // 1. Resetar todos os jogos
     const jogosSnap = await db.collection('jogos').get();
     const opsJogos = jogosSnap.docs.map(doc => b => {
       const id = doc.data().id;
@@ -570,7 +613,6 @@ exports.limparDadosTeste = onCall(
     });
     await commitEmLotes(opsJogos);
 
-    // 2. Limpar config/copa2026
     await db.collection('config').doc('copa2026').set({
       classificacao_real:          FieldValue.delete(),
       terceiros_classificados:     FieldValue.delete(),
@@ -583,7 +625,6 @@ exports.limparDadosTeste = onCall(
       palpitesEspeciaisCalculados: FieldValue.delete(),
     }, { merge: true });
 
-    // 3. Zerar pontuação de todos os usuários
     const usuariosSnap = await db.collection('usuarios').get();
     const opsUsuarios = usuariosSnap.docs.map(doc => b =>
       b.update(doc.ref, { pontuacao: 0 })
@@ -597,15 +638,35 @@ exports.limparDadosTeste = onCall(
   }
 );
 
-// Mesma lógica de pontuação do app Flutter (tela_palpites.dart).
-function calcularPontos(p1, p2, r1, r2) {
-  if (p1 === r1 && p2 === r2) return 10;
-  const sP = p1 - p2;
-  const sR = r1 - r2;
-  const vP = Math.sign(p1 - p2);
-  const vR = Math.sign(r1 - r2);
-  if (sP === sR && vP === vR) return 7;
-  if (vP === vR && vR !== 0) return 5;
-  if (vP === 0 && vR === 0) return 4;
-  return 0;
+// ─── Helpers internos ─────────────────────────────────────────────────────────
+
+// Envia notificação FCM e remove token inválido do Firestore se necessário.
+async function _enviarNotificacao(messaging, db, uid, token, { title, body, data = {} }) {
+  try {
+    await messaging.send({
+      token,
+      notification: { title, body },
+      data,
+      android: {
+        notification: {
+          channelId: 'bolao_alertas',
+          priority: 'high',
+        },
+      },
+    });
+  } catch (error) {
+    if (error.code === 'messaging/registration-token-not-registered') {
+      await db.collection('usuarios').doc(uid).update({ fcmToken: FieldValue.delete() });
+    }
+  }
+}
+
+// Detecta se um time ainda é placeholder (eliminatórias não resolvidas).
+// Espelha ehPlaceholder() de biblioteca.dart no Flutter.
+function _ehPlaceholder(nome) {
+  if (!nome) return true;
+  return /^\d[A-L]$/.test(nome)        // ex: "1A", "2B"
+    || nome.startsWith('Vencedor ')
+    || nome.startsWith('Perdedor ')
+    || nome === '3°';
 }
