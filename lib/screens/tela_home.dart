@@ -200,17 +200,18 @@ class _TelaHomeState extends State<TelaHome> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          IntrinsicHeight(
+          SizedBox(
+            height: 148,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
                   child: _CardNav(
-                    titulo: 'MEUS\nPALPITES',
+                    titulo: 'MEUS PALPITES',
                     subtitulo: 'Faça e gerencie suas apostas.',
                     labelBotao: 'IR PARA PALPITES',
-                    icone: Icons.edit_square,
                     corFundo: Cores.verdePrincipal,
                     corTexto: Cores.onPrimary,
                     onTap: () => widget.onNavegar(1),
@@ -219,10 +220,9 @@ class _TelaHomeState extends State<TelaHome> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _CardNav(
-                    titulo: 'CLASSI-\nFICAÇÃO',
+                    titulo: 'CLASSIFICAÇÃO',
                     subtitulo: 'Veja quem está liderando o bolão.',
                     labelBotao: 'VER RANKING',
-                    icone: Icons.leaderboard,
                     corFundo: Cores.secondaryContainer,
                     corTexto: Cores.onSecondaryContainer,
                     onTap: () => widget.onNavegar(2),
@@ -232,14 +232,20 @@ class _TelaHomeState extends State<TelaHome> {
             ),
           ),
           const SizedBox(height: 12),
-          _CardPalpiteEspecial(
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                  builder: (_) => const TelaPalpitesEspeciais()),
+          SizedBox(
+            height: 110,
+            child: _CardPalpiteEspecial(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                    builder: (_) => const TelaPalpitesEspeciais()),
+              ),
             ),
           ),
           const SizedBox(height: 12),
-          _CardNavLargo(onTap: () => widget.onNavegar(3)),
+          SizedBox(
+            height: 110,
+            child: _CardNavLargo(onTap: () => widget.onNavegar(3)),
+          ),
         ],
       ),
     );
@@ -484,7 +490,6 @@ class _CardNav extends StatelessWidget {
     required this.titulo,
     required this.subtitulo,
     required this.labelBotao,
-    required this.icone,
     required this.corFundo,
     required this.corTexto,
     required this.onTap,
@@ -493,7 +498,6 @@ class _CardNav extends StatelessWidget {
   final String titulo;
   final String subtitulo;
   final String labelBotao;
-  final IconData icone;
   final Color corFundo;
   final Color corTexto;
   final VoidCallback onTap;
@@ -508,60 +512,52 @@ class _CardNav extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Stack(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Positioned(
-                right: -8,
-                bottom: -8,
-                child:
-                Icon(icone, size: 80, color: corTexto.withValues(alpha: 0.15)),
+              Text(
+                titulo,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.anybody(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  fontStyle: FontStyle.italic,
+                  color: corTexto,
+                  height: 1.2,
+                ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    titulo,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      fontStyle: FontStyle.italic,
-                      color: corTexto,
-                      height: 1.2,
+              Text(
+                subtitulo,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12, color: corTexto.withValues(alpha: 0.85)),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: corTexto.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      labelBotao,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: corTexto,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    subtitulo,
-                    style: TextStyle(
-                        fontSize: 12, color: corTexto.withValues(alpha: 0.85)),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: corTexto.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          labelBotao,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4,
-                            color: corTexto,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(Icons.arrow_forward, size: 13, color: corTexto),
-                      ],
-                    ),
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    Icon(Icons.arrow_forward, size: 13, color: corTexto),
+                  ],
+                ),
               ),
             ],
           ),
@@ -577,62 +573,59 @@ class _CardPalpiteEspecial extends StatelessWidget {
   const _CardPalpiteEspecial({required this.onTap});
   final VoidCallback onTap;
 
+  static const _corOuro = Color(0xFFB8860B);
+
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Cores.azulTerciario,
+      color: _corOuro,
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Stack(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Positioned(
-                right: -8,
-                top: 0,
-                bottom: 0,
-                child: Icon(
-                  Icons.emoji_events,
-                  size: 100,
-                  color: Colors.white.withValues(alpha: 0.1),
+              Text(
+                'PALPITES ESPECIAIS',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.anybody(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.white,
                 ),
               ),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'PALPITES ESPECIAIS',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      fontStyle: FontStyle.italic,
-                      color: Colors.white,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Campeão, artilheiro, melhor jogador e mais.',
-                    style: TextStyle(fontSize: 13, color: Colors.white70),
-                  ),
-                  SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Text(
-                        'REGISTRAR PALPITES',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.4,
-                          color: Colors.white,
-                        ),
+              Text(
+                'Campeão, artilheiro, melhor jogador e mais.',
+                style: const TextStyle(fontSize: 13, color: Colors.white70),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'REGISTRAR PALPITES',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: Colors.white,
                       ),
-                      SizedBox(width: 4),
-                      Icon(Icons.arrow_forward, size: 14, color: Colors.white),
-                    ],
-                  ),
-                ],
+                    ),
+                    SizedBox(width: 4),
+                    Icon(Icons.arrow_forward, size: 13, color: Colors.white),
+                  ],
+                ),
               ),
             ],
           ),
@@ -650,65 +643,54 @@ class _CardNavLargo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Cores.surfaceContainerHigh,
+      color: Cores.azulTerciario,
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            border: Border.all(color: Cores.outlineVariant),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Stack(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Positioned(
-                right: -8,
-                top: 0,
-                bottom: 0,
-                child: Icon(
-                  Icons.calendar_month,
-                  size: 100,
-                  color: Cores.onSurface.withValues(alpha: 0.08),
+              Text(
+                'TODOS OS JOGOS',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.anybody(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.white,
                 ),
               ),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'TODOS OS JOGOS',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      fontStyle: FontStyle.italic,
-                      color: Cores.azulTerciario,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Tabela completa, resultados e simulador.',
-                    style: TextStyle(
-                        fontSize: 13, color: Cores.onSurfaceVariant),
-                  ),
-                  SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Text(
-                        'ACESSAR TABELA',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.4,
-                          color: Cores.azulTerciario,
-                        ),
+              const Text(
+                'Tabela completa, resultados e simulador.',
+                style: TextStyle(fontSize: 13, color: Colors.white70),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'ACESSAR TABELA',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: Colors.white,
                       ),
-                      SizedBox(width: 4),
-                      Icon(Icons.arrow_forward,
-                          size: 14, color: Cores.azulTerciario),
-                    ],
-                  ),
-                ],
+                    ),
+                    SizedBox(width: 4),
+                    Icon(Icons.arrow_forward, size: 13, color: Colors.white),
+                  ],
+                ),
               ),
             ],
           ),
