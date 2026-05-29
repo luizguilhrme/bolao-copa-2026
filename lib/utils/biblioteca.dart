@@ -371,17 +371,46 @@ void mostrarRegras(BuildContext context) {
   );
 }
 
-class _BottomSheetRegras extends StatelessWidget {
+class _BottomSheetRegras extends StatefulWidget {
   const _BottomSheetRegras();
+
+  @override
+  State<_BottomSheetRegras> createState() => _BottomSheetRegrasState();
+}
+
+class _BottomSheetRegrasState extends State<_BottomSheetRegras>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Color get _corAba {
+    switch (_tabController.index) {
+      case 1:  return Cores.azulTerciario;
+      case 2:  return const Color(0xFFB8860B);
+      default: return Cores.verdePrincipal;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.7,
+      initialChildSize: 0.75,
       minChildSize: 0.4,
       maxChildSize: 0.95,
       expand: false,
-      builder: (_, controller) => Container(
+      builder: (_, __) => Container(
         decoration: const BoxDecoration(
           color: Cores.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -419,178 +448,30 @@ class _BottomSheetRegras extends StatelessWidget {
                 ],
               ),
             ),
-            const Divider(height: 1, color: Cores.outlineVariant),
-            // Conteúdo scrollável
+            // TabBar
+            TabBar(
+              controller: _tabController,
+              indicatorColor: _corAba,
+              labelColor: _corAba,
+              unselectedLabelColor: Cores.onSurfaceVariant,
+              dividerColor: Cores.outlineVariant,
+              labelStyle: GoogleFonts.anybody(
+                  fontSize: 12, fontWeight: FontWeight.w700),
+              unselectedLabelStyle: GoogleFonts.anybody(fontSize: 12),
+              tabs: const [
+                Tab(text: 'CLÁSSICO'),
+                Tab(text: 'COPA'),
+                Tab(text: 'ESPECIAIS'),
+              ],
+            ),
+            // Conteúdo das abas
             Expanded(
-              child: ListView(
-                controller: controller,
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+              child: TabBarView(
+                controller: _tabController,
                 children: [
-                  // ── Modo Clássico ──────────────────────────────────────
-                  _SecaoRegra(
-                    cor: Cores.verdePrincipal,
-                    icone: Icons.sports_soccer_rounded,
-                    titulo: 'MODO CLÁSSICO',
-                    subtitulo: 'Palpite no placar de cada jogo',
-                  ),
-                  const SizedBox(height: 12),
-                  const _LinhaRegra(
-                    pontos: 100,
-                    descricao: 'Placar exato',
-                    exemplo: 'Palpitou 2×1, jogo foi 2×1',
-                  ),
-                  const _LinhaRegra(
-                    pontos: 70,
-                    descricao: 'Vencedor + saldo de gols',
-                    exemplo: 'Palpitou 2×0, jogo foi 3×1',
-                  ),
-                  const _LinhaRegra(
-                    pontos: 60,
-                    descricao: 'Vencedor + gols exatos de um time',
-                    exemplo: 'Palpitou 3×1, jogo foi 2×1',
-                  ),
-                  const _LinhaRegra(
-                    pontos: 50,
-                    descricao: 'Só o vencedor certo',
-                    exemplo: 'Palpitou 2×0, jogo foi 1×0',
-                  ),
-                  const _LinhaRegra(
-                    pontos: 50,
-                    descricao: 'Empate certo (placar errado)',
-                    exemplo: 'Palpitou 1×1, jogo foi 2×2',
-                  ),
-                  const _LinhaRegra(
-                    pontos: 0,
-                    descricao: 'Errou tudo',
-                    exemplo: 'Palpitou vitória, deu empate',
-                  ),
-                  const _LinhaRegra(
-                    pontos: -10,
-                    descricao: 'Não palpitou',
-                    exemplo: 'Sem palpite antes do jogo começar',
-                  ),
-                  const SizedBox(height: 16),
-                  // Multiplicadores
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Cores.verdePrincipal.withValues(alpha: 0.07),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: Cores.verdePrincipal.withValues(alpha: 0.2)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Multiplicadores por fase',
-                            style: GoogleFonts.anybody(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Cores.verdePrincipal)),
-                        const SizedBox(height: 8),
-                        _LinhaMultiplicador('Fase de Grupos', '×1,0'),
-                        _LinhaMultiplicador('16 avos de Final', '×1,2'),
-                        _LinhaMultiplicador('Oitavas de Final', '×1,4'),
-                        _LinhaMultiplicador('Quartas de Final', '×1,6'),
-                        _LinhaMultiplicador('Semifinal + 3º lugar', '×1,8'),
-                        _LinhaMultiplicador('Final', '×2,0'),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-
-                  // ── Modo Copa ──────────────────────────────────────────
-                  _SecaoRegra(
-                    cor: Cores.azulTerciario,
-                    icone: Icons.leaderboard_rounded,
-                    titulo: 'MODO COPA',
-                    subtitulo: 'Palpite na classificação de cada grupo',
-                  ),
-                  const SizedBox(height: 12),
-                  const _LinhaRegra(
-                    pontos: 200,
-                    corOverride: Cores.azulTerciario,
-                    descricao: 'Posição exata (1º, 2º ou 3º)',
-                    exemplo: 'Palpitou Brasil em 1º, foi 1º',
-                  ),
-                  const _LinhaRegra(
-                    pontos: 100,
-                    corOverride: Color(0xFF3B6FD4),
-                    descricao: 'Classificou, mas posição errada',
-                    exemplo: 'Palpitou 1º, time terminou em 2º',
-                  ),
-                  const _LinhaRegra(
-                    pontos: 0,
-                    descricao: 'Time não classificou',
-                    exemplo: 'Time ficou em 4º ou foi eliminado',
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Cores.azulTerciario.withValues(alpha: 0.07),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: Cores.azulTerciario.withValues(alpha: 0.2)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Cores.azulTerciario,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text('+100',
-                              style: GoogleFonts.anybody(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white)),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Bônus por grupo: acertou todas as posições exatas',
-                            style: GoogleFonts.hankenGrotesk(
-                                fontSize: 13, color: Cores.onSurface),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Pontuação por time — ex: 1º e 2º exatos + 3º errado = +400 pts no grupo.',
-                    style: GoogleFonts.hankenGrotesk(
-                        fontSize: 12,
-                        color: Cores.onSurfaceVariant,
-                        fontStyle: FontStyle.italic),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'No mata-mata, o Modo Copa segue as mesmas regras do Modo Clássico com os multiplicadores de fase.',
-                    style: GoogleFonts.hankenGrotesk(
-                        fontSize: 12,
-                        color: Cores.onSurfaceVariant,
-                        fontStyle: FontStyle.italic),
-                  ),
-                  const SizedBox(height: 28),
-
-                  // ── Palpites Especiais ─────────────────────────────────
-                  _SecaoRegra(
-                    cor: const Color(0xFFB8860B),
-                    icone: Icons.star_rounded,
-                    titulo: 'PALPITES ESPECIAIS',
-                    subtitulo: 'Calculados uma única vez após o torneio',
-                  ),
-                  const SizedBox(height: 12),
-                  const _LinhaEspecial('Campeão do Torneio', '+500'),
-                  const _LinhaEspecial('Artilheiro da Copa', '+300'),
-                  const _LinhaEspecial('Melhor Jogador da Copa', '+300'),
-                  const _LinhaEspecial('Melhor Goleiro', '+300'),
-                  const _LinhaEspecial('Equipe Mais Goleadora', '+200'),
-                  const _LinhaEspecial('Equipe Menos Vazada', '+200'),
+                  _AbaClassico(),
+                  _AbaCopa(),
+                  _AbaEspeciais(),
                 ],
               ),
             ),
@@ -601,50 +482,199 @@ class _BottomSheetRegras extends StatelessWidget {
   }
 }
 
-class _SecaoRegra extends StatelessWidget {
-  const _SecaoRegra({
-    required this.cor,
-    required this.icone,
-    required this.titulo,
-    required this.subtitulo,
-  });
-
-  final Color cor;
-  final IconData icone;
-  final String titulo;
-  final String subtitulo;
-
+class _AbaClassico extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: cor.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icone, color: cor, size: 20),
+        const _LinhaRegra(
+          pontos: 100,
+          descricao: 'Placar exato',
+          exemplo: 'Palpitou 2×1, jogo foi 2×1',
         ),
-        const SizedBox(width: 10),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(titulo,
-                style: GoogleFonts.anybody(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: cor,
-                    letterSpacing: 0.3)),
-            Text(subtitulo,
-                style: GoogleFonts.hankenGrotesk(
-                    fontSize: 12, color: Cores.onSurfaceVariant)),
-          ],
+        const _LinhaRegra(
+          pontos: 70,
+          descricao: 'Vencedor + saldo de gols',
+          exemplo: 'Palpitou 2×0, jogo foi 3×1',
+        ),
+        const _LinhaRegra(
+          pontos: 60,
+          descricao: 'Vencedor + gols exatos de um time',
+          exemplo: 'Palpitou 3×1, jogo foi 2×1',
+        ),
+        const _LinhaRegra(
+          pontos: 50,
+          descricao: 'Só o vencedor certo',
+          exemplo: 'Palpitou 2×0, jogo foi 1×0',
+        ),
+        const _LinhaRegra(
+          pontos: 50,
+          descricao: 'Empate certo (placar errado)',
+          exemplo: 'Palpitou 1×1, jogo foi 2×2',
+        ),
+        const _LinhaRegra(
+          pontos: 0,
+          descricao: 'Errou tudo',
+          exemplo: 'Palpitou vitória, deu empate',
+        ),
+        const _LinhaRegra(
+          pontos: -10,
+          descricao: 'Não palpitou',
+          exemplo: 'Sem palpite antes do jogo começar',
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Cores.verdePrincipal.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+                color: Cores.verdePrincipal.withValues(alpha: 0.2)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Multiplicadores por fase',
+                  style: GoogleFonts.anybody(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Cores.verdePrincipal)),
+              const SizedBox(height: 8),
+              const _LinhaMultiplicador('Fase de Grupos', '×1,0'),
+              const _LinhaMultiplicador('16 avos de Final', '×1,2'),
+              const _LinhaMultiplicador('Oitavas de Final', '×1,4'),
+              const _LinhaMultiplicador('Quartas de Final', '×1,6'),
+              const _LinhaMultiplicador('Semifinal + 3º lugar', '×1,8'),
+              const _LinhaMultiplicador('Final', '×2,0'),
+            ],
+          ),
         ),
       ],
     );
   }
 }
+
+class _AbaCopa extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      children: [
+        const _LinhaRegra(
+          pontos: 200,
+          corOverride: Cores.azulTerciario,
+          descricao: 'Posição exata (1º, 2º ou 3º)',
+          exemplo: 'Palpitou Brasil em 1º, foi 1º',
+        ),
+        const _LinhaRegra(
+          pontos: 100,
+          corOverride: Color(0xFF3B6FD4),
+          descricao: 'Classificou, mas posição errada',
+          exemplo: 'Palpitou 1º, time terminou em 2º',
+        ),
+        const _LinhaRegra(
+          pontos: 0,
+          descricao: 'Time não classificou',
+          exemplo: 'Time ficou em 4º ou foi eliminado',
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Cores.azulTerciario.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(10),
+            border:
+                Border.all(color: Cores.azulTerciario.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Cores.azulTerciario,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('+100',
+                    style: GoogleFonts.anybody(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Bônus por grupo: acertou todas as posições exatas',
+                  style: GoogleFonts.hankenGrotesk(
+                      fontSize: 13, color: Cores.onSurface),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Pontuação por time — ex: 1º e 2º exatos + 3º errado = +400 pts no grupo.',
+          style: GoogleFonts.hankenGrotesk(
+              fontSize: 12,
+              color: Cores.onSurfaceVariant,
+              fontStyle: FontStyle.italic),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'No mata-mata, o Modo Copa segue as mesmas regras do Modo Clássico com os multiplicadores de fase.',
+          style: GoogleFonts.hankenGrotesk(
+              fontSize: 12,
+              color: Cores.onSurfaceVariant,
+              fontStyle: FontStyle.italic),
+        ),
+      ],
+    );
+  }
+}
+
+class _AbaEspeciais extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      children: [
+        Text(
+          'Calculados uma única vez após o torneio.',
+          style: GoogleFonts.hankenGrotesk(
+              fontSize: 13, color: Cores.onSurfaceVariant),
+        ),
+        const SizedBox(height: 16),
+        const _LinhaEspecial(
+            icone: Icons.emoji_events_rounded,
+            label: 'Campeão do Torneio',
+            pontos: '+500'),
+        const _LinhaEspecial(
+            icone: Icons.sports_soccer_rounded,
+            label: 'Artilheiro da Copa',
+            pontos: '+300'),
+        const _LinhaEspecial(
+            icone: Icons.person_rounded,
+            label: 'Melhor Jogador da Copa',
+            pontos: '+300'),
+        const _LinhaEspecial(
+            icone: Icons.sports_rounded,
+            label: 'Melhor Goleiro',
+            pontos: '+300'),
+        const _LinhaEspecial(
+            icone: Icons.bolt_rounded,
+            label: 'Equipe Mais Goleadora',
+            pontos: '+200'),
+        const _LinhaEspecial(
+            icone: Icons.shield_rounded,
+            label: 'Equipe Menos Vazada',
+            pontos: '+200'),
+      ],
+    );
+  }
+}
+
 
 class _LinhaRegra extends StatelessWidget {
   const _LinhaRegra({
@@ -743,25 +773,42 @@ class _LinhaMultiplicador extends StatelessWidget {
 }
 
 class _LinhaEspecial extends StatelessWidget {
-  const _LinhaEspecial(this.label, this.pontos);
+  const _LinhaEspecial(
+      {required this.icone, required this.label, required this.pontos});
+  final IconData icone;
   final String label;
   final String pontos;
+
+  static const _cor = Color(0xFFB8860B);
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: GoogleFonts.hankenGrotesk(
-                  fontSize: 13, color: Cores.onSurface)),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: _cor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icone, color: _cor, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(label,
+                style: GoogleFonts.hankenGrotesk(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Cores.onSurface)),
+          ),
           Text(pontos,
               style: GoogleFonts.anybody(
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFFB8860B))),
+                  color: _cor)),
         ],
       ),
     );
