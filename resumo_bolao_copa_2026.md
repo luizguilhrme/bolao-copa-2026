@@ -79,10 +79,15 @@ C:\bolao\
       palpite_copa_service.dart ← buscarPorUid, salvar; armazena palpites de classificação
                                  de grupos em palpites_copa/{uid}
     utils/
-      cores.dart              ← constantes de cores (Cores.verdePrincipal etc)
-      biblioteca.dart         ← funções utilitárias top-level (flagDe, siglaDe,
-                                 formatarData, mostrarMensagem, ehPlaceholder,
-                                 calcularPontos, multiplicadorFase, calcularPontosComFase)
+      cores.dart              ← constantes de cores; inclui Cores.error (vermelho),
+                                 Cores.pont* (badges de pontuação), Cores.prata/bronze (pódio)
+      biblioteca.dart         ← funções utilitárias top-level: flagDe, siglaDe, isoDe,
+                                 nomePtDe, formatarData, formatarCriadoEm, mostrarMensagem,
+                                 mostrarRegras, ehPlaceholder, calcularPontos, multiplicadorFase,
+                                 calcularPontosComFase, corPontuacao, corFundoPontuacao,
+                                 corBordaPontuacao; widget Bandeira
+      dialogos.dart           ← helpers de SnackBar (mostrarSnackBarSucesso/Erro/Info) e
+                                 widget DialogAmbiente (seleção Produção/Teste)
       avatares.dart           ← lista kJogadores + widgets WidgetAvatar e CardAvatar
   web/
     index.html              ← meta tags PWA iOS (apple-mobile-web-app-capable etc)
@@ -102,7 +107,7 @@ C:\bolao\
 - Foco em aprendizado progressivo de Flutter
 - Padrão Service como camada de abstração entre telas e Firestore (equivalente ao Repository pattern do Android)
 - IDs dos documentos Firestore sempre iguais ao identificador da entidade (UID do usuário, id do jogo) — garante idempotência e busca O(1)
-- Funções utilitárias compartilhadas são declaradas como funções top-level em `biblioteca.dart`, não como métodos `static` de uma classe wrapper — padrão idiomático em Dart
+- Funções utilitárias compartilhadas são declaradas como funções top-level em `biblioteca.dart` — padrão idiomático em Dart. Helpers de SnackBar e widgets de diálogo reutilizados ficam em `dialogos.dart`. Cores centralizadas em `cores.dart` — nunca hardcodar valores de cor nas telas.
 - Comunicação de filho para pai via callback (`void Function(int)`) — o `MenuPrincipal` passa `onNavegar` para a `TelaHome`
 - Cálculo de pontuação feito na Cloud Function `calcularPontuacao` (trigger Firestore) — admin insere placar pelo app, função recalcula pontos e envia notificações de ranking
 - Palpites precarregados em lote (`buscarTodosPorUsuario`) ao abrir a tela, sem query individual por card
