@@ -756,48 +756,50 @@ class _DialogCriarGrupoState extends State<_DialogCriarGrupo> {
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Text('Criar grupo',
           style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
-            decoration: InputDecoration(
-              labelText: 'Nome do grupo',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Cores.verdePrincipal, width: 2),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                labelText: 'Nome do grupo',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Cores.verdePrincipal, width: 2),
+                ),
               ),
+              onSubmitted: (_) => _criar(),
             ),
-            onSubmitted: (_) => _criar(),
-          ),
-          const SizedBox(height: 16),
-          Text('Modo de pontuação',
-              style: GoogleFonts.hankenGrotesk(
-                  fontSize: 12, fontWeight: FontWeight.w700,
-                  color: Cores.onSurfaceVariant, letterSpacing: 0.5)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _ChipRegra(
-                label: 'CLÁSSICO',
-                descricao: 'Palpite no placar',
-                selecionado: _regra == 'classico',
-                onTap: () => setState(() => _regra = 'classico'),
-              ),
-              const SizedBox(width: 8),
-              _ChipRegra(
-                label: 'COPA',
-                descricao: 'Palpite na classificação',
-                selecionado: _regra == 'copa',
-                onTap: () => setState(() => _regra = 'copa'),
-              ),
-            ],
-          ),
-        ],
+            const SizedBox(height: 16),
+            Text('Modo de pontuação',
+                style: GoogleFonts.hankenGrotesk(
+                    fontSize: 12, fontWeight: FontWeight.w700,
+                    color: Cores.onSurfaceVariant, letterSpacing: 0.5)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _ChipRegra(
+                  label: 'CLÁSSICO',
+                  descricao: 'Palpite no placar',
+                  selecionado: _regra == 'classico',
+                  onTap: () => setState(() => _regra = 'classico'),
+                ),
+                const SizedBox(width: 8),
+                _ChipRegra(
+                  label: 'COPA',
+                  descricao: 'Palpite na classificação',
+                  selecionado: _regra == 'copa',
+                  onTap: () => setState(() => _regra = 'copa'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
