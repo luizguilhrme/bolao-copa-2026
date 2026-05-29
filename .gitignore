@@ -50,3 +50,8 @@ app.*.map.json
 # Firebase / Google credentials — não versionar em repo público
 android/app/google-services.json
 lib/firebase_options.dart
+
+# Keystore e senhas de assinatura — nunca versionar
+android/key.properties
+android/app/upload-keystore.jks
+*.jks
