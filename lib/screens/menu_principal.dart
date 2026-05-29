@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/usuario.dart';
+import '../services/auth_service.dart';
 import '../services/notificacoes_service.dart';
 import '../services/usuario_service.dart';
 import '../utils/avatares.dart';
@@ -159,7 +160,7 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
 
   Future<void> _logout() async {
     Navigator.of(context).pop(); // fecha o drawer
-    await FirebaseAuth.instance.signOut();
+    await AuthService().sair();
     // StreamBuilder do main.dart detecta signOut e exibe TelaLogin
   }
 

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/grupo.dart';
 import '../models/usuario.dart';
+import '../services/auth_service.dart';
 import '../services/grupo_service.dart';
 import '../services/usuario_service.dart';
 import '../utils/avatares.dart';
@@ -46,7 +47,7 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
 
   Future<void> _voltar() async {
     // Cancela o cadastro: desloga e main.dart volta para TelaLogin automaticamente
-    await FirebaseAuth.instance.signOut();
+    await AuthService().sair();
   }
 
   Future<void> _confirmar() async {
