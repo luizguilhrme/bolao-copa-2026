@@ -59,6 +59,15 @@ class AuthService {
     }
   }
 
+  /// Desloga do Firebase e também do GoogleSignIn.
+  ///
+  /// Sem o signOut do GoogleSignIn, o seletor de conta do Google não reaparece
+  /// no próximo login — o app entraria direto com a conta anterior.
+  Future<void> sair() async {
+    await _googleSignIn.signOut();
+    await _auth.signOut();
+  }
+
   /// Vincula uma credencial Google a uma conta que já existe com e-mail/senha.
   ///
   /// Fluxo: faz login com senha → anexa a credencial Google → a conta
