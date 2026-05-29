@@ -174,7 +174,7 @@ class _TelaPalpitesState extends State<TelaPalpites> {
         JogoService().buscarTodos(),
         PalpiteService().buscarTodosPorUsuario(_uid),
         UsuarioService().buscarPorUid(_uid),
-        GrupoService().buscarGruposDoUsuario(_uid).first,
+        GrupoService().buscarGruposDoUsuarioOnce(_uid),
         PalpiteCopaService().buscarPorUid(_uid),
       ]);
       _todosJogos  = results[0] as List<Jogo>;

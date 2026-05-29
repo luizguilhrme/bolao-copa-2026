@@ -17,6 +17,19 @@ class GrupoService {
           ..sort((a, b) => a.criadoEm.compareTo(b.criadoEm)));
   }
 
+  /// Busca grupos do usuário uma única vez (sem stream).
+  /// Usado onde precisamos do resultado completo antes de continuar,
+  /// sem capturar a emissão inicial vazia do cache do Firestore.
+  Future<List<Grupo>> buscarGruposDoUsuarioOnce(String uid) async {
+    final snap = await _colecao
+        .where('membros', arrayContains: uid)
+        .get();
+    return snap.docs
+        .map((d) => Grupo.fromMap(d.id, d.data() as Map<String, dynamic>))
+        .toList()
+      ..sort((a, b) => a.criadoEm.compareTo(b.criadoEm));
+  }
+
   Future<Grupo> criarGrupo(String nome, String donoUid, {String regra = 'classico'}) async {
     final codigo = await _gerarCodigoUnico();
     final ref = _colecao.doc();
