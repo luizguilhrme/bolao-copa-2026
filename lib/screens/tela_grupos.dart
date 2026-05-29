@@ -6,6 +6,7 @@ import '../models/grupo.dart';
 import '../models/usuario.dart';
 import '../services/grupo_service.dart';
 import '../utils/avatares.dart';
+import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 
 class TelaGrupos extends StatefulWidget {
@@ -803,6 +804,20 @@ class _DialogCriarGrupoState extends State<_DialogCriarGrupo> {
                     onTap: () => setState(() => _regra = 'copa'),
                   ),
                 ],
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => mostrarRegras(context),
+                icon: const Icon(Icons.info_outline_rounded, size: 16),
+                label: Text('Ver regras',
+                    style: GoogleFonts.hankenGrotesk(fontSize: 13)),
+                style: TextButton.styleFrom(
+                  foregroundColor: Cores.onSurfaceVariant,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  visualDensity: VisualDensity.compact,
+                ),
               ),
             ),
           ],
