@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../services/notificacoes_service.dart';
 import '../services/usuario_service.dart';
 import '../utils/avatares.dart';
+import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 import 'tela_admin_copa.dart';
 import 'tela_admin_definicoes.dart';
@@ -126,9 +127,7 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
     }
   }
 
-  void _abrirRegras() {
-    showDialog(context: context, builder: (_) => const _DialogRegras());
-  }
+  void _abrirRegras() => mostrarRegras(context);
 
   void _abrirAdminPlacares() {
     Navigator.of(context).pop();
@@ -542,154 +541,3 @@ class _ItemDrawer extends StatelessWidget {
   }
 }
 
-// ─── Diálogo de regras de pontuação ──────────────────────────────────────────
-
-class _DialogRegras extends StatelessWidget {
-  const _DialogRegras();
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Cores.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.emoji_events_rounded,
-                    color: Cores.verdePrincipal, size: 24),
-                const SizedBox(width: 8),
-                Text(
-                  'REGRAS DE PONTUAÇÃO',
-                  style: GoogleFonts.anybody(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Cores.onSurface,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            const _ItemRegra(
-                pontos: 10,
-                descricao: 'Placar exato',
-                exemplo: 'Palpitou 2×1, jogo foi 2×1'),
-            const _ItemRegra(
-                pontos: 7,
-                descricao: 'Vencedor + saldo de gols',
-                exemplo: 'Palpitou 2×0, jogo foi 3×1'),
-            const _ItemRegra(
-                pontos: 5,
-                descricao: 'Apenas o vencedor',
-                exemplo: 'Palpitou 2×0, jogo foi 1×0'),
-            const _ItemRegra(
-                pontos: 4,
-                descricao: 'Empate (sem placar exato)',
-                exemplo: 'Palpitou 1×1, jogo foi 0×0'),
-            const _ItemRegra(
-                pontos: 0,
-                descricao: 'Errou tudo',
-                exemplo: 'Nenhum critério acima'),
-            const _ItemRegra(
-                pontos: -1,
-                descricao: 'Esqueceu de palpitar',
-                exemplo: 'Sem palpite registrado antes do jogo'),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Cores.verdePrincipal,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-                child: Text('ENTENDI',
-                    style: GoogleFonts.anybody(
-                        fontWeight: FontWeight.w700, letterSpacing: 0.5)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ItemRegra extends StatelessWidget {
-  const _ItemRegra(
-      {required this.pontos,
-        required this.descricao,
-        required this.exemplo});
-
-  final int pontos;
-  final String descricao;
-  final String exemplo;
-
-  Color get _corBadge {
-    if (pontos == -1) return const Color(0xFFE53935);
-    if (pontos == 10) return const Color(0xFF006D32);
-    if (pontos == 7) return const Color(0xFF1B7F3A);
-    if (pontos == 5) return const Color(0xFF4CAF50);
-    if (pontos == 4) return const Color(0xFFFCD400);
-    return const Color(0xFFBBCBB9);
-  }
-
-  Color get _corTexto =>
-      pontos == 4 ? Cores.onSecondaryContainer : Colors.white;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-                color: _corBadge,
-                borderRadius: BorderRadius.circular(10)),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('$pontos',
-                    style: GoogleFonts.anybody(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: _corTexto,
-                        height: 1)),
-                Text('pts',
-                    style: GoogleFonts.hankenGrotesk(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        color: _corTexto.withValues(alpha: 0.8),
-                        height: 1.2)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(descricao,
-                    style: GoogleFonts.hankenGrotesk(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Cores.onSurface)),
-                Text(exemplo,
-                    style: GoogleFonts.hankenGrotesk(
-                        fontSize: 12, color: Cores.onSurfaceVariant)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
