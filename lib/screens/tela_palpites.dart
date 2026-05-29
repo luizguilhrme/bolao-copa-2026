@@ -15,24 +15,51 @@ import '../utils/cores.dart';
 // ─── Modelo interno ───────────────────────────────────────────────────────────
 
 class _ItemResultado {
-  const _ItemResultado({required this.jogo, this.palpite, this.pontos});
+  const _ItemResultado({required this.jogo, this.palpite, this.pontos, this.pontosBase});
   final Jogo jogo;
   final Palpite? palpite;
-  final int? pontos; // null se jogo não encerrado ou sem palpite
+  final int? pontos;     // pontos reais exibidos (com multiplicador de fase)
+  final int? pontosBase; // pontos base sem multiplicador — define a cor do card
 }
 
 enum _Status { prestesAComecar, aoVivo, encerrado }
 
 // ─── Funções auxiliares (top-level) ──────────────────────────────────────────
 
+// Retorna pontos BASE (sem multiplicador de fase).
+// O multiplicador é aplicado separadamente em _calcularPontosComFase.
 int _calcularPontos(int p1, int p2, int r1, int r2) {
-  if (p1 == r1 && p2 == r2) return 10;
+  if (p1 == r1 && p2 == r2) return 100; // placar exato
   final sP = p1 - p2, sR = r1 - r2;
   final vP = p1.compareTo(p2), vR = r1.compareTo(r2);
-  if (sP == sR && vP == vR) return 7;
-  if (vP == vR && vR != 0) return 5;
-  if (vP == 0 && vR == 0) return 4;
-  return 0;
+  if (vP != vR) return 0; // errou o vencedor — sem pontos
+  if (vP != 0) {
+    // Acertou o vencedor (não empate)
+    if (sP == sR) return 70;              // + saldo de gols correto
+    if (p1 == r1 || p2 == r2) return 60; // + gols exatos de um dos times
+    return 50;                            // só o vencedor
+  }
+  return 50; // empate certo, placar errado
+}
+
+// Multiplicador de pontuação por fase eliminatória.
+double _multiplicador(String round) {
+  switch (round) {
+    case '16 avos de Final':  return 1.2;
+    case 'Oitavas de Final':  return 1.4;
+    case 'Quartas de Final':  return 1.6;
+    case 'Semifinal':
+    case 'Disputa de 3º Lugar': return 1.8;
+    case 'Final':             return 2.0;
+    default:                  return 1.0; // Fase de Grupos
+  }
+}
+
+// Pontos reais considerando a fase do jogo.
+int _calcularPontosComFase(int p1, int p2, int r1, int r2, String round) {
+  final base = _calcularPontos(p1, p2, r1, r2);
+  if (base == 0) return 0;
+  return (base * _multiplicador(round)).round();
 }
 
 _Status _statusDe(Jogo jogo) {
@@ -54,37 +81,41 @@ String _formatarCriadoEm(DateTime? dt) {
       '${l.minute.toString().padLeft(2, '0')}';
 }
 
-Color _corFundo(int? pontos) {
-  if (pontos == null) return Cores.surface;
-  if (pontos == -1) return const Color(0xFFE53935).withValues(alpha: 0.08);
-  if (pontos == 10) return const Color(0xFF006D32).withValues(alpha: 0.08);
-  if (pontos == 7) return const Color(0xFF1B7F3A).withValues(alpha: 0.08);
-  if (pontos == 5) return const Color(0xFF4CAF50).withValues(alpha: 0.08);
-  if (pontos == 4) return const Color(0xFFFCD400).withValues(alpha: 0.12);
-  return const Color(0xFFBBCBB9).withValues(alpha: 0.2);
+// Cores baseadas em pontosBase (sem multiplicador) para manter consistência
+// visual independente da fase. Escala: 100=exato, 70=v+saldo, 60=v+um time,
+// 50=só vencedor ou empate certo, 0=errou, negativo=sem palpite.
+
+Color _corFundo(int? pontosBase) {
+  if (pontosBase == null) return Cores.surface;
+  if (pontosBase < 0)    return const Color(0xFFE53935).withValues(alpha: 0.08);
+  if (pontosBase >= 100) return const Color(0xFF006D32).withValues(alpha: 0.08);
+  if (pontosBase >= 70)  return const Color(0xFF1B7F3A).withValues(alpha: 0.08);
+  if (pontosBase >= 60)  return const Color(0xFF2E7D52).withValues(alpha: 0.08);
+  if (pontosBase >= 50)  return const Color(0xFF4CAF50).withValues(alpha: 0.08);
+  return const Color(0xFFBBCBB9).withValues(alpha: 0.2); // 0 pts
 }
 
-Color _corBorda(int? pontos) {
-  if (pontos == null) return Cores.outlineVariant;
-  if (pontos == -1) return const Color(0xFFE53935);
-  if (pontos == 10) return const Color(0xFF006D32);
-  if (pontos == 7) return const Color(0xFF1B7F3A);
-  if (pontos == 5) return const Color(0xFF4CAF50);
-  if (pontos == 4) return const Color(0xFFFCD400);
+Color _corBorda(int? pontosBase) {
+  if (pontosBase == null) return Cores.outlineVariant;
+  if (pontosBase < 0)    return const Color(0xFFE53935);
+  if (pontosBase >= 100) return const Color(0xFF006D32);
+  if (pontosBase >= 70)  return const Color(0xFF1B7F3A);
+  if (pontosBase >= 60)  return const Color(0xFF2E7D52);
+  if (pontosBase >= 50)  return const Color(0xFF4CAF50);
   return const Color(0xFFBBCBB9);
 }
 
-Color _corBadge(int pontos) {
-  if (pontos == -1) return const Color(0xFFE53935);
-  if (pontos == 10) return const Color(0xFF006D32);
-  if (pontos == 7) return const Color(0xFF1B7F3A);
-  if (pontos == 5) return const Color(0xFF4CAF50);
-  if (pontos == 4) return const Color(0xFFFCD400);
+Color _corBadge(int pontosBase) {
+  if (pontosBase < 0)    return const Color(0xFFE53935);
+  if (pontosBase >= 100) return const Color(0xFF006D32);
+  if (pontosBase >= 70)  return const Color(0xFF1B7F3A);
+  if (pontosBase >= 60)  return const Color(0xFF2E7D52);
+  if (pontosBase >= 50)  return const Color(0xFF4CAF50);
   return const Color(0xFFBBCBB9);
 }
 
-Color _corTextoBadge(int pontos) =>
-    pontos == 4 ? Cores.onSecondaryContainer : Colors.white;
+// Todos os badges agora usam texto branco (não há mais badge amarelo)
+Color _corTextoBadge(int pontosBase) => Colors.white;
 
 // ─── Tela principal ───────────────────────────────────────────────────────────
 
@@ -169,18 +200,25 @@ class _TelaPalpitesState extends State<TelaPalpites> {
         // Bloqueado, ao vivo ou encerrado
         final palpite = _palpitesMap[jogo.id];
         int? pontos;
+        int? pontosBase;
         if (jogo.placar1 != null && jogo.placar2 != null) {
           if (palpite != null) {
-            pontos = _calcularPontos(
+            pontosBase = _calcularPontos(
               palpite.palpite1, palpite.palpite2,
               jogo.placar1!, jogo.placar2!,
             );
+            pontos = _calcularPontosComFase(
+              palpite.palpite1, palpite.palpite2,
+              jogo.placar1!, jogo.placar2!,
+              jogo.round,
+            );
           } else if (_criadoEm != null && jogo.dataHora.isAfter(_criadoEm!)) {
-            pontos = -1;
+            pontos = -10;
+            pontosBase = -10;
           }
         }
-        resultados.add(
-            _ItemResultado(jogo: jogo, palpite: palpite, pontos: pontos));
+        resultados.add(_ItemResultado(
+            jogo: jogo, palpite: palpite, pontos: pontos, pontosBase: pontosBase));
       }
     }
 
@@ -760,6 +798,7 @@ class _CardResultado extends StatelessWidget {
   Jogo get jogo => item.jogo;
   Palpite? get palpite => item.palpite;
   int? get pontos => item.pontos;
+  int? get pontosBase => item.pontosBase;
 
   String get _horario {
     final l = jogo.dataHora.toLocal();
@@ -773,10 +812,10 @@ class _CardResultado extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: encerrado ? _corFundo(pontos) : Cores.surface,
+        color: encerrado ? _corFundo(pontosBase) : Cores.surface,
         border: Border.all(
-          color: encerrado ? _corBorda(pontos) : Cores.outlineVariant,
-          width: encerrado && pontos != null ? 2 : 1,
+          color: encerrado ? _corBorda(pontosBase) : Cores.outlineVariant,
+          width: encerrado && pontosBase != null ? 2 : 1,
         ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
@@ -843,7 +882,7 @@ class _CardResultado extends StatelessWidget {
                 if (encerrado && jogo.placar1 != null) ...[
                   const SizedBox(height: 8),
                   Divider(
-                      color: _corBorda(pontos).withValues(alpha: 0.3),
+                      color: _corBorda(pontosBase).withValues(alpha: 0.3),
                       height: 1),
                   const SizedBox(height: 8),
                   Row(
@@ -872,7 +911,7 @@ class _CardResultado extends StatelessWidget {
               children: [
                 // Badge de pontos (só se encerrado)
                 if (encerrado)
-                  _BadgePontos(pontos: pontos, temPalpite: palpite != null)
+                  _BadgePontos(pontos: pontos, pontosBase: pontosBase, temPalpite: palpite != null)
                 else
                   const SizedBox.shrink(),
 
@@ -1080,14 +1119,20 @@ class _ScoreBox extends StatelessWidget {
 }
 
 class _BadgePontos extends StatelessWidget {
-  const _BadgePontos({required this.pontos, required this.temPalpite});
+  const _BadgePontos({
+    required this.pontos,
+    required this.pontosBase,
+    required this.temPalpite,
+  });
 
-  final int? pontos;
+  final int? pontos;      // valor exibido (com multiplicador de fase)
+  final int? pontosBase;  // valor base (define a cor)
   final bool temPalpite;
 
   @override
   Widget build(BuildContext context) {
-    if (pontos == -1) {
+    // Punição por não ter palpitado
+    if ((pontosBase ?? 0) < 0) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
@@ -1095,7 +1140,7 @@ class _BadgePontos extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
-          '−1 pt',
+          '−10 pts',
           style: GoogleFonts.anybody(
               fontSize: 13,
               fontWeight: FontWeight.w800,
@@ -1104,6 +1149,7 @@ class _BadgePontos extends StatelessWidget {
       );
     }
 
+    // Jogo encerrado mas sem palpite registrado (e sem punição = cadastro após o jogo)
     if (!temPalpite) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1122,10 +1168,11 @@ class _BadgePontos extends StatelessWidget {
     }
 
     final pts = pontos ?? 0;
+    final base = pontosBase ?? 0;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: _corBadge(pts),
+        color: _corBadge(base),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
@@ -1133,7 +1180,7 @@ class _BadgePontos extends StatelessWidget {
         style: GoogleFonts.anybody(
             fontSize: 13,
             fontWeight: FontWeight.w800,
-            color: _corTextoBadge(pts)),
+            color: _corTextoBadge(base)),
       ),
     );
   }

@@ -37,12 +37,22 @@ To populate Firestore with the 104 games, open the drawer → ADMIN → Outras D
 **Admin access:** Gated by `isAdmin: true` in the user's Firestore document. Checked once at session start in `MenuPrincipal._verificarAdmin()`. The drawer shows 4 admin items: Placares, Classificação Copa, Palpites Especiais, Outras Definições. There is a dedicated test admin account (`teste@teste.com`) with `isAdmin: true` in Firestore, used for Google Play Console review.
 
 **Scoring (implemented in `tela_palpites.dart` and Cloud Function `calcularPontuacao`/`recalcularTudo`):**
-- 10 pts — exact score
-- 7 pts — correct winner + correct goal difference
-- 5 pts — correct winner only
-- 4 pts — correct draw (wrong score)
-- 0 pts — none of the above
-- −1 pt — forgot to palpite (only applies to games after the user's `criadoEm`)
+
+Modo Clássico — base points (Fase de Grupos), multiplied by phase:
+- 100 pts — exact score
+- 70 pts — correct winner + correct goal difference
+- 60 pts — correct winner + exact goals of one team
+- 50 pts — correct winner only OR correct draw (wrong score)
+- 0 pts — wrong result
+- −10 pts — forgot to palpite (only applies to games after the user's `criadoEm`)
+
+Phase multipliers (applied to base points):
+- Fase de Grupos: ×1.0 | 16 avos: ×1.2 | Oitavas: ×1.4 | Quartas: ×1.6
+- Semifinal + 3º lugar: ×1.8 | Final: ×2.0
+
+Special bets (one-time, calculated by admin after tournament):
+- Campeão: +500 | Artilheiro: +300 | Melhor Jogador: +300
+- Melhor Goleiro: +300 | Equipe Mais Goleadora: +200 | Equipe Menos Vazada: +200
 
 **Palpite cutoff:** palpites are locked 5 minutes before game start. Games where `team1` or `team2` is still a placeholder (`ehPlaceholder()` in `biblioteca.dart`) are hidden from the palpites screen entirely until both teams are resolved.
 
