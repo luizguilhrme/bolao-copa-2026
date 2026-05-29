@@ -399,7 +399,7 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 
 Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador, goleiro) comparadas com flexibilidade (case-insensitive, trim).
 
-### Modo Copa — palpite na classificação de grupos (a implementar)
+### Modo Copa — palpite na classificação de grupos
 - Posição exata (1º, 2º ou 3º): +200 por time
 - Classificou mas posição errada: +100 por time
 - Time não classificou: 0

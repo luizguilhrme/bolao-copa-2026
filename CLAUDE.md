@@ -50,6 +50,12 @@ Phase multipliers (applied to base points):
 - Fase de Grupos: ×1.0 | 16 avos: ×1.2 | Oitavas: ×1.4 | Quartas: ×1.6
 - Semifinal + 3º lugar: ×1.8 | Final: ×2.0
 
+Modo Copa — points per team prediction in group classification:
+- Exact position (1st, 2nd or 3rd): +200 per team
+- Qualified but wrong position: +100 per team
+- Team did not qualify: 0
+- Bonus for all positions exact in a group: +100
+
 Special bets (one-time, calculated by admin after tournament):
 - Campeão: +500 | Artilheiro: +300 | Melhor Jogador: +300
 - Melhor Goleiro: +300 | Equipe Mais Goleadora: +200 | Equipe Menos Vazada: +200
@@ -478,27 +484,47 @@ classificacao_real           : Map       — { "A": { "primeiro": "Brazil", "seg
 
 ## Regras de pontuação
 
+### Modo Clássico — palpite no resultado do jogo
+
 ```dart
 int calcularPontos(int p1, int p2, int r1, int r2) {
-  if (p1 == r1 && p2 == r2) return 10;           // placar exato
+  if (p1 == r1 && p2 == r2) return 100;          // placar exato
   final sP = p1 - p2, sR = r1 - r2;
   final vP = p1.compareTo(p2), vR = r1.compareTo(r2);
-  if (sP == sR && vP == vR) return 7;            // vencedor + saldo
-  if (vP == vR && vR != 0) return 5;             // só o vencedor
-  if (vP == 0 && vR == 0) return 4;              // empate (sem exato)
-  return 0;                                       // errou tudo
+  if (vP != vR) return 0;
+  if (vP != 0) {
+    if (sP == sR) return 70;                      // vencedor + saldo de gols
+    if (p1 == r1 || p2 == r2) return 60;          // vencedor + gols exatos de um time
+    return 50;                                     // só o vencedor
+  }
+  return 50;                                       // empate certo, placar errado
 }
 ```
 
-Regra extra: −1 pt para quem esqueceu de palpitar em jogo disputado após o `criadoEm` do usuário. Jogos anteriores ao cadastro não geram penalidade.
+Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jogos anteriores ao cadastro não geram penalidade.
 
-Cores dos badges de pontuação:
-- 10 pts → `Color(0xFF006D32)` verde escuro
-- 7 pts → `Color(0xFF1B7F3A)` verde médio
-- 5 pts → `Color(0xFF4CAF50)` verde claro
-- 4 pts → `Color(0xFFFCD400)` amarelo (texto: `Cores.onSecondaryContainer`)
-- 0 pts → `Color(0xFFBBCBB9)` cinza
-- −1 pt → `Color(0xFFE53935)` vermelho
+### Modo Copa — palpite na classificação de grupos
+
+- Posição exata (1º, 2º ou 3º): +200 por time
+- Classificou mas posição errada: +100 por time
+- Time não classificou: 0
+- Bônus se acertou todas as posições do grupo: +100
+
+### Palpites Especiais (calculados uma vez após o torneio)
+- Campeão do Torneio: +500
+- Artilheiro da Copa: +300
+- Melhor Jogador da Copa: +300
+- Melhor Goleiro: +300
+- Equipe Mais Goleadora: +200
+- Equipe Menos Vazada: +200
+
+### Cores dos badges (baseadas em pontosBase, sem multiplicador)
+- ≥100 pts → `Color(0xFF006D32)` verde escuro (placar exato)
+- ≥70 pts  → `Color(0xFF1B7F3A)` verde médio (vencedor + saldo)
+- ≥60 pts  → `Color(0xFF2E7D52)` verde teal (vencedor + um time)
+- ≥50 pts  → `Color(0xFF4CAF50)` verde claro (só vencedor / empate)
+- 0 pts    → `Color(0xFFBBCBB9)` cinza
+- negativo → `Color(0xFFE53935)` vermelho (sem palpite)
 
 ---
 
