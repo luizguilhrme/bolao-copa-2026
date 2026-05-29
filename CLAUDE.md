@@ -17,7 +17,7 @@ flutter test test/foo_test.dart  # run a single test file
 flutter build apk        # build Android APK
 ```
 
-To populate Firestore with the 104 games, use the upload button in TelaAdmin (admin only). A dialog will ask whether to use production (`jogos.json`) or test data (`jogos_teste.json`). The test dataset has dates shifted −25 days and results pre-filled for past games.
+To populate Firestore with the 104 games, open the drawer → ADMIN → Outras Definições → Popular Jogos. A dialog will ask whether to use production (`jogos.json`) or test data (`jogos_teste.json`). The test dataset has dates shifted −25 days and results pre-filled for past games.
 
 ## Architecture
 
@@ -31,7 +31,7 @@ To populate Firestore with the 104 games, use the upload button in TelaAdmin (ad
 
 **Auth routing:** `main.dart` wraps the app in a `StreamBuilder<User?>` on `FirebaseAuth.instance.authStateChanges()`. Logged-in users go to `MenuPrincipal`; logged-out users go to `TelaLogin`.
 
-**Admin access:** Gated by `isAdmin: true` in the user's Firestore document. Checked once at session start in `MenuPrincipal._verificarAdmin()`. Admin screen (`TelaAdmin`) lets the admin enter final scores; saving a score triggers the `calcularPontuacao` Cloud Function which recalculates `pontuacao` for every user who palpited that game, then sends FCM ranking-change notifications. There is a dedicated test admin account (`teste@teste.com`) with `isAdmin: true` in Firestore, used for Google Play Console review.
+**Admin access:** Gated by `isAdmin: true` in the user's Firestore document. Checked once at session start in `MenuPrincipal._verificarAdmin()`. The drawer shows 4 admin items: Placares, Classificação Copa, Palpites Especiais, Outras Definições. There is a dedicated test admin account (`teste@teste.com`) with `isAdmin: true` in Firestore, used for Google Play Console review.
 
 **Scoring (implemented in `tela_palpites.dart` and Cloud Function `calcularPontuacao`/`recalcularTudo`):**
 - 10 pts — exact score
@@ -41,7 +41,7 @@ To populate Firestore with the 104 games, use the upload button in TelaAdmin (ad
 - 0 pts — none of the above
 - −1 pt — forgot to palpite (only applies to games after the user's `criadoEm`)
 
-**Palpite cutoff:** palpites are locked 5 minutes before game start. Admin unlock: 105 minutes after game start (IDs 1 and 2 are always unlocked for testing — see `_jogosTesteIds` in `tela_admin.dart`).
+**Palpite cutoff:** palpites are locked 5 minutes before game start.
 
 ## Code conventions
 
@@ -89,32 +89,50 @@ C:\bolao\
     firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
     models/
       jogo.dart               ← model com fromJson, fromMap, toMap e getter dataHora
-      usuario.dart            ← model com fromMap, toMap e copyWith
+      usuario.dart            ← model com fromMap, toMap e copyWith; inclui campos de palpites especiais
       palpite.dart            ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
       grupo.dart              ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
     screens/
       menu_principal.dart     ← shell com drawer lateral, AppBar, IndexedStack, NavigationBar;
                                  inicializa FCM; deep linking via notificação (onMessageOpenedApp,
-                                 getInitialMessage); SnackBar com botão VER em foreground
-      tela_home.dart          ← jogos de hoje (Firestore) + bento grid de navegação
-      tela_login.dart         ← login e cadastro com design do Stitch
-      tela_setup_perfil.dart  ← seleção de avatar no primeiro acesso (pós-cadastro)
+                                 getInitialMessage); SnackBar com botão VER em foreground;
+                                 seção ADMIN com 4 itens separados
+      tela_home.dart          ← jogos de hoje (Firestore) + bento grid de navegação;
+                                 card "PALPITES ESPECIAIS" navega para TelaPalpitesEspeciais
+      tela_login.dart         ← login e cadastro com design do Stitch; ícone de olho na senha
+      tela_setup_perfil.dart  ← ordem: Nome → Grupos (criar/entrar opcional) → Avatar;
+                                 dialogs de criar/entrar grupo inline
       tela_perfil.dart        ← exibe/edita nome e avatar; alterar senha; excluir conta
       tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
       tela_palpites.dart      ← duas abas: Próximos (com palpites) e Resultados
+      tela_palpites_especiais.dart ← tela azul com 6 palpites especiais do usuário:
+                                 campeão, artilheiro, melhor goleiro, melhor jogador,
+                                 equipe mais goleadora, equipe menos vazada;
+                                 bottom sheet com busca para seleção de times;
+                                 bloqueado após início do primeiro jogo
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos
       tela_grupos.dart        ← lista grupos do usuário; criar grupo (código único); entrar com código; sair;
                                  tocar no card abre dialog de detalhes com membros e avatares;
                                  ícone de lápis (só dono) edita o nome do grupo
-      tela_tabela.dart        ← lista os 104 jogos com seções e tabs
-      tela_admin.dart         ← inserção de placares; dialog Teste/Produção no popular jogos;
-                                 seção Palpites Especiais: seletor de campeão (com bandeiras),
-                                 campo artilheiro, salvar config e calcular pontuação especial
+      tela_tabela.dart        ← lista os 104 jogos com seções e tabs; RefreshIndicator (pull-to-refresh)
+      tela_admin_placares.dart ← inserção de placares com abas Próximos/Encerrados;
+                                 sem regra de 105 min; campos vazios no CORRIGIR limpam o placar
+                                 (dialog de confirmação) e devolvem o jogo para Próximos
+      tela_admin_copa.dart    ← classificação por grupo: 1º e 2º obrigatórios para todos os 12 grupos,
+                                 3º limitado a 8 grupos (contador no AppBar); validação antes de salvar;
+                                 salva em config/copa2026.classificacao_real
+      tela_admin_especiais.dart ← resultados reais: campeão, artilheiro, melhor goleiro,
+                                 equipe mais goleadora, equipe menos vazada, melhor jogador;
+                                 botão CALCULAR chama calcularPalpitesEspeciais (irreversível)
+      tela_admin_definicoes.dart ← ações: popular jogos (Teste/Produção), recalcular Reg. Clássica,
+                                 recalcular Reg. Copa (placeholder), limpar órfãos
       tela_ajuda.dart         ← FAQ estático
     services/
       jogo_service.dart       ← popularJogosNoFirestore({bool teste}), buscarTodos, buscarPorData
       usuario_service.dart    ← criarPerfil, buscarPorUid, observarUsuario,
-                                 atualizarNome, atualizarAvatar
+                                 atualizarNome, atualizarAvatar,
+                                 salvarPalpiteEspecial (campeão + artilheiro),
+                                 salvarPalpitesEspeciais (todos os 6 campos)
       palpite_service.dart    ← salvar, buscarPorJogo, buscarTodosPorUsuario,
                                  buscarPorUsuario, buscarTodosPorJogo
       notificacoes_service.dart ← inicializar FCM, salvar token, buscar/atualizar prefs
@@ -150,6 +168,7 @@ C:\bolao\
 - Palpites precarregados em lote (`buscarTodosPorUsuario`) ao abrir a tela, sem query individual por card
 - Notificações via FCM: `lembretesPalpite` (scheduled `*/30min`) + `calcularPontuacao` envia ranking change. Token salvo no campo `fcmToken` do documento do usuário
 - Bandeiras exibidas como imagens reais via pacote `country_flags` (não emojis); mapeamento de nome → ISO em `isoDe()`
+- Telas admin separadas por responsabilidade (placares, classificação copa, palpites especiais, definições) em vez de uma tela única — cada tela tem foco claro e é navegada via drawer
 
 ---
 
@@ -209,14 +228,17 @@ leading: Builder(
 - Cabeçalho verde com avatar do jogador selecionado, nome e pontuação via `StreamBuilder<Usuario?>`
 - Seção "CONTA": Meu Perfil → `TelaPerfil`; Notificações → `TelaNotificacoes`
 - Seção "GRUPOS": Meus Grupos → `TelaGrupos`
-- Seção "ADMIN" (só para `isAdmin == true`): Atualizar Placares → navega para `TelaAdmin`
+- Seção "ADMIN" (só para `isAdmin == true`), 4 itens:
+  - Placares — Reg. Clássica → `TelaAdminPlacares`
+  - Classificação — Reg. Copa → `TelaAdminCopa`
+  - Palpites Especiais → `TelaAdminEspeciais`
+  - Outras Definições → `TelaAdminDefinicoes`
 - Seção "SUPORTE": Ajuda & FAQ → `TelaAjuda`
 - Rodapé: botão Sair que chama `FirebaseAuth.instance.signOut()`
 
 ### Verificação de admin
 ```dart
 // Lido do Firestore uma única vez no initState
-// Campo isAdmin adicionado manualmente no Console para o usuário admin
 final doc = await FirebaseFirestore.instance.collection('usuarios').doc(_uid).get();
 if (doc.data()?['isAdmin'] == true) setState(() => _isAdmin = true);
 ```
@@ -242,8 +264,8 @@ StreamBuilder<User?>(
 ### Fluxo de cadastro
 1. `TelaLogin` valida e-mail + chama `createUserWithEmailAndPassword`
 2. `authStateChanges` dispara → `main.dart` roteia para `TelaSetupPerfil` automaticamente
-3. `TelaSetupPerfil`: usuário escolhe avatar, clica "Confirmar"
-4. `UsuarioService.atualizarAvatar` salva no Firestore → stream detecta perfil criado → `MenuPrincipal` abre
+3. `TelaSetupPerfil`: usuário define nome, opcionalmente cria/entra em grupo, escolhe avatar, clica "Confirmar"
+4. `UsuarioService.criarPerfil` salva no Firestore → stream detecta perfil criado → `MenuPrincipal` abre
 5. Botão de voltar no setup faz `signOut()` → retorna para `TelaLogin`
 
 ---
@@ -326,26 +348,34 @@ service cloud.firestore {
 ID do documento = UID do Firebase Auth.
 
 ```
-uid             : String
-email           : String
-nome            : String    — parte antes do @ no cadastro
-pontuacao       : Number    — começa em 0; atualizado via FieldValue.increment()
-criadoEm        : Timestamp
-avatar          : String?   — id do jogador selecionado no setup de perfil
-isAdmin         : Boolean   — campo opcional; adicionado manualmente no Console
-fcmToken        : String?   — token FCM do dispositivo; salvo pelo NotificacoesService
-notifLembretes     : Boolean?  — padrão true quando ausente
-notifRanking       : Boolean?  — padrão true quando ausente
-palpiteCampeao     : String?   — nome em inglês do time (ex: "Brazil"); salvo via UsuarioService.salvarPalpiteEspecial
-palpiteArtilheiro  : String?   — nome livre do jogador; bloqueado após início do primeiro jogo
+uid                  : String
+email                : String
+nome                 : String    — parte antes do @ no cadastro
+pontuacao            : Number    — começa em 0; atualizado via FieldValue.increment()
+criadoEm             : Timestamp
+avatar               : String?   — id do jogador selecionado no setup de perfil
+isAdmin              : Boolean   — campo opcional; adicionado manualmente no Console
+fcmToken             : String?   — token FCM do dispositivo; salvo pelo NotificacoesService
+notifLembretes       : Boolean?  — padrão true quando ausente
+notifRanking         : Boolean?  — padrão true quando ausente
+palpiteCampeao       : String?   — nome em inglês do time campeão (ex: "Brazil")
+palpiteArtilheiro    : String?   — nome livre do artilheiro
+palpiteGoleiro       : String?   — nome livre do melhor goleiro
+palpiteMelhorJogador : String?   — nome livre do melhor jogador do torneio
+palpiteMaisGoleadora : String?   — nome em inglês da equipe mais goleadora
+palpiteMenosVazada   : String?   — nome em inglês da equipe menos vazada
 ```
+
+Todos os palpites especiais são bloqueados após o início do primeiro jogo da Copa.
+Salvos via `UsuarioService.salvarPalpitesEspeciais()`.
 
 ### `jogos`
 104 documentos. ID do documento = id do jogo (string "1" a "104").
 
 ```
 id          : Number
-round       : String   — "Fase de Grupos", "Oitavas de Final", etc.
+round       : String   — "Fase de Grupos" | "16 avos de Final" | "Oitavas de Final" |
+                         "Quartas de Final" | "Semifinal" | "Disputa de 3º Lugar" | "Final"
 matchday    : String?  — "Rodada 1/2/3" (null nas fases eliminatórias)
 date        : String   — "2026-06-11"
 time        : String   — "13:00 UTC-6"
@@ -358,7 +388,16 @@ placar1     : Number?  — null até o admin inserir o resultado
 placar2     : Number?  — null até o admin inserir o resultado
 ```
 
-**Conversão de fuso:** `"13:00 UTC-6"` → `DateTime.utc(ano, mes, dia, 13, 0).subtract(Duration(hours: -6))` → `19:00 UTC`. O bug original usava `DateTime(...)` local em vez de `DateTime.utc(...)`, causando dupla conversão de fuso.
+**Fases eliminatórias da Copa 2026 (48 seleções, 104 jogos):**
+- IDs 1–72: Fase de Grupos (6 jogos × 12 grupos = 72 jogos)
+- IDs 73–88: 16 avos de Final (16 jogos)
+- IDs 89–96: Oitavas de Final (8 jogos)
+- IDs 97–100: Quartas de Final (4 jogos)
+- IDs 101–102: Semifinal (2 jogos)
+- ID 103: Disputa de 3º Lugar
+- ID 104: Final
+
+**Conversão de fuso:** `"13:00 UTC-6"` → `DateTime.utc(ano, mes, dia, 13, 0).subtract(Duration(hours: -6))` → `19:00 UTC`.
 
 **Exibição:** `.toLocal()` antes de formatar com `DateFormat` ou manualmente.
 
@@ -373,8 +412,6 @@ palpite2    : Number
 criadoEm    : Timestamp  — serverTimestamp(); atualizado a cada save
 ```
 
-`criadoEm` chega como `null` no cache local antes de o servidor responder → model usa `DateTime?`.
-
 ### `grupos`
 ID do documento = auto-ID gerado pelo Firestore.
 
@@ -386,15 +423,22 @@ membros     : Array<String>  — lista de UIDs; gerenciado via arrayUnion / arra
 criadoEm    : Timestamp — serverTimestamp(); nullable no cache local → model usa DateTime?
 ```
 
-**Busca de grupos do usuário:** `where('membros', arrayContains: uid)` — sem índice composto necessário (sem orderBy). Ordenação feita client-side por `criadoEm`.
-
 ### `config`
 ID do documento = `copa2026` (documento único).
 
 ```
-campeaoReal                  : String?   — nome em inglês do campeão real (ex: "Brazil")
-artilheiroReal               : String?   — nome do artilheiro real (comparação case-insensitive)
-palpitesEspeciaisCalculados  : Boolean   — true após executar calcularPalpitesEspeciais; impede execução dupla
+— Resultados reais (admin, via tela_admin_especiais) —
+campeaoReal                  : String?   — nome em inglês do campeão real
+artilheiroReal               : String?   — nome do artilheiro real
+melhorGoleiroReal            : String?   — nome do melhor goleiro real
+maisGoleadoraReal            : String?   — nome em inglês da equipe mais goleadora
+maisVazadaReal               : String?   — nome em inglês da equipe menos vazada (campo legado)
+melhorJogadorFinalReal       : String?   — nome do melhor jogador real (campo legado)
+palpitesEspeciaisCalculados  : Boolean   — true após executar calcularPalpitesEspeciais
+
+— Classificação real dos grupos (admin, via tela_admin_copa) —
+classificacao_real           : Map       — { "A": { "primeiro": "Brazil", "segundo": "Mexico", "terceiro": "..." }, ... }
+                                           12 grupos (A–L); terceiro só em 8 grupos
 ```
 
 ---
@@ -415,7 +459,7 @@ int calcularPontos(int p1, int p2, int r1, int r2) {
 
 Regra extra: −1 pt para quem esqueceu de palpitar em jogo disputado após o `criadoEm` do usuário. Jogos anteriores ao cadastro não geram penalidade.
 
-Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de resultado):
+Cores dos badges de pontuação:
 - 10 pts → `Color(0xFF006D32)` verde escuro
 - 7 pts → `Color(0xFF1B7F3A)` verde médio
 - 5 pts → `Color(0xFF4CAF50)` verde claro
@@ -431,128 +475,125 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - Card centralizado, fontes Anybody + Hanken Grotesk
 - Alterna entre login e cadastro com `AnimatedSwitcher`
 - Erros do Firebase Auth traduzidos para português
-- Cadastro: cria conta no Auth + perfil no Firestore via `UsuarioService`
+- Ícone de olho no campo de senha para mostrar/ocultar (`_senhaVisivel` bool + `suffixIcon`)
 - Navegação por Enter: Enter no e-mail move o foco para a senha; Enter na senha submete o formulário
 
 ### `tela_setup_perfil.dart` — implementada
 - Exibida após cadastro, antes de entrar no app
+- Ordem dos campos: Nome → **Grupos (opcional)** → Escolha de avatar
+- Seção Grupos: dois botões ("Criar grupo" / "Entrar com código") com dialogs inline (`_DialogCriarGrupoSetup`, `_DialogEntrarGrupoSetup`, `_DialogCodigoSetup`)
 - Seleção de avatar obrigatória (grid de jogadores)
-- Salva `avatar` no Firestore via `UsuarioService.atualizarAvatar`
+- Salva perfil no Firestore via `UsuarioService.criarPerfil`
 
 ### `tela_home.dart` — implementada
-- Carrossel de jogos do dia (Firestore) com chip AO VIVO
-- Jogos com placar já inserido vão para o final do carrossel; chip "ENCERRADO" (bolinha cinza) e placar real exibido
-- AO VIVO exibe "0 – 0" (nunca exibe null); aviso "O placar é atualizado somente ao final da partida." abaixo do carrossel
-- Bento grid de navegação: MEUS PALPITES, CLASSIFICAÇÃO, CAMPEÃO & ARTILHEIRO, TODOS OS JOGOS
-- Card CAMPEÃO & ARTILHEIRO (azul) abre `_DialogPalpiteEspecial`:
-  - Campo de texto livre para artilheiro
-  - Lista rolável com todos os 48 times (ordenados por nome em PT) com bandeiras para seleção do campeão
-  - Bloqueio automático após início do primeiro jogo (verifica `dataHora` do jogo mais antigo)
-  - Pré-preenche com palpites já salvos no Firestore
+- Carrossel de jogos do dia (Firestore) com chip AO VIVO / ENCERRADO
+- Bento grid: MEUS PALPITES, CLASSIFICAÇÃO, **PALPITES ESPECIAIS** (azul, navega para `TelaPalpitesEspeciais`), TODOS OS JOGOS
 - Callback `onNavegar` recebido do `MenuPrincipal`
-- Cards exibem bandeiras reais (`Bandeira`) e nome completo em português (`nomePtDe`)
+
+### `tela_palpites_especiais.dart` — implementada
+- Tela completa com AppBar azul (`Cores.azulTerciario`)
+- Banner de bloqueio quando a Copa já começou
+- 6 palpites: Campeão (seletor de time), Artilheiro (texto), Melhor Goleiro (texto), Melhor Jogador (texto), Equipe Mais Goleadora (seletor), Equipe Menos Vazada (seletor)
+- Seletores de time abrem `_BottomSheetTimes` com `DraggableScrollableSheet` + campo de busca
+- Botão "SALVAR PALPITES" azul fixo no rodapé
+- Salva via `UsuarioService.salvarPalpitesEspeciais()`
 
 ### `tela_tabela.dart` — implementada
 - Tabs "Próximos" / "Resultados" com `AnimatedContainer`
-- Chips horizontais roláveis abaixo das tabs: **Todos** + **A** a **L** (grupos da Copa); filtro derivado dos dados do Firestore; combinado com a aba ativa — ex: "Resultados + Grupo B" mostra só jogos encerrados do Grupo B; eliminatórias (sem `group`) só aparecem em "Todos"
+- Chips horizontais roláveis: **Todos** + **A** a **L**; eliminatórias só em "Todos"
 - `CustomScrollView` com slivers agrupados por seção
-- Chip AO VIVO com ponto pulsante via `AnimationController`
-- Exibe bandeiras reais (`Bandeira`) em círculo e nomes em português (`nomePtDe`)
-- Tocar em um jogo encerrado na aba Resultados abre dialog com todos os palpites registrados, ordenados por pontuação; cada linha mostra posição, avatar, nome, palpite e badge de pontos
+- **RefreshIndicator** (pull-to-refresh) — rebusca todos os jogos via `JogoService().buscarTodos()`
+- Tocar em jogo encerrado abre dialog com todos os palpites registrados
 
 ### `tela_palpites.dart` — implementada
 - Duas abas: **Próximos** e **Resultados**
-- `Future.wait` carrega jogos + palpites + perfil do usuário (para `criadoEm`) em paralelo
-- `Timer.periodic(30s)` reclassifica jogos entre abas automaticamente
-- **Aba Próximos:** jogos disponíveis para palpite (mais de 5 min antes do início); "Ver mais" carrega próxima data; trava impede salvar após o cutoff
-- **Aba Resultados:** chip "PRESTES A COMEÇAR" (amarelo, <5 min), "AO VIVO" (pulsante), ou horário; cards encerrados coloridos pela pontuação; badge de pontos; "Registrado em DD/MM às HHhMM"
-- **Regra −1:** jogo encerrado sem palpite cujo `dataHora > criadoEm` do usuário → `pontos = -1`; card com borda/fundo vermelhos; badge vermelho "−1 pt". Jogos anteriores ao cadastro ficam sem penalidade (badge cinza "Sem palpite")
-- Palpite precarregado pelo pai — `_CardPalpite` não faz query individual
-- Bandeiras reais (`Bandeira`) e nome completo em português nos cards de ambas as abas
-- **Navegação por Enter:** Enter no gol 1 → foco para gol 2; Enter no gol 2 → salva e move foco para o gol 1 do próximo card; sem próximo card → fecha teclado
-- `_AbaProximos` é `StatefulWidget` gerenciando lista de `FocusNode` (um por card visível); reconstruída ao mudar o número de cards (ex: "Ver mais")
+- `Future.wait` carrega jogos + palpites + perfil em paralelo
+- `Timer.periodic(30s)` reclassifica jogos automaticamente
+- Regra −1 pt para ausência de palpite; card vermelho
+- Navegação por Enter entre campos
 
 ### `tela_ranking.dart` — implementada
-- Ranking filtrado por grupo — não existe ranking global
-- `StatefulWidget` com dois `StreamBuilder` aninhados: grupos do usuário (outer) + todos os usuários ordenados por pontuação (inner); filtragem client-side por `grupo.membros`
-- Usuário sem grupos → mensagem orientando a criar/entrar via Meus Grupos
-- Usuário com 1 grupo → ranking desse grupo, sem seletor
-- Usuário com 2+ grupos → chips no topo para alternar; seleção explícita em `_grupoSelecionado`; se grupo selecionado sair da lista, volta automaticamente para o primeiro
-- Pódio visual para top 3: avatar real (foto do jogador via `WidgetAvatar`); fundo do degrau dourado/prata (`Color(0xFFC0C0C0)`)/bronze (`Color(0xFFCD7F32)`)
-- Lista para 4º em diante com avatar real; usuário logado destacado com borda verde
-- Tocar em qualquer card (pódio ou lista) abre `_DialogPalpitesUsuario`:
-  - Cabeçalho verde com avatar + nome; se o usuário tiver palpiteCampeao/palpiteArtilheiro, exibe em destaque (container semitransparente) com bandeira do campeão e nome do artilheiro
-  - Lista dos palpites nos jogos encerrados, ordenados do mais recente para o mais antigo; cada linha mostra bandeiras + siglas + resultado, palpite e badge de pontos
+- Ranking filtrado por grupo (sem ranking global)
+- Pódio top 3 + lista 4º em diante
+- Dialog com histórico de palpites do usuário
 
-### `tela_grupos.dart` — implementada (acesso via drawer → GRUPOS → Meus Grupos)
-- `StreamBuilder` em `GrupoService().buscarGruposDoUsuario(uid)` → lista reativa de grupos
-- Cada card: nome, código de 6 chars (toque copia para clipboard), nº de membros, badge "ADMIN" se for o dono
-- **Tocar no card** abre `_DialogDetalhesGrupo`: cabeçalho verde com nome e código copiável; lista de membros com `WidgetAvatar` + nome; dono aparece primeiro com badge "ADMIN"; `FutureBuilder` em `GrupoService().buscarMembros(uids)`
-- **Ícone de lápis** no card (só visível para o dono) abre `_DialogEditarNome` pré-preenchido; chama `GrupoService.editarNome`
-- Dois botões no topo: **Criar grupo** e **Entrar com código**
-- **Criar grupo**: dialog com campo nome → `GrupoService.criarGrupo` → dialog exibe o código gerado (copiável)
-- **Entrar com código**: dialog com campo de 6 chars → `GrupoService.entrarComCodigo` → SnackBar verde (sucesso), vermelho (não encontrado) ou azul (já é membro)
-- **Sair do grupo**: botão no card com dialog de confirmação; grupo é deletado automaticamente se ficar sem membros
+### `tela_grupos.dart` — implementada
+- `StreamBuilder` reativo em grupos do usuário
+- Criar, entrar com código, sair, editar nome (só dono)
+- Dialog de detalhes com membros e avatares
 
-### `tela_admin.dart` — implementada (acesso exclusivo via drawer)
-- Filtra jogos elegíveis: 105 min após o início (IDs 1 e 2 sempre desbloqueados para teste)
-- Card com pré-preenchimento se já tiver placar (modo correção); exibe bandeiras reais e nomes em português
-- Ao salvar: atualiza `placar1`/`placar2` no Firestore → Cloud Function `calcularPontuacao` dispara automaticamente
-- Botão de popular jogos abre dialog pedindo **Teste** (`jogos_teste.json`) ou **Produção** (`jogos.json`)
-- Botão de recalcular chama a Cloud Function `recalcularTudo` (admin only)
-- Botão de vassoura (`delete_sweep`) chama `limparUsuariosOrfaos`: remove docs `usuarios` sem conta Auth + palpites cujo uid não existe em `usuarios`; exibe contagem de usuários e palpites removidos
-- **Seção Palpites Especiais** no topo: seletor de campeão real com bandeiras e nomes em PT (filtra placeholders com dígitos, ordena ignorando acentos); campo de artilheiro (texto livre); botão SALVAR grava em `config/copa2026`; botão CALCULAR chama `calcularPalpitesEspeciais` (irreversível, desabilitado após execução); `resizeToAvoidBottomInset: false` evita overflow ao abrir teclado
+### `tela_admin_placares.dart` — implementada
+- Duas abas: **Próximos** (sem placar) / **Encerrados** (com placar)
+- Sem regra de 105 minutos — exibe todos os 104 jogos
+- CORRIGIR PLACAR com campos vazios: dialog de confirmação → salva `null` → jogo retorna para Próximos
+- Cabeçalho mostra data + horário do jogo
+
+### `tela_admin_copa.dart` — implementada
+- 12 cards de grupo com dropdowns de 1º, 2º e 3º colocado
+- 3º colocado limitado a 8 grupos (dos 12); quando 8 preenchidos, dropdown dos demais fica desabilitado com hint "Limite de 8 atingido"
+- Contador `3º: X/8` no AppBar
+- Validação antes de salvar: exige todos os 1ºs, todos os 2ºs e exatamente 8 3ºs
+- Salva em `config/copa2026.classificacao_real`
+
+### `tela_admin_especiais.dart` — implementada
+- Resultados reais: Campeão (seletor com bandeiras), Artilheiro (texto), Melhor Goleiro (texto), Equipe Mais Goleadora (seletor), Equipe Menos Vazada (seletor), Melhor Jogador (texto)
+- Botão SALVAR grava em `config/copa2026`
+- Botão CALCULAR chama `calcularPalpitesEspeciais` (irreversível; desabilitado após execução)
+
+### `tela_admin_definicoes.dart` — implementada
+- Popular Jogos: dialog Teste/Produção → `JogoService.popularJogosNoFirestore`
+- Recalcular Reg. Clássica: chama Cloud Function `recalcularTudo`
+- Recalcular Reg. Copa: placeholder (a implementar)
+- Limpar Órfãos: chama Cloud Function `limparUsuariosOrfaos`
 
 ### `tela_perfil.dart` — implementada
-- Exibe avatar do jogador com botão de troca (bottom sheet grid)
-- Edição de nome inline via dialog
-- Alterar senha: dialog com senha atual + nova senha + confirmação + reautenticação
-- Excluir conta: dialog com senha para confirmação; remove doc Firestore + conta Auth
+- Exibe avatar com botão de troca; edição de nome; alterar senha; excluir conta
 
 ### `tela_notificacoes.dart` — implementada
-- Toggle **Lembrete de palpite**: notificação 30 min antes de jogos sem palpite
-- Toggle **Mudança no ranking**: notificação quando posição no ranking muda
-- Prefs salvas nos campos `notifLembretes` / `notifRanking` do documento do usuário
-- Auto-save a cada toggle
+- Toggles: lembrete de palpite / mudança no ranking
 
 ### `tela_ajuda.dart` — implementada
-- FAQ estático com perguntas e respostas expansíveis
-- Seção de pontuação com badges coloridos e exemplos
+- FAQ estático com `ExpansionTile` e badges de pontuação
 
 ---
 
 ## avatares.dart — widgets e dados compartilhados
 
 ```dart
-// Lista dos 12 jogadores disponíveis como avatar
 const kJogadores = [
   Jogador('messi', 'Messi', 'Argentina'),
   Jogador('cr7', 'Cristiano Ronaldo', 'Portugal'),
   // ... 10 mais
 ];
 
-// Exibe foto do jogador em círculo; fallback: inicial do nome
 WidgetAvatar(avatarId: usuario.avatar, nome: usuario.nome, tamanho: 64)
-
-// Card de seleção com borda verde e check quando selecionado
 CardAvatar(jogador: jogador, selecionado: true, onTap: () { ... })
 ```
 
-`WidgetAvatar` aceita `corFundo`, `corTexto`, `borderColor` e `borderWidth` para se adaptar ao drawer (fundo verde-claro) e ao perfil (fundo verde-escuro).
-
 ---
+
+## UsuarioService — métodos
+
+```dart
+criarPerfil(Usuario)
+buscarPorUid(String uid)
+observarUsuario(String uid)               // Stream reativo
+atualizarNome(String uid, String nome)
+atualizarAvatar(String uid, String avatarId)
+salvarPalpiteEspecial({uid, campeao, artilheiro})         // legado — só 2 campos
+salvarPalpitesEspeciais({uid, campeao, artilheiro,        // todos os 6 palpites especiais
+  goleiro?, melhorJogador?, maisGoleadora?, menosVazada?})
+```
 
 ## PalpiteService — métodos
 
 ```dart
-salvar(Palpite)                          // set() com docId fixo — idempotente
-buscarPorJogo(String uid, int jogoId)    // get() por docId — O(1)
-buscarTodosPorUsuario(String uid)        // where(uid) sem orderBy — sem índice composto
-buscarPorUsuario(String uid)             // where(uid) + orderBy(jogoId) — requer índice composto
-buscarTodosPorJogo(int jogoId)           // where(jogoId) — usado pelo admin
+salvar(Palpite)
+buscarPorJogo(String uid, int jogoId)
+buscarTodosPorUsuario(String uid)
+buscarPorUsuario(String uid)              // requer índice composto no Firestore
+buscarTodosPorJogo(int jogoId)
 ```
-
-**Nota sobre índices:** `buscarPorUsuario` usa `where + orderBy` em campos diferentes → Firestore exige índice composto. O índice está versionado em `firestore.indexes.json` e é deployado com `firebase deploy --only firestore`.
 
 ---
 
@@ -562,19 +603,28 @@ buscarTodosPorJogo(int jogoId)           // where(jogoId) — usado pelo admin
 O getter `dataHora` no `Jogo` usava `DateTime(...)` (local) antes de subtrair o offset UTC, causando dupla conversão. Corrigido com `DateTime.utc(...)`.
 
 ### Bug de exibição de horário
-`formatarData()` em `biblioteca.dart` formatava sem converter para local. Corrigido adicionando `final local = data.toLocal()` no início da função — todos os pontos de uso se beneficiam automaticamente.
+`formatarData()` formatava sem converter para local. Corrigido adicionando `final local = data.toLocal()`.
 
 ### setState com Future
-`onSalvo: () => setState(() => _futureJogos = _carregarElegiveis())` retornava um `Future` para o `setState`. Corrigido com chaves: `setState(() { _futureJogos = _carregarElegiveis(); })`.
+`onSalvo: () => setState(() => _futureJogos = _carregarElegiveis())` retornava `Future` para o `setState`. Corrigido com chaves: `setState(() { _futureJogos = ...; })`.
 
 ### not-found ao atualizar placar
-O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Firestore bate com o campo `id`. Corrigido com `.where('id', isEqualTo: jogoId).limit(1).get()` + `.docs.first.reference`.
+Corrigido com `.where('id', isEqualTo: jogoId).limit(1).get()` + `.docs.first.reference`.
 
 ### criadoEm null no cache local
-`FieldValue.serverTimestamp()` chega como `null` no cache local antes de o servidor responder. Corrigido tornando `criadoEm` nullable (`DateTime?`) no model `Palpite`. O mesmo padrão foi aplicado em `Grupo.fromMap` com fallback para `DateTime.now()`.
+`FieldValue.serverTimestamp()` chega como `null` antes do servidor responder → `criadoEm` nullable em `Palpite` e `Grupo`.
 
 ### Flash de MenuPrincipal durante cadastro
-`authStateChanges` disparava ao criar a conta Firebase, exibindo `MenuPrincipal` brevemente antes do setup. Corrigido fazendo o roteamento levar em conta a existência do perfil Firestore, não só o auth.
+`authStateChanges` disparava antes do perfil Firestore existir. Corrigido verificando existência do perfil no roteamento.
+
+### Nomes de fases da Copa 2026 corrigidos
+A Copa 2026 tem 48 seleções e 7 fases eliminatórias. `jogos.json` e `jogos_teste.json` corrigidos:
+- IDs 73–88: `"16 avos de Final"` (16 jogos — fase nova introduzida em 2026)
+- IDs 89–96: `"Oitavas de Final"`
+- IDs 97–100: `"Quartas de Final"`
+- IDs 101–102: `"Semifinal"`
+- ID 103: `"Disputa de 3º Lugar"`
+- ID 104: `"Final"`
 
 ---
 
@@ -607,41 +657,29 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 - Callback `void Function(int)` como padrão de comunicação filho → pai
 - `widget.X` dentro de um `State` para acessar propriedades do `StatefulWidget`
 - Funções top-level em Dart como alternativa idiomática a métodos `static`
-- `const` em mapas literais para alocação única em tempo de compilação
-- `Map` em Dart preserva ordem de inserção
-- Arrow function `=>` vs bloco `{}` — diferença de tipo de retorno (causou o bug do setState)
+- Arrow function `=>` vs bloco `{}` — diferença de tipo de retorno
 - `Builder` widget para acessar o `Scaffold` correto dentro do `AppBar`
 - `addPostFrameCallback` para executar código após o frame atual terminar
 - `.clamp(min, max)` para limitar valores numéricos
-- `showModalBottomSheet` + `DraggableScrollableSheet` para sheets scrolláveis
+- `showModalBottomSheet` + `DraggableScrollableSheet` para sheets scrolláveis com busca
 - `GridView.builder` com `SliverGridDelegateWithFixedCrossAxisCount`
 - `Image.asset` com `errorBuilder` para fallback quando imagem não existe
 - `ExpansionTile` para listas expansíveis (FAQ)
-- `WidgetsBinding.instance.addPostFrameCallback` para evitar conflito de setState
-- `@pragma('vm:entry-point')` — necessário para funções top-level chamadas pelo runtime nativo (ex: handler de background do FCM)
-- `FirebaseMessaging.onBackgroundMessage` — registra handler para mensagens com app fechado; deve ser top-level
-- `FirebaseMessaging.onMessage` — stream de mensagens com app em foreground (não exibe notificação automaticamente)
-- `EmailAuthProvider.credential` + `reauthenticateWithCredential` — reautenticação necessária para operações sensíveis (updatePassword, delete)
-- Converter `StatelessWidget` em `StatefulWidget` — padrão quando um widget filho precisa de estado próprio (ex: `_PerfilConteudo`)
-- `showDialog<T>` retornando valor via `Navigator.of(ctx).pop(valor)` — comunicação do dialog de volta ao chamador
-- `FocusNode` + `FocusScope.of(context).requestFocus()` — navegação programática entre campos de texto
-- `TextInputAction.next` / `.done` + `onSubmitted` — ação do botão Enter no teclado virtual
-- `FocusNode` compartilhado entre pai e filho — pai cria o nó, filho usa como `focusNode` no `TextField`; permite que o pai solicite foco externamente
-- Gerenciar lista de `FocusNode` em `StatefulWidget` com `didUpdateWidget` para recriar nós quando o número de itens muda
-- `CountryFlag.fromCountryCode(iso, height: h, width: w)` do pacote `country_flags` — renderiza bandeiras como imagens SVG por código ISO 3166-1 alpha-2; suporta subdivisões como `GB-ENG`, `GB-WLS`, `GB-SCT`
-- `Container.clipBehavior: Clip.antiAlias` com `BoxDecoration(shape: BoxShape.circle)` — recorta o filho (ex: imagem de bandeira) em formato circular
-- `country_flags 4.x`: API mudou — tamanho agora vai dentro de `ImageTheme(width, height)` em vez de parâmetros diretos; suporta nativamente subdivisões do Reino Unido (`GB-ENG`, `GB-SCT`, `GB-WLS`); não precisa mais de `FittedBox` com zoom
-- `FittedBox(fit: BoxFit.cover, clipBehavior: Clip.hardEdge)` com `CountryFlag(width: tamanho * 2.2)` — força bandeira a preencher o círculo sem letterboxing (largura 2.2× garante que flags até 2:1 preencham a altura)
-- `FirebaseMessaging.onMessageOpenedApp` — stream disparado quando usuário toca na notificação com app em background; `getInitialMessage()` — recupera notificação que abriu o app quando estava fechado; usados juntos para deep linking FCM
-- `Flexible` dentro de `Row` — permite que o filho encolha e use `TextOverflow.ellipsis` sem estourar o layout; essencial em cabeçalhos de dialog com nomes longos ao lado de widgets de tamanho fixo (bandeiras, placar)
-- `kIsWeb` de `package:flutter/foundation.dart` — guard para código não suportado na web (ex: `FirebaseMessaging.onBackgroundMessage`, FCM token registration)
-- Flutter web: `flutter create --platforms web .` cria a pasta `web/` com boilerplate; `manifest.json` configura nome/ícone/tema; meta tags iOS habilitam "Adicionar à Tela de Início" no Safari
-- `firebase deploy --only hosting --project <id>` — deploya `build/web` no Firebase Hosting
-- `calcularPontos()` em `biblioteca.dart` — função pública compartilhada; os dialogs de palpites a usam para calcular badges de pontuação
-- `FieldValue.arrayUnion([value])` / `arrayRemove([value])` — adiciona/remove elemento de array no Firestore de forma atômica, sem sobrescrever o array inteiro; idempotente (arrayUnion não duplica)
-- `Color.withValues(alpha: x)` — substituto de `withOpacity(x)` a partir do Flutter 3.27; opera em precisão de ponto flutuante completa em vez de converter para 8 bits
-- Catch genérico `catch (_)` engole exceções silenciosamente — usar `catch (e)` e exibir `$e` no SnackBar durante desenvolvimento para ver o erro real
-- `Exception('ja_membro')` + `e.toString().contains('ja_membro')` — padrão simples para distinguir casos de erro sem criar classes de exceção customizadas
+- `RefreshIndicator` — pull-to-refresh envolvendo `CustomScrollView` ou `ListView`; estado vazio também precisa ser envolvido com `ListView` filho para o gesto funcionar
+- `TabController` + `TabBar` + `TabBarView` — abas com `SingleTickerProviderStateMixin`; `TabBar` no `bottom` do `AppBar`
+- `obscureText` controlado por `bool` de estado + `suffixIcon` com `IconButton` — padrão para campo de senha com olho
+- `@pragma('vm:entry-point')` — necessário para funções top-level chamadas pelo runtime nativo
+- `FirebaseMessaging.onBackgroundMessage` — handler de mensagens com app fechado; deve ser top-level
+- `FirebaseMessaging.onMessage` — stream de mensagens em foreground
+- `EmailAuthProvider.credential` + `reauthenticateWithCredential` — reautenticação para operações sensíveis
+- `showDialog<T>` retornando valor via `Navigator.of(ctx).pop(valor)`
+- `FocusNode` + `FocusScope.of(context).requestFocus()` — navegação programática entre campos
+- `TextInputAction.next` / `.done` + `onSubmitted`
+- `CountryFlag` via `country_flags 4.x` — `ImageTheme(width, height)`; suporta `GB-ENG`, `GB-SCT`, `GB-WLS`
+- `Color.withValues(alpha: x)` — substituto de `withOpacity` a partir do Flutter 3.27
+- `FieldValue.arrayUnion` / `arrayRemove` — atômico e idempotente
+- `Exception('ja_membro')` + `e.toString().contains('ja_membro')` — distinguir casos de erro sem classes customizadas
+- `kIsWeb` — guard para código não suportado na web
 
 ---
 
@@ -651,71 +689,48 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 
 | Função | Tipo | O que faz |
 |---|---|---|
-| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula delta de pontuação para cada palpite; na primeira inserção de resultado aplica −1 para usuários sem palpite registrados antes do jogo; envia FCM de ranking para quem mudou de posição |
+| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula pontuação para cada palpite; aplica −1 para ausências; envia FCM de ranking |
 | `lembretesPalpite` | Schedule (`*/30 * * * *`) | Notifica usuários sem palpite em jogos que começam em ~30 min |
-| `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação de todos os usuários do zero, incluindo a penalidade de −1 por ausência de palpite |
-| `membroEntrou` | Firestore trigger (`grupos/{grupoId}`) | Detecta novo membro no array `membros` e envia FCM para o dono do grupo |
-| `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Lê `config/copa2026` (campeaoReal + artilheiroReal) e aplica +50 / +25 pts para cada usuário que acertou; marca `palpitesEspeciaisCalculados: true` para evitar execução dupla |
-| `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` cujo UID não tem conta Auth + todos os `palpites` cujo uid não existe em `usuarios`; cobre casos onde o doc de usuário já foi deletado antes |
+| `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação de todos os usuários do zero |
+| `membroEntrou` | Firestore trigger (`grupos/{grupoId}`) | Detecta novo membro e envia FCM para o dono do grupo |
+| `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Aplica pontos por campeão/artilheiro acertados; marca `palpitesEspeciaisCalculados: true` |
+| `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos |
 
-**FCM token management:** token salvo em `usuarios/{uid}.fcmToken`. Tokens inválidos são removidos automaticamente (`messaging/registration-token-not-registered`).
-
-**Deep linking via notificação:** payload FCM inclui `data: { tela: 'palpites' }` (lembrete), `data: { tela: 'ranking' }` (ranking) ou `data: { tela: 'grupos' }` (novo membro). `MenuPrincipal` lê esse campo em `onMessageOpenedApp`, `getInitialMessage` e no `onMessage` (SnackBar com botão VER) para navegar para a aba correta.
+**Deep linking via notificação:** `data: { tela: 'palpites' }`, `data: { tela: 'ranking' }`, `data: { tela: 'grupos' }`.
 
 ---
 
 ## Segurança do Firestore
 
-Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deploy: `firebase deploy --only firestore --project bolaodasoci2026`.
-
 **`usuarios`**
-- `read`: qualquer autenticado (ranking, drawer, dialogs)
-- `create`: só o próprio usuário; payload restrito a `['uid', 'email', 'nome', 'pontuacao', 'criadoEm', 'avatar']`; `isAdmin` e `pontuacao` devem ser `false`/`0` — impede escalada de privilégio
-- `update`: só campos `['nome', 'avatar', 'fcmToken', 'notifLembretes', 'notifRanking', 'palpiteCampeao', 'palpiteArtilheiro']`; `pontuacao`, `isAdmin`, `criadoEm`, `email`, `uid` protegidos (alterados apenas pelo Admin SDK da Cloud Function)
-- `delete`: só o próprio usuário (exclusão de conta)
-
-**`jogos`**
 - `read`: qualquer autenticado
-- `write`: só admin (verificado via `get()` no documento do usuário)
+- `create`: só o próprio usuário; campos restritos; `isAdmin`/`pontuacao` protegidos
+- `update`: só campos de perfil e palpites especiais; `pontuacao`/`isAdmin` protegidos
+- `delete`: só o próprio usuário
 
-**`palpites`**
-- `read`: qualquer autenticado (necessário para dialogs de TelaTabela e TelaRanking)
-- `create`: dono do palpite + `request.time < jogo.dataHora` (cutoff no backend, não só no frontend)
-- `update`: dono + `uid`/`jogoId` imutáveis + jogo não iniciado
-- `delete`: bloqueado
+**`jogos`** — `read`: autenticado; `write`: autenticado (admin na prática)
 
-**`config`**
-- `read`: qualquer autenticado
-- `write`: só admin — usado para gravar `campeaoReal`, `artilheiroReal` e `palpitesEspeciaisCalculados` em `config/copa2026`
+**`palpites`** — `read/write`: autenticado (cutoff verificado no frontend)
 
-**`grupos`**
-- `read`: qualquer autenticado
-- `create`: qualquer autenticado (cria seu próprio grupo)
-- `update`: membro do grupo (sair/editar) OU usuário adicionando apenas a si mesmo ao array `membros` (entrar com código)
-- `delete`: só o dono (`request.auth.uid == resource.data.donoUid`)
+**`config`** — `read`: autenticado; `write`: só admin
 
-**Decisões conscientes:**
-- Email visível a todos os autenticados: aceitável para bolão de amigos; mudar exigiria refatoração de arquitetura
-- Palpites de jogos futuros legíveis: restringir exigiria `dataHoraJogo` em cada palpite + migração de dados; não vale para grupo de amigos
+**`grupos`** — `read/create`: autenticado; `update`: membro; `delete`: dono
 
 ---
 
 ## Google Play — status de publicação
 
-- **Internal Testing** — ✓ v1.0.0+2 publicada; testadores adicionados por e-mail e podem instalar via Play Store
-- **Closed Testing (Alpha)** — ✓ v1.0.0+3 (build 3) publicada; inclui detalhes de grupo, editar nome, notif de membro e palpites especiais
-- **Política de privacidade** — ✓ publicada em `https://bolaodasoci2026.web.app/privacy`
-- **Exclusão de conta** — ✓ publicada em `https://bolaodasoci2026.web.app/delete`
-- **Segurança dos dados** — ✓ questionário completo enviado no Play Console
-- **Classificação de conteúdo** — ✓ questionário enviado
-- **Público-alvo** — ✓ 13 anos ou mais
-- **Declaração de anúncios** — ✓ sem anúncios
-- **Página da loja** — ✓ ícone, elemento gráfico, descrição breve e completa configurados (pt-BR)
-- **Categoria** — ✓ App de Esportes
+- **Internal Testing** — ✓ v1.0.0+2 publicada
+- **Closed Testing (Alpha)** — ✓ v1.0.0+3 publicada
+- **Política de privacidade** — ✓ `https://bolaodasoci2026.web.app/privacy`
+- **Exclusão de conta** — ✓ `https://bolaodasoci2026.web.app/delete`
+- **Segurança dos dados, classificação, público-alvo, anúncios** — ✓ todos enviados
 - **Usuário de revisão** — `teste@teste.com` (isAdmin: true no Firestore)
 
-## Próximos passos (na ordem recomendada)
+## Próximos passos
 
-1. Aguardar aprovação da revisão do Google (1–7 dias úteis).
-2. Após aprovação: retomar a faixa (botão "Retomar faixa" no Play Console) para liberar aos testadores.
-3. Coletar feedback dos testadores e evoluir o app.
+1. Aguardar aprovação da revisão do Google.
+2. Após aprovação: retomar a faixa no Play Console para liberar aos testadores.
+3. Implementar `regra` no model de grupo (Reg. Clássica vs Reg. Copa) e pontuação por grupo.
+4. Implementar tela de palpites Regra Copa para o usuário (classificação de grupos).
+5. Atualizar tela de ranking para ler pontuação por grupo quando regra copa estiver ativa.
