@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **REGRA OBRIGATÓRIA:** Este arquivo e `C:\bolao\resumo_bolao_copa_2026.md` são documentação complementar e DEVEM ser atualizados juntos, no mesmo commit, sempre. Se um for atualizado sem o outro, a documentação fica inconsistente.
+
 ## Project overview
 
 Flutter app for a World Cup 2026 prediction pool (bolão). Users register predictions for match scores; an admin enters real results, and the app calculates and ranks players by points. Backend is Firebase (Auth + Firestore).
