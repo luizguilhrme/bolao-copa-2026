@@ -697,10 +697,22 @@ Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deplo
 
 ---
 
+## Segurança das API Keys (Google Cloud Console)
+
+O repositório é **público** no GitHub. Os arquivos `google-services.json` e `firebase_options.dart` foram removidos do tracking git e adicionados ao `.gitignore`. As API keys são restritas no Google Cloud Console → APIs & Services → Credentials:
+
+- **Android key:** restrita por package name `com.luizdeveloper.bolao.bolao` + SHA-1 do upload keystore
+- **Browser key:** restrita por HTTP referrer `bolaodasoci2026.web.app/*` e `bolaodasoci2026.firebaseapp.com/*`
+- **Keystore e senhas** (`key.properties`, `upload-keystore.jks`) nunca foram commitados; protegidos pelo `.gitignore`
+
+Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regenerar `firebase_options.dart` e baixar `google-services.json` do Firebase Console.
+
+---
+
 ## Google Play — status de publicação
 
 - **Internal Testing** — ✓ v1.0.0+2 publicada; testadores adicionados por e-mail e podem instalar via Play Store
-- **Closed Testing (Alpha)** — ✓ v1.0.0+4 (build 4) publicada; inclui Google Sign-In com account linking
+- **Closed Testing (Alpha)** — ✓ v1.0.0+5 (build 5) publicada; redesign visual dos cards da tela home
 - **Política de privacidade** — ✓ publicada em `https://bolaodasoci2026.web.app/privacy`
 - **Exclusão de conta** — ✓ publicada em `https://bolaodasoci2026.web.app/delete`
 - **Segurança dos dados** — ✓ questionário completo enviado no Play Console

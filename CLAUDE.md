@@ -771,6 +771,18 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 
 ---
 
+## Segurança das API Keys (Google Cloud Console)
+
+O repositório é **público** no GitHub. Os arquivos `google-services.json` e `firebase_options.dart` foram removidos do tracking git e adicionados ao `.gitignore`. As API keys são restritas no Google Cloud Console → APIs & Services → Credentials:
+
+- **Android key:** restrita por package name `com.luizdeveloper.bolao.bolao` + SHA-1 do upload keystore
+- **Browser key:** restrita por HTTP referrer `bolaodasoci2026.web.app/*` e `bolaodasoci2026.firebaseapp.com/*`
+- **Keystore e senhas** (`key.properties`, `upload-keystore.jks`) nunca foram commitados; protegidos pelo `.gitignore`
+
+Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regenerar `firebase_options.dart` e baixar `google-services.json` do Firebase Console.
+
+---
+
 ## Segurança do Firestore
 
 **`usuarios`**
