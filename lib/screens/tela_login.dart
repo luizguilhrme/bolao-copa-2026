@@ -16,6 +16,7 @@ class _TelaLoginState extends State<TelaLogin> {
   final _senhaFocus = FocusNode();
   bool _modoLogin = true;
   bool _carregando = false;
+  bool _senhaVisivel = false;
   String? _erro;
 
   @override
@@ -210,10 +211,17 @@ class _TelaLoginState extends State<TelaLogin> {
           controller: _senhaController,
           hint: '••••••••',
           icone: Icons.lock_outlined,
-          obscureText: true,
+          obscureText: !_senhaVisivel,
           focusNode: _senhaFocus,
           textInputAction: TextInputAction.done,
           onSubmitted: (_) => _entrar(),
+          suffixIcon: IconButton(
+            icon: Icon(
+              _senhaVisivel ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+              color: Cores.onSurfaceVariant,
+            ),
+            onPressed: () => setState(() => _senhaVisivel = !_senhaVisivel),
+          ),
         ),
 
         // Mensagem de erro (aparece só quando há erro)
@@ -317,6 +325,7 @@ class _TelaLoginState extends State<TelaLogin> {
     FocusNode? focusNode,
     TextInputAction? textInputAction,
     ValueChanged<String>? onSubmitted,
+    Widget? suffixIcon,
   }) {
     return TextField(
       controller: controller,
@@ -333,6 +342,7 @@ class _TelaLoginState extends State<TelaLogin> {
         hintText: hint,
         hintStyle: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
         prefixIcon: Icon(icone, color: Cores.onSurfaceVariant),
+        suffixIcon: suffixIcon,
         filled: true,
         fillColor: Cores.surfaceContainer,
         border: OutlineInputBorder(
@@ -343,7 +353,6 @@ class _TelaLoginState extends State<TelaLogin> {
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(color: Cores.outlineVariant, width: 2),
         ),
-        // Borda azul no foco, igual ao focus:border-tertiary do CSS
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(color: Cores.azulTerciario, width: 2),

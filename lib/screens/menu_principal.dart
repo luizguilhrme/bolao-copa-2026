@@ -8,7 +8,10 @@ import '../services/notificacoes_service.dart';
 import '../services/usuario_service.dart';
 import '../utils/avatares.dart';
 import '../utils/cores.dart';
-import 'tela_admin.dart';
+import 'tela_admin_copa.dart';
+import 'tela_admin_definicoes.dart';
+import 'tela_admin_especiais.dart';
+import 'tela_admin_placares.dart';
 import 'tela_ajuda.dart';
 import 'tela_grupos.dart';
 import 'tela_home.dart';
@@ -126,10 +129,31 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
     showDialog(context: context, builder: (_) => const _DialogRegras());
   }
 
-  void _abrirAdmin() {
-    Navigator.of(context).pop(); // fecha o drawer antes de navegar
+  void _abrirAdminPlacares() {
+    Navigator.of(context).pop();
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const TelaAdmin()),
+      MaterialPageRoute(builder: (_) => const TelaAdminPlacares()),
+    );
+  }
+
+  void _abrirAdminCopa() {
+    Navigator.of(context).pop();
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const TelaAdminCopa()),
+    );
+  }
+
+  void _abrirAdminEspeciais() {
+    Navigator.of(context).pop();
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const TelaAdminEspeciais()),
+    );
+  }
+
+  void _abrirAdminDefinicoes() {
+    Navigator.of(context).pop();
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const TelaAdminDefinicoes()),
     );
   }
 
@@ -157,7 +181,10 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
           drawer: _DrawerNav(
             usuario: snapshot.data,
             isAdmin: _isAdmin,
-            onAdmin: _abrirAdmin,
+            onAdminPlacares: _abrirAdminPlacares,
+            onAdminCopa: _abrirAdminCopa,
+            onAdminEspeciais: _abrirAdminEspeciais,
+            onAdminDefinicoes: _abrirAdminDefinicoes,
             onLogout: _logout,
           ),
           body: IndexedStack(index: _indiceNav, children: telas),
@@ -245,13 +272,19 @@ class _DrawerNav extends StatelessWidget {
   const _DrawerNav({
     required this.usuario,
     required this.isAdmin,
-    required this.onAdmin,
+    required this.onAdminPlacares,
+    required this.onAdminCopa,
+    required this.onAdminEspeciais,
+    required this.onAdminDefinicoes,
     required this.onLogout,
   });
 
   final Usuario? usuario;
   final bool isAdmin;
-  final VoidCallback onAdmin;
+  final VoidCallback onAdminPlacares;
+  final VoidCallback onAdminCopa;
+  final VoidCallback onAdminEspeciais;
+  final VoidCallback onAdminDefinicoes;
   final VoidCallback onLogout;
 
   @override
@@ -316,10 +349,28 @@ class _DrawerNav extends StatelessWidget {
                   ),
                   _LabelSecao('ADMIN'),
                   _ItemDrawer(
-                    icone: Icons.edit_note_rounded,
-                    label: 'Atualizar Placares',
+                    icone: Icons.sports_score_rounded,
+                    label: 'Placares — Reg. Clássica',
                     cor: Cores.verdePrincipal,
-                    onTap: onAdmin,
+                    onTap: onAdminPlacares,
+                  ),
+                  _ItemDrawer(
+                    icone: Icons.emoji_events_rounded,
+                    label: 'Classificação — Reg. Copa',
+                    cor: Cores.verdePrincipal,
+                    onTap: onAdminCopa,
+                  ),
+                  _ItemDrawer(
+                    icone: Icons.star_rounded,
+                    label: 'Palpites Especiais',
+                    cor: Cores.verdePrincipal,
+                    onTap: onAdminEspeciais,
+                  ),
+                  _ItemDrawer(
+                    icone: Icons.settings_rounded,
+                    label: 'Outras Definições',
+                    cor: Cores.verdePrincipal,
+                    onTap: onAdminDefinicoes,
                   ),
                 ],
 

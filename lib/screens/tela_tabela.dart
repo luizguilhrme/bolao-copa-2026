@@ -45,6 +45,11 @@ class _TelaTabelaState extends State<TelaTabela> {
     _futureJogos = JogoService().buscarTodos();
   }
 
+  Future<void> _recarregar() async {
+    setState(() => _futureJogos = JogoService().buscarTodos());
+    await _futureJogos;
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Jogo>>(
@@ -223,10 +228,21 @@ class _TelaTabelaState extends State<TelaTabela> {
       ..sort((a, b) => a.dataHora.compareTo(b.dataHora)); // ordena por horário
 
     if (filtrados.isEmpty) {
-      return Center(
-        child: Text(
-          _abaAtiva == 0 ? 'Nenhum jogo futuro.' : 'Nenhum resultado ainda.',
-          style: const TextStyle(color: Cores.onSurfaceVariant),
+      return RefreshIndicator(
+        color: Cores.verdePrincipal,
+        onRefresh: _recarregar,
+        child: ListView(
+          children: [
+            SizedBox(
+              height: 300,
+              child: Center(
+                child: Text(
+                  _abaAtiva == 0 ? 'Nenhum jogo futuro.' : 'Nenhum resultado ainda.',
+                  style: const TextStyle(color: Cores.onSurfaceVariant),
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -250,7 +266,10 @@ class _TelaTabelaState extends State<TelaTabela> {
     //
     // Isso é mais eficiente que um ListView com widgets intercalados porque
     // o Flutter consegue calcular o layout de cada sliver de forma independente.
-    return CustomScrollView(
+    return RefreshIndicator(
+      color: Cores.verdePrincipal,
+      onRefresh: _recarregar,
+      child: CustomScrollView(
       slivers: [
         for (final entrada in porSecao.entries) ...[
           SliverToBoxAdapter(
@@ -272,6 +291,7 @@ class _TelaTabelaState extends State<TelaTabela> {
         // Espaço final para o card não ficar colado atrás da NavigationBar
         const SliverToBoxAdapter(child: SizedBox(height: 24)),
       ],
+    ),
     );
   }
 
