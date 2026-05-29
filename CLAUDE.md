@@ -737,7 +737,7 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 ## Google Play — status de publicação
 
 - **Internal Testing** — ✓ v1.0.0+2 publicada
-- **Closed Testing (Alpha)** — ✓ v1.0.0+3 publicada
+- **Closed Testing (Alpha)** — ✓ v1.0.0+4 publicada (Google Sign-In com account linking)
 - **Política de privacidade** — ✓ `https://bolaodasoci2026.web.app/privacy`
 - **Exclusão de conta** — ✓ `https://bolaodasoci2026.web.app/delete`
 - **Segurança dos dados, classificação, público-alvo, anúncios** — ✓ todos enviados
