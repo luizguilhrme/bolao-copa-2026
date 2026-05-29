@@ -18,6 +18,7 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
   // ignore: prefer_final_fields
   bool _recalculandoCopa = false;
   bool _limpando = false;
+  bool _limpandoTeste = false;
 
   Future<void> _popularJogos() async {
     final ambiente = await showDialog<String>(
@@ -116,6 +117,56 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
     );
     if (confirmar == false && mounted) {
       // placeholder — funcionalidade em breve
+    }
+  }
+
+  Future<void> _limparDadosTeste() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Cores.surface,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Limpar dados de teste?',
+            style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+        content: Text(
+          'Remove todos os placares, restaura os times das eliminatórias para os placeholders, '
+          'limpa a classificação, resultados especiais e zera as pontuações de todos os usuários.\n\n'
+          'Os palpites dos usuários são preservados.',
+          style: GoogleFonts.hankenGrotesk(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('CANCELAR',
+                style: GoogleFonts.anybody(color: Cores.onSurfaceVariant)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFBA1A1A)),
+            child: Text('LIMPAR TUDO',
+                style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+
+    setState(() => _limpandoTeste = true);
+    try {
+      final fn = FirebaseFunctions.instanceFor(region: 'southamerica-east1');
+      final result = await fn.httpsCallable('limparDadosTeste').call();
+      final jogos = result.data['jogosResetados'];
+      final usuarios = result.data['usuariosZerados'];
+      if (mounted) {
+        mostrarMensagem(
+            context, 'Limpeza concluída: $jogos jogos e $usuarios usuários resetados.');
+      }
+    } catch (e) {
+      if (mounted) mostrarMensagem(context, 'Erro: $e');
+    } finally {
+      if (mounted) setState(() => _limpandoTeste = false);
     }
   }
 
@@ -227,6 +278,16 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
                 'Em breve: recalcula pontuação com base na classificação real da fase de grupos.',
             carregando: _recalculandoCopa,
             onTap: _recalcularCopa,
+          ),
+          const SizedBox(height: 12),
+          _CardOpcao(
+            icone: Icons.cleaning_services_rounded,
+            corIcone: const Color(0xFFBA1A1A),
+            titulo: 'Limpar Dados de Teste',
+            descricao:
+                'Reseta placares, times eliminatórias, classificação e pontuações. Palpites são preservados.',
+            carregando: _limpandoTeste,
+            onTap: _limparDadosTeste,
           ),
           const SizedBox(height: 12),
           _CardOpcao(

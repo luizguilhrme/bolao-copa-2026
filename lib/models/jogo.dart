@@ -12,6 +12,8 @@ class Jogo {
   final String ground;
   int? placar1;
   int? placar2;
+  // Preenchido pelo admin em eliminatórias com empate após 90min (prorrogação/pênaltis)
+  String? vencedor;
 
   Jogo({
     required this.id,
@@ -25,6 +27,7 @@ class Jogo {
     required this.ground,
     this.placar1,
     this.placar2,
+    this.vencedor,
   });
 
   // fromJson original — continua funcionando para ler o jogos.json local
@@ -41,6 +44,7 @@ class Jogo {
       ground: json['ground'],
       placar1: json['placar1'],
       placar2: json['placar2'],
+      // vencedor não existe no JSON local; só no Firestore para eliminatórias
     );
   }
 
@@ -94,6 +98,7 @@ class Jogo {
       'ground': ground,
       'placar1': placar1,
       'placar2': placar2,
+      'vencedor': vencedor,
     };
   }
 
@@ -112,6 +117,7 @@ class Jogo {
       ground: map['ground'] as String,
       placar1: map['placar1'] as int?,
       placar2: map['placar2'] as int?,
+      vencedor: map['vencedor'] as String?,
     );
   }
 }

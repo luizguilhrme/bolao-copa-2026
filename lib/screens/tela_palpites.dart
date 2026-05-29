@@ -153,6 +153,9 @@ class _TelaPalpitesState extends State<TelaPalpites> {
     final resultados = <_ItemResultado>[];
 
     for (final jogo in _todosJogos) {
+      // Pular jogos cujos times ainda não foram definidos (fase mata-mata)
+      if (ehPlaceholder(jogo.team1) || ehPlaceholder(jogo.team2)) continue;
+
       final cutoff =
       jogo.dataHora.toLocal().subtract(const Duration(minutes: 5));
 

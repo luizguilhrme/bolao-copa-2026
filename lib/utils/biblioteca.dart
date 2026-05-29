@@ -325,6 +325,14 @@ const kTimesCopa2026 = [
   'England', 'Croatia', 'Ghana', 'Panama',
 ];
 
+/// Retorna true se o nome do time ainda é um placeholder (confronto não definido).
+/// Exemplos: "1A", "2B", "3°", "Vencedor 73", "Perdedor 101".
+bool ehPlaceholder(String team) =>
+    RegExp(r'^[12][A-L]$').hasMatch(team) ||
+    team.contains('°') ||
+    team.startsWith('Vencedor ') ||
+    team.startsWith('Perdedor ');
+
 /// Retorna a sigla de 3 letras correspondente ao nome completo do país.
 /// Para times não mapeados, usa as 3 primeiras letras do nome em maiúsculo
 /// como fallback — ex: "Vencedor 73" → "VEN".
