@@ -170,21 +170,29 @@ class _TelaPalpitesState extends State<TelaPalpites> {
   Future<void> _carregar() async {
     setState(() => _carregando = true);
     try {
+      // Carrega dados essenciais em paralelo
       final results = await Future.wait([
         JogoService().buscarTodos(),
         PalpiteService().buscarTodosPorUsuario(_uid),
         UsuarioService().buscarPorUid(_uid),
         GrupoService().buscarGruposDoUsuarioOnce(_uid),
-        PalpiteCopaService().buscarPorUid(_uid),
       ]);
-      _todosJogos  = results[0] as List<Jogo>;
+      _todosJogos = results[0] as List<Jogo>;
       final palpites = results[1] as List<Palpite>;
-      _criadoEm    = (results[2] as Usuario?)?.criadoEm;
-      _meusGrupos  = results[3] as List<Grupo>;
-      _palpitesCopa = results[4] as Map<String, Map<String, String?>>;
+      _criadoEm   = (results[2] as Usuario?)?.criadoEm;
+      _meusGrupos = results[3] as List<Grupo>;
       _palpitesMap = {for (final p in palpites) p.jogoId: p};
+
+      // Palpites Copa carregados separadamente — um erro de permissão aqui
+      // não deve derrubar o carregamento dos jogos e palpites clássicos.
+      try {
+        _palpitesCopa = await PalpiteCopaService().buscarPorUid(_uid);
+      } catch (_) {
+        _palpitesCopa = {};
+      }
+
       _reclassificar(preservarDatasVisiveis: false);
-    } catch (_) {
+    } catch (e) {
       setState(() => _carregando = false);
     }
   }
