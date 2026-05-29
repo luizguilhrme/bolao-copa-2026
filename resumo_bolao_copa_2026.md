@@ -42,8 +42,9 @@ C:\bolao\
                                  inicializa FCM; deep linking via notificação (onMessageOpenedApp,
                                  getInitialMessage); SnackBar com botão VER em foreground
       tela_home.dart          ← jogos de hoje (Firestore) + bento grid de navegação
-      tela_login.dart         ← login e cadastro com design do Stitch
-      tela_setup_perfil.dart  ← seleção de avatar no primeiro acesso (pós-cadastro)
+      tela_login.dart         ← login e cadastro com design do Stitch; Google Sign-In com account linking
+      tela_setup_perfil.dart  ← seleção de avatar no primeiro acesso (pós-cadastro);
+                                 nome pré-preenchido com displayName do Google
       tela_perfil.dart        ← exibe/edita nome e avatar; alterar senha; excluir conta
       tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
       tela_palpites.dart      ← duas abas: Próximos (com palpites) e Resultados
@@ -232,6 +233,7 @@ firebase_auth: ^5.3.1
 cloud_firestore: ^5.4.4
 cloud_functions: ^5.1.0
 firebase_messaging: ^15.1.0
+google_sign_in: ^6.2.1
 country_flags: ^4.1.2
 google_fonts: ^6.2.1
 intl: ^0.19.0
@@ -239,7 +241,7 @@ intl: ^0.19.0
 
 ### Serviços ativados no Firebase Console
 - **Firestore Database** — regras de produção ativas (ver abaixo)
-- **Authentication** — provedor E-mail/senha ativado
+- **Authentication** — provedores ativos: E-mail/senha e Google Sign-In
 
 ### Regras do Firestore
 ```
@@ -383,11 +385,14 @@ Cores dos badges de pontuação (usadas no diálogo de regras e nos cards de res
 - Erros do Firebase Auth traduzidos para português
 - Cadastro: cria conta no Auth + perfil no Firestore via `UsuarioService`
 - Navegação por Enter: Enter no e-mail move o foco para a senha; Enter na senha submete o formulário
+- Botão "Continuar com Google" com logo desenhado via `CustomPainter` (sem asset externo)
+- Account linking: se o e-mail Google já existe com senha, exibe `_DialogVincularConta` que faz login com senha e chama `linkWithCredential`
 
 ### `tela_setup_perfil.dart` — implementada
 - Exibida após cadastro, antes de entrar no app
 - Seleção de avatar obrigatória (grid de jogadores)
 - Salva `avatar` no Firestore via `UsuarioService.atualizarAvatar`
+- Nome pré-preenchido com `user.displayName` (Google) quando disponível
 
 ### `tela_home.dart` — implementada
 - Carrossel de jogos do dia (Firestore) com chip AO VIVO

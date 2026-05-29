@@ -27,8 +27,15 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
   @override
   void initState() {
     super.initState();
+    // Usuários que entram pelo Google já têm displayName preenchido.
+    // Para e-mail/senha, usamos a parte antes do @ como sugestão inicial.
+    final nomeGoogle = widget.user.displayName;
     final email = widget.user.email ?? '';
-    _nomeController = TextEditingController(text: email.split('@').first);
+    _nomeController = TextEditingController(
+      text: (nomeGoogle != null && nomeGoogle.isNotEmpty)
+          ? nomeGoogle
+          : email.split('@').first,
+    );
   }
 
   @override

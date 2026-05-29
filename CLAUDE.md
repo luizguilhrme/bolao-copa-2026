@@ -102,9 +102,11 @@ C:\bolao\
                                  seção ADMIN com 4 itens separados
       tela_home.dart          ← jogos de hoje (Firestore) + bento grid de navegação;
                                  card "PALPITES ESPECIAIS" navega para TelaPalpitesEspeciais
-      tela_login.dart         ← login e cadastro com design do Stitch; ícone de olho na senha
+      tela_login.dart         ← login e cadastro com design do Stitch; ícone de olho na senha;
+                                 botão "Continuar com Google" com account linking automático
       tela_setup_perfil.dart  ← ordem: Nome → Grupos (criar/entrar opcional) → Avatar;
-                                 dialogs de criar/entrar grupo inline
+                                 dialogs de criar/entrar grupo inline;
+                                 nome pré-preenchido com displayName do Google quando disponível
       tela_perfil.dart        ← exibe/edita nome e avatar; alterar senha; excluir conta
       tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
       tela_palpites.dart      ← duas abas: Próximos (com palpites) e Resultados
@@ -312,6 +314,7 @@ firebase_auth: ^5.3.1
 cloud_firestore: ^5.4.4
 cloud_functions: ^5.1.0
 firebase_messaging: ^15.1.0
+google_sign_in: ^6.2.1
 country_flags: ^4.1.2
 google_fonts: ^6.2.1
 intl: ^0.19.0
@@ -319,7 +322,7 @@ intl: ^0.19.0
 
 ### Serviços ativados no Firebase Console
 - **Firestore Database** — regras de produção ativas (ver abaixo)
-- **Authentication** — provedor E-mail/senha ativado
+- **Authentication** — provedores ativos: E-mail/senha e Google Sign-In
 
 ### Regras do Firestore
 ```
@@ -486,12 +489,15 @@ Cores dos badges de pontuação:
 - Erros do Firebase Auth traduzidos para português
 - Ícone de olho no campo de senha para mostrar/ocultar (`_senhaVisivel` bool + `suffixIcon`)
 - Navegação por Enter: Enter no e-mail move o foco para a senha; Enter na senha submete o formulário
+- Botão "Continuar com Google" com logo desenhado via `CustomPainter` (sem asset externo)
+- Account linking: se o e-mail Google já existe com senha, exibe `_DialogVincularConta` que faz login com senha e chama `linkWithCredential`
 
 ### `tela_setup_perfil.dart` — implementada
 - Exibida após cadastro, antes de entrar no app
 - Ordem dos campos: Nome → **Grupos (opcional)** → Escolha de avatar
 - Seção Grupos: dois botões ("Criar grupo" / "Entrar com código") com dialogs inline (`_DialogCriarGrupoSetup`, `_DialogEntrarGrupoSetup`, `_DialogCodigoSetup`)
 - Seleção de avatar obrigatória (grid de jogadores)
+- Nome pré-preenchido com `user.displayName` (Google) quando disponível
 - Salva perfil no Firestore via `UsuarioService.criarPerfil`
 
 ### `tela_home.dart` — implementada
