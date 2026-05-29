@@ -104,7 +104,9 @@ C:\bolao\
       jogo.dart               ← model com fromJson, fromMap, toMap e getter dataHora; campo vencedor (String?, nullable)
       usuario.dart            ← model com fromMap, toMap e copyWith; inclui campos de palpites especiais
       palpite.dart            ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
-      grupo.dart              ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
+      grupo.dart              ← model com fromMap, toMap; criadoEm é DateTime? (nullable);
+                                 campo regra: 'classico' | 'copa' (default 'classico')
+      palpite_copa.dart       ← (sem model dedicado; estrutura gerenciada pelo PalpiteCopaService)
     screens/
       menu_principal.dart     ← shell com drawer lateral, AppBar, IndexedStack, NavigationBar;
                                  inicializa FCM; deep linking via notificação (onMessageOpenedApp,
@@ -119,17 +121,22 @@ C:\bolao\
                                  nome pré-preenchido com displayName do Google quando disponível
       tela_perfil.dart        ← exibe/edita nome e avatar; alterar senha; excluir conta
       tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
-      tela_palpites.dart      ← duas abas: Próximos (com palpites) e Resultados
+      tela_palpites.dart      ← abas MODO CLÁSSICO / MODO COPA (exibidas quando usuário tem grupos
+                                 dos dois modos E Fase de Grupos ativa); sub-abas Próximos / Encerrados;
+                                 MODO COPA: form de palpite de classificação (12 grupos, FAB SALVAR);
+                                 detecção automática de fim da Fase de Grupos (jogos 73+ com times reais)
       tela_palpites_especiais.dart ← tela azul com 6 palpites especiais do usuário:
                                  campeão, artilheiro, melhor goleiro, melhor jogador,
                                  equipe mais goleadora, equipe menos vazada;
                                  bottom sheet com busca para seleção de times;
                                  bloqueado após início do primeiro jogo
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos
-      tela_grupos.dart        ← lista grupos do usuário; criar grupo (código único); entrar com código; sair;
-                                 tocar no card abre dialog de detalhes com membros e avatares;
+      tela_grupos.dart        ← lista grupos do usuário; criar grupo (código único) com seleção
+                                 de modo CLÁSSICO/COPA; entrar com código; sair;
+                                 card exibe chip de modo; dialog de detalhes com membros e avatares;
                                  ícone de lápis (só dono) edita o nome do grupo
-      tela_tabela.dart        ← lista os 104 jogos com seções e tabs; RefreshIndicator (pull-to-refresh)
+      tela_tabela.dart        ← lista os 104 jogos com seções e tabs "Próximos"/"Encerrados";
+                                 RefreshIndicator (pull-to-refresh)
       tela_admin_placares.dart ← inserção de placares com abas Próximos/Encerrados;
                                  sem regra de 105 min; campos vazios no CORRIGIR limpam o placar
                                  (dialog de confirmação) e devolvem o jogo para Próximos;
@@ -156,13 +163,17 @@ C:\bolao\
       palpite_service.dart    ← salvar, buscarPorJogo, buscarTodosPorUsuario,
                                  buscarPorUsuario, buscarTodosPorJogo
       notificacoes_service.dart ← inicializar FCM, salvar token, buscar/atualizar prefs
-      grupo_service.dart      ← criarGrupo, entrarComCodigo, buscarGruposDoUsuario,
+      grupo_service.dart      ← criarGrupo({regra}), entrarComCodigo, buscarGruposDoUsuario (stream),
+                                 buscarGruposDoUsuarioOnce (Future, evita emissão vazia do cache),
                                  sairDoGrupo, editarNome, buscarMembros;
                                  código único gerado com loop anti-colisão
+      palpite_copa_service.dart ← buscarPorUid, salvar; coleção palpites_copa/{uid} com
+                                 palpites de classificação de grupos do MODO COPA
     utils/
       cores.dart              ← constantes de cores (Cores.verdePrincipal etc)
       biblioteca.dart         ← funções utilitárias top-level (flagDe, siglaDe,
-                                 formatarData, mostrarMensagem, ehPlaceholder)
+                                 formatarData, mostrarMensagem, ehPlaceholder,
+                                 calcularPontos, multiplicadorFase, calcularPontosComFase)
       avatares.dart           ← lista kJogadores + widgets WidgetAvatar e CardAvatar
   web/
     index.html              ← meta tags PWA iOS (apple-mobile-web-app-capable etc)
@@ -524,27 +535,34 @@ Cores dos badges de pontuação:
 - Salva via `UsuarioService.salvarPalpitesEspeciais()`
 
 ### `tela_tabela.dart` — implementada
-- Tabs "Próximos" / "Resultados" com `AnimatedContainer`
+- Tabs "Próximos" / "Encerrados" com `AnimatedContainer`
 - Chips horizontais roláveis: **Todos** + **A** a **L**; eliminatórias só em "Todos"
 - `CustomScrollView` com slivers agrupados por seção
 - **RefreshIndicator** (pull-to-refresh) — rebusca todos os jogos via `JogoService().buscarTodos()`
 - Tocar em jogo encerrado abre dialog com todos os palpites registrados
 
 ### `tela_palpites.dart` — implementada
-- Duas abas: **Próximos** e **Resultados**
-- `Future.wait` carrega jogos + palpites + perfil em paralelo
+- Abas superiores **MODO CLÁSSICO** / **MODO COPA** em verde (só visíveis quando usuário tem grupos dos dois modos E Fase de Grupos ativa)
+- Sub-abas **Próximos** / **Encerrados** dentro de cada modo
+- MODO CLÁSSICO: exibe jogos da Fase de Grupos (id 1–72) com palpite de placar
+- MODO COPA: formulário de palpite de classificação dos 12 grupos (dropdowns 1º/2º/3º por grupo); FAB quadrado "SALVAR" no canto inferior direito; bloqueado após início do 1º jogo
+- Detecção automática de fim da Fase de Grupos: quando jogos 73+ têm times reais, abas de modo somem e todos os jogos restantes aparecem em único Próximos/Encerrados
+- `Future.wait` carrega jogos + palpites + perfil + grupos em paralelo; palpites Copa carregados separadamente para não bloquear o resto
 - `Timer.periodic(30s)` reclassifica jogos automaticamente
-- Regra −1 pt para ausência de palpite; card vermelho
+- Penalidade −10 pts por ausência de palpite; card vermelho
 - Navegação por Enter entre campos
+- `buscarGruposDoUsuarioOnce()` (query direta ao servidor) evita bug de emissão vazia do cache do Firestore
 
 ### `tela_ranking.dart` — implementada
 - Ranking filtrado por grupo (sem ranking global)
 - Pódio top 3 + lista 4º em diante
-- Dialog com histórico de palpites do usuário
+- Dialog com histórico de palpites do usuário (só MODO CLÁSSICO por enquanto)
+- Usa `calcularPontosComFase` com multiplicador de fase correto
 
 ### `tela_grupos.dart` — implementada
 - `StreamBuilder` reativo em grupos do usuário
-- Criar, entrar com código, sair, editar nome (só dono)
+- Criar grupo com seleção de modo CLÁSSICO/COPA; entrar com código; sair; editar nome (só dono)
+- Card exibe chip colorido do modo (verde=CLÁSSICO, azul=COPA)
 - Dialog de detalhes com membros e avatares
 
 ### `tela_admin_placares.dart` — implementada
@@ -755,8 +773,7 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 
 ## Próximos passos
 
-1. Aguardar aprovação da revisão do Google.
-2. Após aprovação: retomar a faixa no Play Console para liberar aos testadores.
-3. Implementar `regra` no model de grupo (Reg. Clássica vs Reg. Copa) e pontuação por grupo.
-4. Implementar tela de palpites Regra Copa para o usuário (classificação de grupos).
-5. Atualizar tela de ranking para ler pontuação por grupo quando regra copa estiver ativa.
+1. Implementar cálculo e exibição de pontos do MODO COPA (aba Encerrados mostra classificação real vs palpite).
+2. Atualizar tela de ranking para exibir pontuação separada por modo (CLÁSSICO vs COPA).
+3. Implementar recalcularTudo para MODO COPA (Cloud Function).
+4. Publicar nova versão na Play Store quando o conjunto de features estiver estável.
