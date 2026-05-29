@@ -1,6 +1,7 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/auth_service.dart';
 import '../utils/cores.dart';
 
 class TelaLogin extends StatefulWidget {
@@ -16,6 +17,7 @@ class _TelaLoginState extends State<TelaLogin> {
   final _senhaFocus = FocusNode();
   bool _modoLogin = true;
   bool _carregando = false;
+  bool _carregandoGoogle = false;
   bool _senhaVisivel = false;
   String? _erro;
 
@@ -38,7 +40,7 @@ class _TelaLoginState extends State<TelaLogin> {
       } on FirebaseAuthException catch (e) {
         setState(() => _erro = _traduzirErro(e.code));
       } finally {
-        setState(() => _carregando = false);
+        if (mounted) setState(() => _carregando = false);
       }
     } else {
       setState(() { _carregando = true; _erro = null; });
@@ -55,6 +57,32 @@ class _TelaLoginState extends State<TelaLogin> {
       }
     }
   }
+
+  Future<void> _entrarComGoogle() async {
+    setState(() { _carregandoGoogle = true; _erro = null; });
+    try {
+      await AuthService().entrarComGoogle();
+      // authStateChanges dispara → main.dart roteia automaticamente
+    } on ContaJaExisteException catch (e) {
+      // E-mail já existe com senha → mostra dialog de linking
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _DialogVincularConta(
+          email: e.email,
+          credencialGoogle: e.credencial,
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      setState(() => _erro = _traduzirErro(e.code));
+    } catch (_) {
+      // Usuário cancelou a janela do Google — não exibe erro
+    } finally {
+      if (mounted) setState(() => _carregandoGoogle = false);
+    }
+  }
+
   String _traduzirErro(String codigo) {
     switch (codigo) {
       case 'user-not-found':
@@ -67,6 +95,8 @@ class _TelaLoginState extends State<TelaLogin> {
         return 'A senha precisa ter pelo menos 6 caracteres.';
       case 'invalid-email':
         return 'E-mail inválido.';
+      case 'invalid-credential':
+        return 'E-mail ou senha incorretos.';
       default:
         return 'Ocorreu um erro. Tente novamente.';
     }
@@ -80,7 +110,7 @@ class _TelaLoginState extends State<TelaLogin> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 448), // max-w-md
+            constraints: const BoxConstraints(maxWidth: 448),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
@@ -99,6 +129,10 @@ class _TelaLoginState extends State<TelaLogin> {
               children: [
                 _buildCabecalho(),
                 const SizedBox(height: 24),
+                _buildBotaoGoogle(),
+                const SizedBox(height: 20),
+                _buildDivisor(),
+                const SizedBox(height: 20),
                 _buildFormulario(),
                 const SizedBox(height: 16),
                 _buildRodape(),
@@ -110,19 +144,11 @@ class _TelaLoginState extends State<TelaLogin> {
     );
   }
 
-  // Seção do topo: ícone, título COPA 2026 e subtítulo
   Widget _buildCabecalho() {
     return Column(
       children: [
-        // Ícone de bola preenchido em verde
-        Icon(
-          Icons.sports_soccer,
-          color: Cores.verdePrincipal,
-          size: 48,
-        ),
+        Icon(Icons.sports_soccer, color: Cores.verdePrincipal, size: 48),
         const SizedBox(height: 8),
-
-        // "COPA 2026" com a fonte Anybody, italic, bold, maiúsculo
         Text(
           'COPA 2026',
           style: GoogleFonts.anybody(
@@ -135,9 +161,6 @@ class _TelaLoginState extends State<TelaLogin> {
           ),
         ),
         const SizedBox(height: 8),
-
-        // Título "Bem-vindo de volta!" ou "Crie sua conta"
-        // AnimatedSwitcher anima a troca de texto quando o modo muda
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
           child: Text(
@@ -151,7 +174,6 @@ class _TelaLoginState extends State<TelaLogin> {
           ),
         ),
         const SizedBox(height: 4),
-
         Text(
           _modoLogin
               ? 'Faça login para continuar suas previsões.'
@@ -165,12 +187,68 @@ class _TelaLoginState extends State<TelaLogin> {
     );
   }
 
-  // Formulário com os dois campos e o botão
+  // Botão "Continuar com Google" — design oficial do Google:
+  // fundo branco, borda cinza, logo "G" colorido, texto escuro
+  Widget _buildBotaoGoogle() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: (_carregando || _carregandoGoogle) ? null : _entrarComGoogle,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: Colors.white,
+          side: const BorderSide(color: Color(0xFFDADCE0), width: 1.5),
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: _carregandoGoogle
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _LogoGoogle(tamanho: 20),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Continuar com Google',
+                    style: GoogleFonts.hankenGrotesk(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF3C4043),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  // Divisor "ou" entre o botão Google e o formulário de e-mail
+  Widget _buildDivisor() {
+    return Row(
+      children: [
+        const Expanded(child: Divider(color: Color(0xFFDADCE0))),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            'ou',
+            style: GoogleFonts.hankenGrotesk(
+              fontSize: 13,
+              color: Cores.onSurfaceVariant,
+            ),
+          ),
+        ),
+        const Expanded(child: Divider(color: Color(0xFFDADCE0))),
+      ],
+    );
+  }
+
   Widget _buildFormulario() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Label "EMAIL" em caps
         _buildLabel('Email'),
         const SizedBox(height: 4),
         _buildCampoTexto(
@@ -182,15 +260,13 @@ class _TelaLoginState extends State<TelaLogin> {
           onSubmitted: (_) => FocusScope.of(context).requestFocus(_senhaFocus),
         ),
         const SizedBox(height: 16),
-
-        // Label "SENHA" com link "Esqueceu?" à direita (só no modo login)
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             _buildLabel('Senha'),
             if (_modoLogin)
               TextButton(
-                onPressed: () {}, // implementar depois
+                onPressed: () {},
                 style: TextButton.styleFrom(
                   padding: EdgeInsets.zero,
                   minimumSize: Size.zero,
@@ -223,41 +299,29 @@ class _TelaLoginState extends State<TelaLogin> {
             onPressed: () => setState(() => _senhaVisivel = !_senhaVisivel),
           ),
         ),
-
-        // Mensagem de erro (aparece só quando há erro)
         if (_erro != null) ...[
           const SizedBox(height: 8),
           Text(
             _erro!,
-            style: GoogleFonts.hankenGrotesk(
-              fontSize: 14,
-              color: Colors.red,
-            ),
+            style: GoogleFonts.hankenGrotesk(fontSize: 14, color: Colors.red),
           ),
         ],
         const SizedBox(height: 20),
-
-        // Botão principal verde com ícone de seta
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
-            onPressed: _carregando ? null : _entrar,
+            onPressed: (_carregando || _carregandoGoogle) ? null : _entrar,
             style: FilledButton.styleFrom(
               backgroundColor: Cores.verdePrincipal,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             icon: _carregando
                 ? const SizedBox(
-              height: 18,
-              width: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
                 : const Icon(Icons.arrow_forward, color: Colors.white),
             label: Text(
               _modoLogin ? 'Entrar' : 'Criar conta',
@@ -273,17 +337,13 @@ class _TelaLoginState extends State<TelaLogin> {
     );
   }
 
-  // Link "Não tem conta? Cadastre-se" / "Já tem conta? Entre"
   Widget _buildRodape() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
           _modoLogin ? 'Não tem uma conta? ' : 'Já tem conta? ',
-          style: GoogleFonts.hankenGrotesk(
-            fontSize: 14,
-            color: Cores.onSurfaceVariant,
-          ),
+          style: GoogleFonts.hankenGrotesk(fontSize: 14, color: Cores.onSurfaceVariant),
         ),
         GestureDetector(
           onTap: () => setState(() {
@@ -303,7 +363,6 @@ class _TelaLoginState extends State<TelaLogin> {
     );
   }
 
-  // Label reutilizável no estilo "CAPS SMALL"
   Widget _buildLabel(String texto) {
     return Text(
       texto.toUpperCase(),
@@ -334,10 +393,7 @@ class _TelaLoginState extends State<TelaLogin> {
       focusNode: focusNode,
       textInputAction: textInputAction,
       onSubmitted: onSubmitted,
-      style: GoogleFonts.hankenGrotesk(
-        fontSize: 16,
-        color: Cores.onSurface,
-      ),
+      style: GoogleFonts.hankenGrotesk(fontSize: 16, color: Cores.onSurface),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
@@ -358,6 +414,202 @@ class _TelaLoginState extends State<TelaLogin> {
           borderSide: BorderSide(color: Cores.azulTerciario, width: 2),
         ),
       ),
+    );
+  }
+}
+
+// ─── Logo do Google renderizado com CustomPainter ────────────────────────────
+// Desenha o "G" colorido do Google sem precisar de arquivo de imagem externo.
+
+class _LogoGoogle extends StatelessWidget {
+  const _LogoGoogle({required this.tamanho});
+  final double tamanho;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size(tamanho, tamanho),
+      painter: _GoogleGPainter(),
+    );
+  }
+}
+
+class _GoogleGPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = size.width / 2;
+    final paint = Paint()..style = PaintingStyle.stroke..strokeWidth = size.width * 0.12;
+
+    // Arco azul (225° → 90°)
+    paint.color = const Color(0xFF4285F4);
+    canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy), radius: r * 0.88),
+        _rad(225), _rad(225), false, paint);
+
+    // Arco vermelho (315° → 45°) — deixamos o azul cobrir o início
+    paint.color = const Color(0xFFEA4335);
+    canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy), radius: r * 0.88),
+        _rad(315), _rad(90), false, paint);
+
+    // Arco amarelo (45° → 45°)
+    paint.color = const Color(0xFFFBBC05);
+    canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy), radius: r * 0.88),
+        _rad(45), _rad(45), false, paint);
+
+    // Arco verde (90° → 135°)
+    paint.color = const Color(0xFF34A853);
+    canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy), radius: r * 0.88),
+        _rad(90), _rad(135), false, paint);
+
+    // Barra horizontal azul (o traço do "G")
+    paint
+      ..style = PaintingStyle.fill
+      ..color = const Color(0xFF4285F4);
+    canvas.drawRect(
+      Rect.fromLTWH(cx, cy - size.height * 0.07, r * 0.88, size.height * 0.14),
+      paint,
+    );
+  }
+
+  double _rad(double graus) => graus * 3.14159265 / 180;
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ─── Dialog de account linking ────────────────────────────────────────────────
+// Exibido quando o e-mail do Google já tem uma conta com senha no Firebase.
+// Pede a senha para fazer login com ela e então vincula o Google à mesma conta.
+
+class _DialogVincularConta extends StatefulWidget {
+  const _DialogVincularConta({
+    required this.email,
+    required this.credencialGoogle,
+  });
+  final String email;
+  final Object credencialGoogle; // AuthCredential
+
+  @override
+  State<_DialogVincularConta> createState() => _DialogVincularContaState();
+}
+
+class _DialogVincularContaState extends State<_DialogVincularConta> {
+  final _senhaController = TextEditingController();
+  bool _carregando = false;
+  bool _senhaVisivel = false;
+  String? _erro;
+
+  @override
+  void dispose() {
+    _senhaController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _vincular() async {
+    final senha = _senhaController.text.trim();
+    if (senha.isEmpty) {
+      setState(() => _erro = 'Digite sua senha.');
+      return;
+    }
+    setState(() { _carregando = true; _erro = null; });
+    try {
+      await AuthService().vincularGoogle(
+        email: widget.email,
+        senha: senha,
+        credencialGoogle: widget.credencialGoogle as dynamic,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      // authStateChanges dispara → main.dart roteia automaticamente
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _erro = e.code == 'wrong-password' || e.code == 'invalid-credential'
+            ? 'Senha incorreta.'
+            : 'Erro ao conectar as contas. Tente novamente.';
+        _carregando = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Cores.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        'Conectar conta Google',
+        style: GoogleFonts.anybody(fontWeight: FontWeight.w700, fontSize: 18),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'O e-mail ${widget.email} já tem uma conta com senha neste app.',
+            style: GoogleFonts.hankenGrotesk(fontSize: 14, height: 1.4),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Digite sua senha para conectar o Google à sua conta existente. Depois disso você poderá entrar das duas formas.',
+            style: GoogleFonts.hankenGrotesk(
+              fontSize: 13,
+              color: Cores.onSurfaceVariant,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _senhaController,
+            obscureText: !_senhaVisivel,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _vincular(),
+            style: GoogleFonts.hankenGrotesk(fontSize: 15),
+            decoration: InputDecoration(
+              labelText: 'Senha',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Cores.azulTerciario, width: 2),
+              ),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _senhaVisivel ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  color: Cores.onSurfaceVariant,
+                ),
+                onPressed: () => setState(() => _senhaVisivel = !_senhaVisivel),
+              ),
+            ),
+          ),
+          if (_erro != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _erro!,
+              style: GoogleFonts.hankenGrotesk(fontSize: 13, color: Colors.red),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _carregando ? null : () => Navigator.of(context).pop(),
+          child: Text('CANCELAR',
+              style: GoogleFonts.anybody(color: Cores.onSurfaceVariant)),
+        ),
+        FilledButton(
+          onPressed: _carregando ? null : _vincular,
+          style: FilledButton.styleFrom(backgroundColor: Cores.azulTerciario),
+          child: _carregando
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : Text('CONECTAR',
+                  style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+        ),
+      ],
     );
   }
 }
