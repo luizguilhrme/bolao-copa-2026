@@ -752,8 +752,9 @@ class _DialogCriarGrupoState extends State<_DialogCriarGrupo> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: Cores.surface,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      // Padding mínimo na área dos botões: só o suficiente para respirar
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
       title: Text('Criar grupo',
           style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
       content: SingleChildScrollView(
@@ -781,22 +782,28 @@ class _DialogCriarGrupoState extends State<_DialogCriarGrupo> {
                     fontSize: 12, fontWeight: FontWeight.w700,
                     color: Cores.onSurfaceVariant, letterSpacing: 0.5)),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                _ChipRegra(
-                  label: 'CLÁSSICO',
-                  descricao: 'Palpite no placar',
-                  selecionado: _regra == 'classico',
-                  onTap: () => setState(() => _regra = 'classico'),
-                ),
-                const SizedBox(width: 8),
-                _ChipRegra(
-                  label: 'COPA',
-                  descricao: 'Palpite na classificação',
-                  selecionado: _regra == 'copa',
-                  onTap: () => setState(() => _regra = 'copa'),
-                ),
-              ],
+            // IntrinsicHeight garante que ambos os chips tenham a mesma
+            // altura, independente do tamanho do texto de descrição.
+            // CrossAxisAlignment.stretch faz cada chip ocupar toda a altura.
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ChipRegra(
+                    label: 'CLÁSSICO',
+                    descricao: 'Palpite no placar',
+                    selecionado: _regra == 'classico',
+                    onTap: () => setState(() => _regra = 'classico'),
+                  ),
+                  const SizedBox(width: 8),
+                  _ChipRegra(
+                    label: 'COPA',
+                    descricao: 'Palpite na classificação',
+                    selecionado: _regra == 'copa',
+                    onTap: () => setState(() => _regra = 'copa'),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

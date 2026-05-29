@@ -1669,69 +1669,51 @@ class _AbaCopaProximosState extends State<_AbaCopaProximos> {
       );
     }
 
-    return Column(
+    return Stack(
       children: [
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-            children: [
-              Text(
-                'Palpite na classificação de cada grupo.',
-                style: GoogleFonts.hankenGrotesk(
-                    fontSize: 15, color: Cores.onSurfaceVariant),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '1º e 2º classificam. 3º apenas nos 8 grupos que avançam.',
-                style: GoogleFonts.hankenGrotesk(
-                    fontSize: 13, color: Cores.onSurfaceVariant),
-              ),
-              const SizedBox(height: 20),
-              ...widget.timesPorGrupo.entries.map((entry) =>
-                  _CardGrupoClassificacao(
-                    grupo: entry.key,
-                    times: entry.value,
-                    palpite: _local[entry.key] ?? {},
-                    onChanged: (pos, time) {
-                      setState(() {
-                        _local[entry.key] ??= {};
-                        _local[entry.key]![pos] = time;
-                        // Limpa seleções conflitantes
-                        for (final outraPos in ['primeiro', 'segundo', 'terceiro']) {
-                          if (outraPos != pos && _local[entry.key]![outraPos] == time) {
-                            _local[entry.key]![outraPos] = null;
-                          }
-                        }
-                      });
-                    },
-                  )),
-            ],
-          ),
-        ),
-        // Botão Salvar fixo no rodapé
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-          decoration: const BoxDecoration(
-            color: Cores.surface,
-            border: Border(top: BorderSide(color: Cores.outlineVariant)),
-          ),
-          child: SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _salvando ? null : _salvar,
-              style: FilledButton.styleFrom(
-                backgroundColor: Cores.azulTerciario,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              icon: _salvando
-                  ? const SizedBox(width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.save_rounded, color: Colors.white),
-              label: Text('SALVAR PALPITES',
-                  style: GoogleFonts.anybody(
-                      fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+        ListView(
+          // Padding inferior para o conteúdo não ficar atrás do botão flutuante
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+          children: [
+            Text(
+              'Palpite na classificação de cada grupo.',
+              style: GoogleFonts.hankenGrotesk(
+                  fontSize: 15, color: Cores.onSurfaceVariant),
             ),
+            const SizedBox(height: 4),
+            Text(
+              '1º e 2º classificam. 3º apenas nos 8 grupos que avançam.',
+              style: GoogleFonts.hankenGrotesk(
+                  fontSize: 13, color: Cores.onSurfaceVariant),
+            ),
+            const SizedBox(height: 20),
+            ...widget.timesPorGrupo.entries.map((entry) =>
+                _CardGrupoClassificacao(
+                  grupo: entry.key,
+                  times: entry.value,
+                  palpite: _local[entry.key] ?? {},
+                  onChanged: (pos, time) {
+                    setState(() {
+                      _local[entry.key] ??= {};
+                      _local[entry.key]![pos] = time;
+                      for (final outraPos in ['primeiro', 'segundo', 'terceiro']) {
+                        if (outraPos != pos && _local[entry.key]![outraPos] == time) {
+                          _local[entry.key]![outraPos] = null;
+                        }
+                      }
+                    });
+                  },
+                )),
+          ],
+        ),
+
+        // Botão flutuante quadrado — canto inferior direito
+        Positioned(
+          right: 20,
+          bottom: 24,
+          child: _BotaoSalvarCopa(
+            salvando: _salvando,
+            onTap: _salvando ? null : _salvar,
           ),
         ),
       ],
@@ -1885,6 +1867,64 @@ class _DropdownClassificacao extends StatelessWidget {
         )),
       ],
       onChanged: onChanged,
+    );
+  }
+}
+
+// ─── Botão salvar Copa (FAB quadrado) ────────────────────────────────────────
+
+class _BotaoSalvarCopa extends StatelessWidget {
+  const _BotaoSalvarCopa({required this.salvando, required this.onTap});
+  final bool salvando;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Ink(
+        decoration: BoxDecoration(
+          color: onTap == null ? Cores.outlineVariant : Cores.azulTerciario,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: SizedBox(
+            width: 72,
+            height: 72,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                salvando
+                    ? const SizedBox(
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.5, color: Colors.white))
+                    : const Icon(Icons.save_rounded,
+                        color: Colors.white, size: 26),
+                const SizedBox(height: 4),
+                Text(
+                  'SALVAR',
+                  style: GoogleFonts.anybody(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
