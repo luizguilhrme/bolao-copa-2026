@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 
 class TelaAjuda extends StatelessWidget {
@@ -35,24 +36,24 @@ class TelaAjuda extends StatelessWidget {
           _SecaoHeader(icone: Icons.emoji_events_rounded, titulo: 'PONTUAÇÃO'),
           const SizedBox(height: 16),
           const _ItemPontuacao(
-            pontos: 10,
+            pontos: 100,
             descricao: 'Placar exato',
             exemplo: 'Palpitou 2×1  →  jogo foi 2×1',
           ),
           const _ItemPontuacao(
-            pontos: 7,
+            pontos: 70,
             descricao: 'Vencedor + saldo de gols',
             exemplo: 'Palpitou 2×0  →  jogo foi 3×1',
           ),
           const _ItemPontuacao(
-            pontos: 5,
-            descricao: 'Apenas o vencedor',
-            exemplo: 'Palpitou 2×0  →  jogo foi 1×0',
+            pontos: 60,
+            descricao: 'Vencedor + gols exatos de um time',
+            exemplo: 'Palpitou 3×1  →  jogo foi 2×1',
           ),
           const _ItemPontuacao(
-            pontos: 4,
-            descricao: 'Empate (sem placar exato)',
-            exemplo: 'Palpitou 1×1  →  jogo foi 0×0',
+            pontos: 50,
+            descricao: 'Só o vencedor / empate certo',
+            exemplo: 'Palpitou 2×0  →  jogo foi 1×0',
           ),
           const _ItemPontuacao(
             pontos: 0,
@@ -60,8 +61,8 @@ class TelaAjuda extends StatelessWidget {
             exemplo: 'Nenhum critério acima',
           ),
           const _ItemPontuacao(
-            pontos: -1,
-            descricao: 'Esqueceu de palpitar',
+            pontos: -10,
+            descricao: 'Não palpitou',
             exemplo: 'Sem palpite registrado antes do jogo',
           ),
           const SizedBox(height: 32),
@@ -150,16 +151,8 @@ class _ItemPontuacao extends StatelessWidget {
   final String descricao;
   final String exemplo;
 
-  Color get _corBadge {
-    if (pontos == -1) return const Color(0xFFE53935);
-    if (pontos == 10) return const Color(0xFF006D32);
-    if (pontos == 7) return const Color(0xFF1B7F3A);
-    if (pontos == 5) return const Color(0xFF4CAF50);
-    if (pontos == 4) return const Color(0xFFFCD400);
-    return const Color(0xFFBBCBB9);
-  }
-
-  Color get _corTexto => pontos == 4 ? Cores.onSecondaryContainer : Colors.white;
+  Color get _corBadge => corPontuacao(pontos);
+  Color get _corTexto => Colors.white;
 
   @override
   Widget build(BuildContext context) {

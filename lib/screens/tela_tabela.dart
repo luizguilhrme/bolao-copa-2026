@@ -967,17 +967,8 @@ class _BadgePontos extends StatelessWidget {
   const _BadgePontos(this.pontos);
   final int pontos;
 
-  Color get _cor {
-    switch (pontos) {
-      case 10: return const Color(0xFF006D32);
-      case 7:  return const Color(0xFF1B7F3A);
-      case 5:  return const Color(0xFF4CAF50);
-      case 4:  return const Color(0xFFFCD400);
-      default: return const Color(0xFFBBCBB9);
-    }
-  }
-
-  Color get _corTexto => pontos == 4 ? Cores.onSecondaryContainer : Colors.white;
+  Color get _cor => corPontuacao(pontos);
+  Color get _corTexto => Colors.white;
 
   @override
   Widget build(BuildContext context) {

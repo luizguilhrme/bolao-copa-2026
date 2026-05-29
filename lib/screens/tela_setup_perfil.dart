@@ -321,7 +321,7 @@ class _DialogCriarGrupoSetupState extends State<_DialogCriarGrupoSetup> {
         SnackBar(
           content: Text('Erro ao criar grupo: $e',
               style: GoogleFonts.hankenGrotesk()),
-          backgroundColor: const Color(0xFFBA1A1A),
+          backgroundColor: Cores.error,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -569,7 +569,7 @@ class _DialogEntrarGrupoSetupState extends State<_DialogEntrarGrupoSetup> {
       if (!mounted) return;
       Navigator.of(context).pop();
       final msg = grupo == null ? 'Código não encontrado.' : 'Você entrou no grupo "${grupo.nome}"!';
-      final cor = grupo == null ? const Color(0xFFBA1A1A) : Cores.verdePrincipal;
+      final cor = grupo == null ? Cores.error : Cores.verdePrincipal;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(msg, style: GoogleFonts.hankenGrotesk()),
@@ -587,7 +587,7 @@ class _DialogEntrarGrupoSetupState extends State<_DialogEntrarGrupoSetup> {
             jaMembro ? 'Você já é membro deste grupo.' : 'Erro ao entrar: $e',
             style: GoogleFonts.hankenGrotesk(),
           ),
-          backgroundColor: jaMembro ? Cores.azulTerciario : const Color(0xFFBA1A1A),
+          backgroundColor: jaMembro ? Cores.azulTerciario : Cores.error,
           behavior: SnackBarBehavior.floating,
         ),
       );

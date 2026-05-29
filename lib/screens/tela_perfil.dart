@@ -281,7 +281,7 @@ class _PerfilConteudoState extends State<_PerfilConteudo> {
               _ItemAcao(
                 icone: Icons.delete_outline_rounded,
                 label: 'Excluir conta',
-                cor: const Color(0xFFBA1A1A),
+                cor: Cores.error,
                 onTap: () => _excluirConta(context),
                 ultimo: true,
               ),
@@ -659,12 +659,12 @@ class _DialogExcluirContaState extends State<_DialogExcluirConta> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
         children: [
-          const Icon(Icons.warning_rounded, color: Color(0xFFBA1A1A), size: 22),
+          const Icon(Icons.warning_rounded, color: Cores.error, size: 22),
           const SizedBox(width: 8),
           Text(
             'Excluir conta',
             style: GoogleFonts.anybody(
-                fontWeight: FontWeight.w800, color: const Color(0xFFBA1A1A)),
+                fontWeight: FontWeight.w800, color: Cores.error),
           ),
         ],
       ),
@@ -692,7 +692,7 @@ class _DialogExcluirContaState extends State<_DialogExcluirConta> {
               style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant)),
         ),
         FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: const Color(0xFFBA1A1A)),
+          style: FilledButton.styleFrom(backgroundColor: Cores.error),
           onPressed: _excluindo ? null : _excluir,
           child: _excluindo
               ? const SizedBox(

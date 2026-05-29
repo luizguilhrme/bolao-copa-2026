@@ -401,13 +401,13 @@ class _DrawerNav extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: ListTile(
               leading: const Icon(Icons.logout_rounded,
-                  color: Color(0xFFBA1A1A)),
+                  color: Cores.error),
               title: Text(
                 'Sair',
                 style: GoogleFonts.hankenGrotesk(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFFBA1A1A),
+                  color: Cores.error,
                 ),
               ),
               shape: RoundedRectangleBorder(
