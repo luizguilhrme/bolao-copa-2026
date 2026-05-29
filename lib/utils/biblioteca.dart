@@ -285,15 +285,40 @@ class Bandeira extends StatelessWidget {
   }
 }
 
-/// Calcula os pontos de um palpite dado o resultado real.
+/// Calcula os pontos BASE de um palpite (sem multiplicador de fase).
+/// Espelha _calcularPontos em tela_palpites.dart.
 int calcularPontos(int p1, int p2, int r1, int r2) {
-  if (p1 == r1 && p2 == r2) return 10;
+  if (p1 == r1 && p2 == r2) return 100;
   final sP = p1 - p2, sR = r1 - r2;
   final vP = p1.compareTo(p2), vR = r1.compareTo(r2);
-  if (sP == sR && vP == vR) return 7;
-  if (vP == vR && vR != 0) return 5;
-  if (vP == 0 && vR == 0) return 4;
-  return 0;
+  if (vP != vR) return 0;
+  if (vP != 0) {
+    if (sP == sR) return 70;
+    if (p1 == r1 || p2 == r2) return 60;
+    return 50;
+  }
+  return 50;
+}
+
+/// Multiplicador de pontuação por fase eliminatória.
+/// Espelha _multiplicador em tela_palpites.dart.
+double multiplicadorFase(String round) {
+  switch (round) {
+    case '16 avos de Final':    return 1.2;
+    case 'Oitavas de Final':    return 1.4;
+    case 'Quartas de Final':    return 1.6;
+    case 'Semifinal':
+    case 'Disputa de 3º Lugar': return 1.8;
+    case 'Final':               return 2.0;
+    default:                    return 1.0;
+  }
+}
+
+/// Pontos reais considerando a fase do jogo.
+int calcularPontosComFase(int p1, int p2, int r1, int r2, String round) {
+  final base = calcularPontos(p1, p2, r1, r2);
+  if (base == 0) return 0;
+  return (base * multiplicadorFase(round)).round();
 }
 
 /// Lista dos 48 times da Copa 2026 (nomes em inglês, mesmos usados no Firestore).

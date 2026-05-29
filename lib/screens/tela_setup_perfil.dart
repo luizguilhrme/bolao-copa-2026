@@ -294,6 +294,7 @@ class _DialogCriarGrupoSetup extends StatefulWidget {
 class _DialogCriarGrupoSetupState extends State<_DialogCriarGrupoSetup> {
   final _controller = TextEditingController();
   bool _carregando = false;
+  String _regra = 'classico';
 
   @override
   void dispose() {
@@ -306,7 +307,7 @@ class _DialogCriarGrupoSetupState extends State<_DialogCriarGrupoSetup> {
     if (nome.isEmpty) return;
     setState(() => _carregando = true);
     try {
-      final grupo = await GrupoService().criarGrupo(nome, widget.uid);
+      final grupo = await GrupoService().criarGrupo(nome, widget.uid, regra: _regra);
       if (!mounted) return;
       Navigator.of(context).pop();
       showDialog(
@@ -334,19 +335,48 @@ class _DialogCriarGrupoSetupState extends State<_DialogCriarGrupoSetup> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Text('Criar grupo',
           style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        textCapitalization: TextCapitalization.words,
-        decoration: InputDecoration(
-          labelText: 'Nome do grupo',
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Cores.verdePrincipal, width: 2),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              labelText: 'Nome do grupo',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Cores.verdePrincipal, width: 2),
+              ),
+            ),
+            onSubmitted: (_) => _criar(),
           ),
-        ),
-        onSubmitted: (_) => _criar(),
+          const SizedBox(height: 16),
+          Text('Modo de pontuação',
+              style: GoogleFonts.hankenGrotesk(
+                  fontSize: 12, fontWeight: FontWeight.w700,
+                  color: Cores.onSurfaceVariant, letterSpacing: 0.5)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _ChipRegraSetup(
+                label: 'CLÁSSICO',
+                descricao: 'Palpite no placar',
+                selecionado: _regra == 'classico',
+                onTap: () => setState(() => _regra = 'classico'),
+              ),
+              const SizedBox(width: 8),
+              _ChipRegraSetup(
+                label: 'COPA',
+                descricao: 'Palpite na classificação',
+                selecionado: _regra == 'copa',
+                onTap: () => setState(() => _regra = 'copa'),
+              ),
+            ],
+          ),
+        ],
       ),
       actions: [
         TextButton(
@@ -368,6 +398,55 @@ class _DialogCriarGrupoSetupState extends State<_DialogCriarGrupoSetup> {
                   style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
         ),
       ],
+    );
+  }
+}
+
+class _ChipRegraSetup extends StatelessWidget {
+  const _ChipRegraSetup({
+    required this.label,
+    required this.descricao,
+    required this.selecionado,
+    required this.onTap,
+  });
+  final String label;
+  final String descricao;
+  final bool selecionado;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cor = label == 'COPA' ? Cores.azulTerciario : Cores.verdePrincipal;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: selecionado ? cor.withValues(alpha: 0.1) : Cores.surfaceContainer,
+            border: Border.all(
+              color: selecionado ? cor : Cores.outlineVariant,
+              width: selecionado ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: GoogleFonts.anybody(
+                    fontSize: 12, fontWeight: FontWeight.w800,
+                    color: selecionado ? cor : Cores.onSurfaceVariant,
+                  )),
+              Text(descricao,
+                  style: GoogleFonts.hankenGrotesk(
+                    fontSize: 11, color: Cores.onSurfaceVariant,
+                  )),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
