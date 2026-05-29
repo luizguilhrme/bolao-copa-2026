@@ -239,6 +239,29 @@ class _CardGrupo extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              // Chip de regra (CLÁSSICO / COPA)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: grupo.regra == 'copa'
+                      ? Cores.azulTerciario.withValues(alpha: 0.12)
+                      : Cores.verdePrincipal.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: grupo.regra == 'copa'
+                        ? Cores.azulTerciario.withValues(alpha: 0.4)
+                        : Cores.verdePrincipal.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  grupo.regra == 'copa' ? 'COPA' : 'CLÁSSICO',
+                  style: GoogleFonts.anybody(
+                    fontSize: 10, fontWeight: FontWeight.w700,
+                    color: grupo.regra == 'copa' ? Cores.azulTerciario : Cores.verdePrincipal,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
               if (isDono) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -690,6 +713,7 @@ class _DialogCriarGrupo extends StatefulWidget {
 class _DialogCriarGrupoState extends State<_DialogCriarGrupo> {
   final _controller = TextEditingController();
   bool _carregando = false;
+  String _regra = 'classico'; // 'classico' ou 'copa'
 
   @override
   void dispose() {
@@ -702,7 +726,7 @@ class _DialogCriarGrupoState extends State<_DialogCriarGrupo> {
     if (nome.isEmpty) return;
     setState(() => _carregando = true);
     try {
-      final grupo = await GrupoService().criarGrupo(nome, widget.uid);
+      final grupo = await GrupoService().criarGrupo(nome, widget.uid, regra: _regra);
       if (!mounted) return;
       Navigator.of(context).pop();
       showDialog(
@@ -732,20 +756,48 @@ class _DialogCriarGrupoState extends State<_DialogCriarGrupo> {
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Text('Criar grupo',
           style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        textCapitalization: TextCapitalization.words,
-        decoration: InputDecoration(
-          labelText: 'Nome do grupo',
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10)),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Cores.verdePrincipal, width: 2),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              labelText: 'Nome do grupo',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Cores.verdePrincipal, width: 2),
+              ),
+            ),
+            onSubmitted: (_) => _criar(),
           ),
-        ),
-        onSubmitted: (_) => _criar(),
+          const SizedBox(height: 16),
+          Text('Modo de pontuação',
+              style: GoogleFonts.hankenGrotesk(
+                  fontSize: 12, fontWeight: FontWeight.w700,
+                  color: Cores.onSurfaceVariant, letterSpacing: 0.5)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _ChipRegra(
+                label: 'CLÁSSICO',
+                descricao: 'Palpite no placar',
+                selecionado: _regra == 'classico',
+                onTap: () => setState(() => _regra = 'classico'),
+              ),
+              const SizedBox(width: 8),
+              _ChipRegra(
+                label: 'COPA',
+                descricao: 'Palpite na classificação',
+                selecionado: _regra == 'copa',
+                onTap: () => setState(() => _regra = 'copa'),
+              ),
+            ],
+          ),
+        ],
       ),
       actions: [
         TextButton(
@@ -989,6 +1041,57 @@ class _DialogEntrarGrupoState extends State<_DialogEntrarGrupo> {
                   style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
         ),
       ],
+    );
+  }
+}
+
+// ─── Chip de seleção de regra (CLÁSSICO / COPA) ───────────────────────────────
+
+class _ChipRegra extends StatelessWidget {
+  const _ChipRegra({
+    required this.label,
+    required this.descricao,
+    required this.selecionado,
+    required this.onTap,
+  });
+  final String label;
+  final String descricao;
+  final bool selecionado;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cor = label == 'COPA' ? Cores.azulTerciario : Cores.verdePrincipal;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: selecionado ? cor.withValues(alpha: 0.1) : Cores.surfaceContainer,
+            border: Border.all(
+              color: selecionado ? cor : Cores.outlineVariant,
+              width: selecionado ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: GoogleFonts.anybody(
+                    fontSize: 12, fontWeight: FontWeight.w800,
+                    color: selecionado ? cor : Cores.onSurfaceVariant,
+                  )),
+              Text(descricao,
+                  style: GoogleFonts.hankenGrotesk(
+                    fontSize: 11, color: Cores.onSurfaceVariant,
+                  )),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

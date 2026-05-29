@@ -113,7 +113,7 @@ class _TelaTabelaState extends State<TelaTabela> {
         child: Row(
           children: [
             _buildBotaoTab(indice: 0, rotulo: 'Próximos'),
-            _buildBotaoTab(indice: 1, rotulo: 'Resultados'),
+            _buildBotaoTab(indice: 1, rotulo: 'Encerrados'),
           ],
         ),
       ),

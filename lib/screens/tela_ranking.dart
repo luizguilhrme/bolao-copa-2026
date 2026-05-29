@@ -706,7 +706,7 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
           return _ItemPalpiteUsuario(
             jogo: j,
             palpite: p,
-            pontos: calcularPontos(p.palpite1, p.palpite2, j.placar1!, j.placar2!),
+            pontos: calcularPontosComFase(p.palpite1, p.palpite2, j.placar1!, j.placar2!, j.round),
           );
         })
         .toList()

@@ -17,7 +17,7 @@ class GrupoService {
           ..sort((a, b) => a.criadoEm.compareTo(b.criadoEm)));
   }
 
-  Future<Grupo> criarGrupo(String nome, String donoUid) async {
+  Future<Grupo> criarGrupo(String nome, String donoUid, {String regra = 'classico'}) async {
     final codigo = await _gerarCodigoUnico();
     final ref = _colecao.doc();
     final grupo = Grupo(
@@ -27,6 +27,7 @@ class GrupoService {
       donoUid: donoUid,
       membros: [donoUid],
       criadoEm: DateTime.now(),
+      regra: regra,
     );
     await ref.set(grupo.toMap());
     return grupo;

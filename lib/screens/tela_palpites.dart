@@ -3,10 +3,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/grupo.dart';
 import '../models/jogo.dart';
 import '../models/palpite.dart';
 import '../models/usuario.dart';
+import '../services/grupo_service.dart';
 import '../services/jogo_service.dart';
+import '../services/palpite_copa_service.dart';
 import '../services/palpite_service.dart';
 import '../services/usuario_service.dart';
 import '../utils/biblioteca.dart';
@@ -133,12 +136,16 @@ class _TelaPalpitesState extends State<TelaPalpites> {
   // Dados brutos — carregados uma vez do Firestore
   List<Jogo> _todosJogos = [];
   Map<int, Palpite> _palpitesMap = {};
+  List<Grupo> _meusGrupos = [];
+  Map<String, Map<String, String?>> _palpitesCopa = {};
 
   // Dados derivados — atualizados pelo timer
   Map<String, List<Jogo>> _gruposProximos = {};
-  List<String> _todasAsDatas = [];
   int _datasVisiveis = 1;
   List<_ItemResultado> _resultados = [];
+
+  // Modo ativo: 'classico' ou 'copa' (só relevante quando ambos os modos presentes)
+  bool _modoClassico = true;
 
   DateTime? _criadoEm;
   Timer? _timer;
@@ -167,10 +174,14 @@ class _TelaPalpitesState extends State<TelaPalpites> {
         JogoService().buscarTodos(),
         PalpiteService().buscarTodosPorUsuario(_uid),
         UsuarioService().buscarPorUid(_uid),
+        GrupoService().buscarGruposDoUsuario(_uid).first,
+        PalpiteCopaService().buscarPorUid(_uid),
       ]);
-      _todosJogos = results[0] as List<Jogo>;
+      _todosJogos  = results[0] as List<Jogo>;
       final palpites = results[1] as List<Palpite>;
-      _criadoEm = (results[2] as Usuario?)?.criadoEm;
+      _criadoEm    = (results[2] as Usuario?)?.criadoEm;
+      _meusGrupos  = results[3] as List<Grupo>;
+      _palpitesCopa = results[4] as Map<String, Map<String, String?>>;
       _palpitesMap = {for (final p in palpites) p.jogoId: p};
       _reclassificar(preservarDatasVisiveis: false);
     } catch (_) {
@@ -228,7 +239,6 @@ class _TelaPalpitesState extends State<TelaPalpites> {
 
     setState(() {
       _gruposProximos = proximos;
-      _todasAsDatas = datas;
       _datasVisiveis = preservarDatasVisiveis
           ? _datasVisiveis.clamp(1, datas.isEmpty ? 1 : datas.length)
           : 1;
@@ -240,13 +250,77 @@ class _TelaPalpitesState extends State<TelaPalpites> {
   // Chamado pelo card quando o usuário salva um palpite novo
   void _onPalpiteSalvo(Palpite palpite) {
     _palpitesMap[palpite.jogoId] = palpite;
-    // O jogo continua em Próximos — não precisa reclassificar
   }
 
-  bool get _temMaisProximos => _datasVisiveis < _todasAsDatas.length;
+  // Salva palpites do MODO COPA e atualiza estado local
+  Future<void> _salvarPalpitesCopa(Map<String, Map<String, String?>> palpites) async {
+    await PalpiteCopaService().salvar(_uid, palpites);
+    if (mounted) setState(() => _palpitesCopa = palpites);
+  }
 
-  List<String> get _datasAtivas =>
-      _todasAsDatas.take(_datasVisiveis).toList();
+  // ─── Computed properties ────────────────────────────────────────────────────
+
+  /// True se os 16 avos de final já têm times definidos (Fase de Grupos encerrada).
+  bool get _faseGruposEncerrada {
+    final j73 = _todosJogos.where((j) => j.id == 73).firstOrNull;
+    return j73 != null && !ehPlaceholder(j73.team1);
+  }
+
+  bool get _temModoClassico =>
+      _meusGrupos.isEmpty || _meusGrupos.any((g) => g.regra == 'classico');
+
+  bool get _temModoCopa => _meusGrupos.any((g) => g.regra == 'copa');
+
+  /// True se o usuário tem ambos os modos E a Fase de Grupos ainda está ativa.
+  bool get _mostrarAbas => _temModoClassico && _temModoCopa && !_faseGruposEncerrada;
+
+  /// Palpites Copa bloqueados 5 min antes do primeiro jogo.
+  bool get _copaBloqueada {
+    if (_todosJogos.isEmpty) return false;
+    final primeiro = _todosJogos.reduce((a, b) => a.id < b.id ? a : b);
+    return DateTime.now().isAfter(
+        primeiro.dataHora.toLocal().subtract(const Duration(minutes: 5)));
+  }
+
+  /// Times de cada grupo extraídos dos jogos da Fase de Grupos.
+  Map<String, List<String>> get _timesPorGrupo {
+    final mapa = <String, Set<String>>{};
+    for (final jogo in _todosJogos) {
+      if (jogo.group == null) continue;
+      final letra = jogo.group!.replaceAll('Grupo ', '');
+      mapa.putIfAbsent(letra, () => <String>{})
+        ..add(jogo.team1)
+        ..add(jogo.team2);
+    }
+    const ordem = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+    return {for (final k in ordem) if (mapa.containsKey(k)) k: mapa[k]!.toList()};
+  }
+
+  // Próximos filtrados por fase (Fase de Grupos ou Knockout)
+  Map<String, List<Jogo>> get _proximosFiltrados {
+    final result = <String, List<Jogo>>{};
+    for (final entry in _gruposProximos.entries) {
+      final filtrado = _faseGruposEncerrada
+          ? entry.value.where((j) => j.group == null).toList()
+          : entry.value.where((j) => j.group != null).toList();
+      if (filtrado.isNotEmpty) result[entry.key] = filtrado;
+    }
+    return result;
+  }
+
+  // Encerrados filtrados por fase
+  List<_ItemResultado> get _encerradosFiltrados => _faseGruposEncerrada
+      ? _resultados
+      : _resultados.where((r) => r.jogo.group != null).toList();
+
+  bool get _temMaisProximos =>
+      !_faseGruposEncerrada && _datasVisiveis < _proximosFiltrados.length;
+
+  List<String> get _datasAtivas {
+    final datas = _proximosFiltrados.keys.toList();
+    if (_faseGruposEncerrada) return datas;
+    return datas.take(_datasVisiveis).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -254,39 +328,70 @@ class _TelaPalpitesState extends State<TelaPalpites> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    // Determina se o conteúdo atual é Copa (bet form) ou Clássico (jogos)
+    final bool exibirCopa = !_faseGruposEncerrada &&
+        ((_mostrarAbas && !_modoClassico) ||
+         (_temModoCopa && !_temModoClassico));
+
+    final int countProximos = exibirCopa ? 0 : _proximosFiltrados.values
+        .fold(0, (s, l) => s + l.length);
+    final int countEncerrados = exibirCopa ? 0 : _encerradosFiltrados.length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Seletor de abas
+        // Seletor de MODO (só quando ambos os modos presentes e fase de grupos ativa)
+        if (_mostrarAbas)
+          _SeletorModo(
+            modoClassico: _modoClassico,
+            onChanged: (v) => setState(() {
+              _modoClassico = v;
+              _abaProximos = true; // reset sub-aba ao trocar de modo
+            }),
+          ),
+
+        // Sub-abas Próximos / Encerrados
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
           child: _SeletorAbas(
             abaProximos: _abaProximos,
-            countProximos: _gruposProximos.values
-                .fold(0, (s, l) => s + l.length),
-            countResultados: _resultados.length,
+            countProximos: countProximos,
+            countEncerrados: countEncerrados,
+            modoCopa: exibirCopa,
             onChanged: (v) => setState(() => _abaProximos = v),
           ),
         ),
 
-        // Conteúdo
+        // Conteúdo principal
         Expanded(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            child: _abaProximos
-                ? _AbaProximos(
-              key: const ValueKey('proximos'),
-              grupos: _gruposProximos,
-              datasAtivas: _datasAtivas,
-              palpitesMap: _palpitesMap,
-              temMais: _temMaisProximos,
-              onVerMais: () => setState(() => _datasVisiveis++),
-              onPalpiteSalvo: _onPalpiteSalvo,
-            )
-                : _AbaResultados(
-              key: const ValueKey('resultados'),
-              resultados: _resultados,
-            ),
+            child: exibirCopa
+                ? (_abaProximos
+                    ? _AbaCopaProximos(
+                        key: const ValueKey('copa-proximos'),
+                        timesPorGrupo: _timesPorGrupo,
+                        palpites: _palpitesCopa,
+                        bloqueado: _copaBloqueada,
+                        onSalvar: _salvarPalpitesCopa,
+                      )
+                    : const _AbaCopaEncerrados(
+                        key: ValueKey('copa-encerrados'),
+                      ))
+                : (_abaProximos
+                    ? _AbaProximos(
+                        key: const ValueKey('proximos'),
+                        grupos: _proximosFiltrados,
+                        datasAtivas: _datasAtivas,
+                        palpitesMap: _palpitesMap,
+                        temMais: _temMaisProximos,
+                        onVerMais: () => setState(() => _datasVisiveis++),
+                        onPalpiteSalvo: _onPalpiteSalvo,
+                      )
+                    : _AbaEncerrados(
+                        key: const ValueKey('encerrados'),
+                        resultados: _encerradosFiltrados,
+                      )),
           ),
         ),
       ],
@@ -300,14 +405,17 @@ class _SeletorAbas extends StatelessWidget {
   const _SeletorAbas({
     required this.abaProximos,
     required this.countProximos,
-    required this.countResultados,
+    required this.countEncerrados,
     required this.onChanged,
+    this.modoCopa = false,
   });
 
   final bool abaProximos;
   final int countProximos;
-  final int countResultados;
+  final int countEncerrados;
   final void Function(bool) onChanged;
+  /// No MODO COPA Próximos não há lista de jogos — esconde o contador
+  final bool modoCopa;
 
   @override
   Widget build(BuildContext context) {
@@ -316,7 +424,7 @@ class _SeletorAbas extends StatelessWidget {
         Expanded(
           child: _BotaoAba(
             label: 'Próximos',
-            count: countProximos,
+            count: modoCopa ? 0 : countProximos,
             ativo: abaProximos,
             onTap: () => onChanged(true),
           ),
@@ -324,8 +432,8 @@ class _SeletorAbas extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: _BotaoAba(
-            label: 'Resultados',
-            count: countResultados,
+            label: 'Encerrados',
+            count: modoCopa ? 0 : countEncerrados,
             ativo: !abaProximos,
             onTap: () => onChanged(false),
           ),
@@ -549,10 +657,10 @@ class _AbaProximosState extends State<_AbaProximos> {
   }
 }
 
-// ─── Aba Resultados ───────────────────────────────────────────────────────────
+// ─── Aba Encerrados ───────────────────────────────────────────────────────────
 
-class _AbaResultados extends StatelessWidget {
-  const _AbaResultados({super.key, required this.resultados});
+class _AbaEncerrados extends StatelessWidget {
+  const _AbaEncerrados({super.key, required this.resultados});
 
   final List<_ItemResultado> resultados;
 
@@ -1413,6 +1521,394 @@ class _FimDaLista extends StatelessWidget {
         ),
         const Expanded(child: Divider(color: Cores.outlineVariant)),
       ],
+    );
+  }
+}
+
+// ─── Seletor de modo (MODO CLÁSSICO / MODO COPA) ─────────────────────────────
+
+class _SeletorModo extends StatelessWidget {
+  const _SeletorModo({required this.modoClassico, required this.onChanged});
+  final bool modoClassico;
+  final void Function(bool) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Cores.verdePrincipal,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Row(
+        children: [
+          _BotaoModo(
+            label: 'MODO CLÁSSICO',
+            ativo: modoClassico,
+            onTap: () => onChanged(true),
+          ),
+          const SizedBox(width: 8),
+          _BotaoModo(
+            label: 'MODO COPA',
+            ativo: !modoClassico,
+            onTap: () => onChanged(false),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BotaoModo extends StatelessWidget {
+  const _BotaoModo({required this.label, required this.ativo, required this.onTap});
+  final String label;
+  final bool ativo;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: ativo ? Colors.white : Colors.transparent,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.anybody(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+            color: ativo ? Cores.verdePrincipal : Colors.white70,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Aba Copa — Próximos (formulário de palpite de classificação) ─────────────
+
+class _AbaCopaProximos extends StatefulWidget {
+  const _AbaCopaProximos({
+    super.key,
+    required this.timesPorGrupo,
+    required this.palpites,
+    required this.bloqueado,
+    required this.onSalvar,
+  });
+
+  final Map<String, List<String>> timesPorGrupo;
+  final Map<String, Map<String, String?>> palpites;
+  final bool bloqueado;
+  final Future<void> Function(Map<String, Map<String, String?>>) onSalvar;
+
+  @override
+  State<_AbaCopaProximos> createState() => _AbaCopaProximosState();
+}
+
+class _AbaCopaProximosState extends State<_AbaCopaProximos> {
+  late Map<String, Map<String, String?>> _local;
+  bool _salvando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Copia palpites existentes para edição local
+    _local = {
+      for (final k in widget.timesPorGrupo.keys)
+        k: Map<String, String?>.from(widget.palpites[k] ?? {
+          'primeiro': null, 'segundo': null, 'terceiro': null,
+        }),
+    };
+  }
+
+  Future<void> _salvar() async {
+    setState(() => _salvando = true);
+    try {
+      await widget.onSalvar(_local);
+      if (!mounted) return;
+      mostrarMensagem(context, 'Palpites salvos com sucesso!');
+    } catch (_) {
+      if (!mounted) return;
+      mostrarMensagem(context, 'Erro ao salvar. Tente novamente.');
+    } finally {
+      if (mounted) setState(() => _salvando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.bloqueado) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_outline_rounded, size: 56, color: Cores.azulTerciario),
+              const SizedBox(height: 16),
+              Text('Palpites encerrados',
+                  style: GoogleFonts.anybody(fontSize: 20, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Text('O primeiro jogo da Copa já começou.\nOs palpites de classificação estão bloqueados.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.hankenGrotesk(
+                      fontSize: 14, color: Cores.onSurfaceVariant, height: 1.5)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+            children: [
+              Text(
+                'Palpite na classificação de cada grupo.',
+                style: GoogleFonts.hankenGrotesk(
+                    fontSize: 15, color: Cores.onSurfaceVariant),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '1º e 2º classificam. 3º apenas nos 8 grupos que avançam.',
+                style: GoogleFonts.hankenGrotesk(
+                    fontSize: 13, color: Cores.onSurfaceVariant),
+              ),
+              const SizedBox(height: 20),
+              ...widget.timesPorGrupo.entries.map((entry) =>
+                  _CardGrupoClassificacao(
+                    grupo: entry.key,
+                    times: entry.value,
+                    palpite: _local[entry.key] ?? {},
+                    onChanged: (pos, time) {
+                      setState(() {
+                        _local[entry.key] ??= {};
+                        _local[entry.key]![pos] = time;
+                        // Limpa seleções conflitantes
+                        for (final outraPos in ['primeiro', 'segundo', 'terceiro']) {
+                          if (outraPos != pos && _local[entry.key]![outraPos] == time) {
+                            _local[entry.key]![outraPos] = null;
+                          }
+                        }
+                      });
+                    },
+                  )),
+            ],
+          ),
+        ),
+        // Botão Salvar fixo no rodapé
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          decoration: const BoxDecoration(
+            color: Cores.surface,
+            border: Border(top: BorderSide(color: Cores.outlineVariant)),
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _salvando ? null : _salvar,
+              style: FilledButton.styleFrom(
+                backgroundColor: Cores.azulTerciario,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: _salvando
+                  ? const SizedBox(width: 18, height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.save_rounded, color: Colors.white),
+              label: Text('SALVAR PALPITES',
+                  style: GoogleFonts.anybody(
+                      fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Card de um grupo na tela de palpite Copa
+class _CardGrupoClassificacao extends StatelessWidget {
+  const _CardGrupoClassificacao({
+    required this.grupo,
+    required this.times,
+    required this.palpite,
+    required this.onChanged,
+  });
+
+  final String grupo;
+  final List<String> times;
+  final Map<String, String?> palpite;
+  final void Function(String posicao, String? time) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Cores.surface,
+        border: Border.all(color: Cores.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Cabeçalho
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: const BoxDecoration(
+              color: Cores.surfaceContainer,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
+            ),
+            child: Text(
+              'GRUPO $grupo',
+              style: GoogleFonts.anybody(
+                  fontSize: 13, fontWeight: FontWeight.w800,
+                  color: Cores.verdePrincipal, letterSpacing: 0.5),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                _DropdownClassificacao(
+                  label: '🥇 1º Colocado',
+                  times: times,
+                  selecionado: palpite['primeiro'],
+                  excluir: {palpite['segundo'], palpite['terceiro']},
+                  onChanged: (v) => onChanged('primeiro', v),
+                ),
+                const SizedBox(height: 8),
+                _DropdownClassificacao(
+                  label: '🥈 2º Colocado',
+                  times: times,
+                  selecionado: palpite['segundo'],
+                  excluir: {palpite['primeiro'], palpite['terceiro']},
+                  onChanged: (v) => onChanged('segundo', v),
+                ),
+                const SizedBox(height: 8),
+                _DropdownClassificacao(
+                  label: '🥉 3º Colocado (opcional)',
+                  times: times,
+                  selecionado: palpite['terceiro'],
+                  excluir: {palpite['primeiro'], palpite['segundo']},
+                  onChanged: (v) => onChanged('terceiro', v),
+                  opcional: true,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DropdownClassificacao extends StatelessWidget {
+  const _DropdownClassificacao({
+    required this.label,
+    required this.times,
+    required this.selecionado,
+    required this.excluir,
+    required this.onChanged,
+    this.opcional = false,
+  });
+
+  final String label;
+  final List<String> times;
+  final String? selecionado;
+  final Set<String?> excluir;
+  final void Function(String?) onChanged;
+  final bool opcional;
+
+  @override
+  Widget build(BuildContext context) {
+    final disponiveis = times.where((t) => !excluir.contains(t) || t == selecionado).toList();
+
+    return DropdownButtonFormField<String>(
+      value: selecionado,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: GoogleFonts.hankenGrotesk(fontSize: 13, color: Cores.onSurfaceVariant),
+        filled: true,
+        fillColor: Cores.surfaceContainer,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Cores.outlineVariant)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Cores.outlineVariant)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Cores.azulTerciario, width: 2)),
+      ),
+      hint: Text(opcional ? 'Não palpitar' : 'Selecionar time',
+          style: GoogleFonts.hankenGrotesk(fontSize: 14, color: Cores.outlineVariant)),
+      isExpanded: true,
+      items: [
+        if (opcional)
+          DropdownMenuItem<String>(value: null,
+              child: Text('Não palpitar',
+                  style: GoogleFonts.hankenGrotesk(fontSize: 14,
+                      color: Cores.onSurfaceVariant))),
+        ...disponiveis.map((t) => DropdownMenuItem<String>(
+          value: t,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: ClipOval(child: Bandeira(t, tamanho: 24)),
+              ),
+              const SizedBox(width: 8),
+              Text(nomePtDe(t),
+                  style: GoogleFonts.hankenGrotesk(
+                      fontSize: 14, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        )),
+      ],
+      onChanged: onChanged,
+    );
+  }
+}
+
+// ─── Aba Copa — Encerrados ────────────────────────────────────────────────────
+
+class _AbaCopaEncerrados extends StatelessWidget {
+  const _AbaCopaEncerrados({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.bar_chart_rounded, size: 64, color: Cores.outlineVariant),
+            const SizedBox(height: 16),
+            Text('Resultados em breve',
+                style: GoogleFonts.anybody(
+                    fontSize: 18, fontWeight: FontWeight.w700, color: Cores.onSurface)),
+            const SizedBox(height: 8),
+            Text(
+              'Quando o admin confirmar a classificação dos grupos, seus pontos do MODO COPA aparecerão aqui.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.hankenGrotesk(
+                  fontSize: 14, color: Cores.onSurfaceVariant, height: 1.5),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
