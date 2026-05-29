@@ -12,7 +12,11 @@ class ContaJaExisteException implements Exception {
 
 class AuthService {
   final _auth = FirebaseAuth.instance;
-  final _googleSignIn = GoogleSignIn();
+  final _googleSignIn = GoogleSignIn(
+    // Client ID web necessário para o Google Sign-In funcionar na versão PWA/browser.
+    // No Android este valor é ignorado — o app usa o google-services.json.
+    clientId: '847953336398-4vsrvm2ldqf2k7daaigssdjq0iacg478.apps.googleusercontent.com',
+  );
 
   /// Abre o seletor de conta Google e autentica no Firebase.
   ///
