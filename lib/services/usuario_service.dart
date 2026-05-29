@@ -62,4 +62,23 @@ class UsuarioService {
       'palpiteArtilheiro': artilheiro,
     });
   }
+
+  Future<void> salvarPalpitesEspeciais({
+    required String uid,
+    required String campeao,
+    required String artilheiro,
+    String? goleiro,
+    String? melhorJogador,
+    String? maisGoleadora,
+    String? menosVazada,
+  }) async {
+    await _colecao.doc(uid).update({
+      'palpiteCampeao': campeao,
+      'palpiteArtilheiro': artilheiro,
+      if (goleiro != null) 'palpiteGoleiro': goleiro,
+      if (melhorJogador != null) 'palpiteMelhorJogador': melhorJogador,
+      if (maisGoleadora != null) 'palpiteMaisGoleadora': maisGoleadora,
+      if (menosVazada != null) 'palpiteMenosVazada': menosVazada,
+    });
+  }
 }

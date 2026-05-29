@@ -10,6 +10,10 @@ class Usuario {
   final String? avatar;
   final String? palpiteCampeao;
   final String? palpiteArtilheiro;
+  final String? palpiteGoleiro;
+  final String? palpiteMelhorJogador;
+  final String? palpiteMaisGoleadora;
+  final String? palpiteMenosVazada;
 
   const Usuario({
     required this.uid,
@@ -20,6 +24,10 @@ class Usuario {
     this.avatar,
     this.palpiteCampeao,
     this.palpiteArtilheiro,
+    this.palpiteGoleiro,
+    this.palpiteMelhorJogador,
+    this.palpiteMaisGoleadora,
+    this.palpiteMenosVazada,
   });
 
   // fromMap é equivalente ao fromJson do Gson —
@@ -34,6 +42,10 @@ class Usuario {
       avatar: map['avatar'] as String?,
       palpiteCampeao: map['palpiteCampeao'] as String?,
       palpiteArtilheiro: map['palpiteArtilheiro'] as String?,
+      palpiteGoleiro: map['palpiteGoleiro'] as String?,
+      palpiteMelhorJogador: map['palpiteMelhorJogador'] as String?,
+      palpiteMaisGoleadora: map['palpiteMaisGoleadora'] as String?,
+      palpiteMenosVazada: map['palpiteMenosVazada'] as String?,
     );
   }
 
