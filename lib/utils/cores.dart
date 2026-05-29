@@ -35,4 +35,16 @@ class Cores {
   // ── Erro ─────────────────────────────────────────────────────────
   static const Color error   = Color(0xFFBA1A1A);
   static const Color onError = Color(0xFFFFFFFF);
+
+  // ── Badges de pontuação (escala 100/70/60/50/0/negativo) ─────────
+  static const Color pontExato          = Color(0xFF006D32); // 100 pts
+  static const Color pontVencedorSaldo  = Color(0xFF1B7F3A); // 70 pts
+  static const Color pontVencedorUmTime = Color(0xFF2E7D52); // 60 pts
+  static const Color pontVencedor       = Color(0xFF4CAF50); // 50 pts
+  static const Color pontZero           = Color(0xFFBBCBB9); // 0 pts
+  static const Color pontNegativo       = Color(0xFFE53935); // negativo
+
+  // ── Pódio ─────────────────────────────────────────────────────────
+  static const Color prata  = Color(0xFFC0C0C0);
+  static const Color bronze = Color(0xFFCD7F32);
 }

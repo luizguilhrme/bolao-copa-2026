@@ -150,7 +150,7 @@ class _TelaAdminCopaState extends State<TelaAdminCopa> {
         SnackBar(
           content: Text(erro),
           behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFFB00020),
+          backgroundColor: Cores.error,
         ),
       );
       return;

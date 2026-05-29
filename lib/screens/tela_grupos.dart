@@ -8,6 +8,7 @@ import '../services/grupo_service.dart';
 import '../utils/avatares.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
+import '../utils/dialogos.dart';
 
 class TelaGrupos extends StatefulWidget {
   const TelaGrupos({super.key});
@@ -66,7 +67,7 @@ class _TelaGruposState extends State<TelaGrupos> {
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text('SAIR',
                 style: GoogleFonts.anybody(
-                    color: const Color(0xFFBA1A1A),
+                    color: Cores.error,
                     fontWeight: FontWeight.w700)),
           ),
         ],
@@ -301,15 +302,8 @@ class _CardGrupo extends StatelessWidget {
                 child: GestureDetector(
                   onTap: () {
                     Clipboard.setData(ClipboardData(text: grupo.codigo));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Código copiado!',
-                            style: GoogleFonts.hankenGrotesk()),
-                        backgroundColor: Cores.verdePrincipal,
-                        behavior: SnackBarBehavior.floating,
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
+                    mostrarSnackBarSucesso(context, 'Código copiado!',
+                        duration: const Duration(seconds: 2));
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -364,12 +358,12 @@ class _CardGrupo extends StatelessWidget {
             child: TextButton.icon(
               onPressed: onSair,
               icon: const Icon(Icons.logout_rounded,
-                  size: 16, color: Color(0xFFBA1A1A)),
+                  size: 16, color: Cores.error),
               label: Text(
                 'Sair do grupo',
                 style: GoogleFonts.hankenGrotesk(
                   fontSize: 13,
-                  color: const Color(0xFFBA1A1A),
+                  color: Cores.error,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -427,13 +421,8 @@ class _DialogDetalhesGrupo extends StatelessWidget {
                 GestureDetector(
                   onTap: () {
                     Clipboard.setData(ClipboardData(text: grupo.codigo));
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text('Código copiado!',
-                          style: GoogleFonts.hankenGrotesk()),
-                      backgroundColor: Cores.verdePrincipal,
-                      behavior: SnackBarBehavior.floating,
-                      duration: const Duration(seconds: 2),
-                    ));
+                    mostrarSnackBarSucesso(context, 'Código copiado!',
+                        duration: const Duration(seconds: 2));
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -595,12 +584,7 @@ class _DialogEditarNomeState extends State<_DialogEditarNome> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _salvando = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Erro ao salvar: $e',
-            style: GoogleFonts.hankenGrotesk()),
-        backgroundColor: const Color(0xFFBA1A1A),
-        behavior: SnackBarBehavior.floating,
-      ));
+      mostrarSnackBarErro(context, 'Erro ao salvar: $e');
     }
   }
 
@@ -737,15 +721,8 @@ class _DialogCriarGrupoState extends State<_DialogCriarGrupo> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _carregando = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao criar grupo: $e',
-              style: GoogleFonts.hankenGrotesk()),
-          backgroundColor: const Color(0xFFBA1A1A),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 8),
-        ),
-      );
+      mostrarSnackBarErro(context, 'Erro ao criar grupo: $e',
+          duration: const Duration(seconds: 8));
     }
   }
 
@@ -873,15 +850,8 @@ class _DialogCodigoGerado extends StatelessWidget {
           GestureDetector(
             onTap: () {
               Clipboard.setData(ClipboardData(text: grupo.codigo));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Código copiado!',
-                      style: GoogleFonts.hankenGrotesk()),
-                  backgroundColor: Cores.verdePrincipal,
-                  behavior: SnackBarBehavior.floating,
-                  duration: const Duration(seconds: 2),
-                ),
-              );
+              mostrarSnackBarSucesso(context, 'Código copiado!',
+                  duration: const Duration(seconds: 2));
             },
             child: Container(
               width: double.infinity,
@@ -968,47 +938,19 @@ class _DialogEntrarGrupoState extends State<_DialogEntrarGrupo> {
       if (!mounted) return;
       Navigator.of(context).pop();
       if (grupo == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Código não encontrado.',
-                style: GoogleFonts.hankenGrotesk()),
-            backgroundColor: const Color(0xFFBA1A1A),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        mostrarSnackBarErro(context, 'Código não encontrado.');
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Você entrou em "${grupo.nome}"!',
-                style: GoogleFonts.hankenGrotesk()),
-            backgroundColor: Cores.verdePrincipal,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        mostrarSnackBarSucesso(context, 'Você entrou em "${grupo.nome}"!');
       }
     } catch (e) {
       if (!mounted) return;
       if (e.toString().contains('ja_membro')) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Você já faz parte deste grupo.',
-                style: GoogleFonts.hankenGrotesk()),
-            backgroundColor: Cores.azulTerciario,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        mostrarSnackBarInfo(context, 'Você já faz parte deste grupo.');
       } else {
         setState(() => _carregando = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao entrar no grupo: $e',
-                style: GoogleFonts.hankenGrotesk()),
-            backgroundColor: const Color(0xFFBA1A1A),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 8),
-          ),
-        );
+        mostrarSnackBarErro(context, 'Erro ao entrar no grupo: $e',
+            duration: const Duration(seconds: 8));
       }
     }
   }

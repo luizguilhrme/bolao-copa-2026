@@ -287,6 +287,38 @@ class Bandeira extends StatelessWidget {
   }
 }
 
+/// Formata DateTime no estilo "dd/MM às HHhMM" (usado em timestamps de palpite).
+String formatarCriadoEm(DateTime? dt) {
+  if (dt == null) return '';
+  final l = dt.toLocal();
+  return '${l.day.toString().padLeft(2, '0')}/'
+      '${l.month.toString().padLeft(2, '0')} às '
+      '${l.hour.toString().padLeft(2, '0')}h'
+      '${l.minute.toString().padLeft(2, '0')}';
+}
+
+/// Cor sólida do badge de pontuação baseada em [pontosBase] (sem multiplicador).
+Color corPontuacao(int pontosBase) {
+  if (pontosBase < 0)    return Cores.pontNegativo;
+  if (pontosBase >= 100) return Cores.pontExato;
+  if (pontosBase >= 70)  return Cores.pontVencedorSaldo;
+  if (pontosBase >= 60)  return Cores.pontVencedorUmTime;
+  if (pontosBase >= 50)  return Cores.pontVencedor;
+  return Cores.pontZero;
+}
+
+/// Cor de fundo (semitransparente) do card de palpite.
+Color corFundoPontuacao(int? pontosBase) {
+  if (pontosBase == null) return Cores.surface;
+  return corPontuacao(pontosBase).withValues(alpha: pontosBase == 0 ? 0.2 : 0.08);
+}
+
+/// Cor de borda do card de palpite.
+Color corBordaPontuacao(int? pontosBase) {
+  if (pontosBase == null) return Cores.outlineVariant;
+  return corPontuacao(pontosBase);
+}
+
 /// Calcula os pontos BASE de um palpite (sem multiplicador de fase).
 /// Espelha _calcularPontos em tela_palpites.dart.
 int calcularPontos(int p1, int p2, int r1, int r2) {

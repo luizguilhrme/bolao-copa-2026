@@ -7,6 +7,7 @@ import '../models/jogo.dart';
 import '../services/jogo_service.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
+import '../utils/dialogos.dart';
 
 class TelaAdmin extends StatefulWidget {
   const TelaAdmin({super.key});
@@ -217,7 +218,7 @@ class _TelaAdminState extends State<TelaAdmin> {
   Future<void> _popularJogos() async {
     final ambiente = await showDialog<String>(
       context: context,
-      builder: (_) => const _DialogAmbiente(),
+      builder: (_) => const DialogAmbiente(),
     );
     if (ambiente == null || !mounted) return;
 
@@ -997,71 +998,3 @@ class _Campo extends StatelessWidget {
   }
 }
 
-// ─── Dialog de seleção de ambiente ───────────────────────────────────────────
-
-class _DialogAmbiente extends StatelessWidget {
-  const _DialogAmbiente();
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: Cores.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Row(
-        children: [
-          const Icon(Icons.cloud_upload_outlined, color: Cores.verdePrincipal),
-          const SizedBox(width: 8),
-          Text(
-            'Popular jogos',
-            style: GoogleFonts.anybody(
-              fontWeight: FontWeight.w800,
-              color: Cores.onSurface,
-            ),
-          ),
-        ],
-      ),
-      content: Text(
-        'Escolha o ambiente. Os 104 jogos serão gravados no Firestore sobrescrevendo os dados atuais.',
-        style: GoogleFonts.hankenGrotesk(
-          fontSize: 14,
-          color: Cores.onSurfaceVariant,
-          height: 1.4,
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(
-            'Cancelar',
-            style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
-          ),
-        ),
-        OutlinedButton.icon(
-          icon: const Icon(Icons.science_outlined, size: 18),
-          label: Text(
-            'Teste',
-            style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w700),
-          ),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Cores.azulTerciario,
-            side: const BorderSide(color: Cores.azulTerciario),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-          onPressed: () => Navigator.of(context).pop('teste'),
-        ),
-        FilledButton.icon(
-          icon: const Icon(Icons.public_rounded, size: 18),
-          label: Text(
-            'Produção',
-            style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w700),
-          ),
-          style: FilledButton.styleFrom(
-            backgroundColor: Cores.verdePrincipal,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-          onPressed: () => Navigator.of(context).pop('producao'),
-        ),
-      ],
-    );
-  }
-}
