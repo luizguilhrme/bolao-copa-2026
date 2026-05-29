@@ -333,6 +333,7 @@ class _DialogCriarGrupoSetupState extends State<_DialogCriarGrupoSetup> {
     return AlertDialog(
       backgroundColor: Cores.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
       title: Text('Criar grupo',
           style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
       content: SingleChildScrollView(
@@ -360,22 +361,25 @@ class _DialogCriarGrupoSetupState extends State<_DialogCriarGrupoSetup> {
                     fontSize: 12, fontWeight: FontWeight.w700,
                     color: Cores.onSurfaceVariant, letterSpacing: 0.5)),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                _ChipRegraSetup(
-                  label: 'CLÁSSICO',
-                  descricao: 'Palpite no placar',
-                  selecionado: _regra == 'classico',
-                  onTap: () => setState(() => _regra = 'classico'),
-                ),
-                const SizedBox(width: 8),
-                _ChipRegraSetup(
-                  label: 'COPA',
-                  descricao: 'Palpite na classificação',
-                  selecionado: _regra == 'copa',
-                  onTap: () => setState(() => _regra = 'copa'),
-                ),
-              ],
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ChipRegraSetup(
+                    label: 'CLÁSSICO',
+                    descricao: 'Palpite no placar',
+                    selecionado: _regra == 'classico',
+                    onTap: () => setState(() => _regra = 'classico'),
+                  ),
+                  const SizedBox(width: 8),
+                  _ChipRegraSetup(
+                    label: 'COPA',
+                    descricao: 'Palpite na classificação',
+                    selecionado: _regra == 'copa',
+                    onTap: () => setState(() => _regra = 'copa'),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
