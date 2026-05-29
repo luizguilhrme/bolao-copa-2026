@@ -259,6 +259,18 @@ class _CardAdminState extends State<_CardAdmin> {
       if (confirmar != true) return;
     }
 
+    // Para eliminatórias com empate após 90 min, pedir quem avançou
+    String? vencedorPenaltis;
+    final ehEliminatoria = widget.jogo.round != 'Fase de Grupos';
+    if (!limpando && novoP1 != null && novoP1 == novoP2 && ehEliminatoria) {
+      vencedorPenaltis = await _dialogVencedor();
+      if (!mounted) return;
+      if (vencedorPenaltis == null) {
+        mostrarMensagem(context, 'Selecione o time que avançou para salvar.');
+        return;
+      }
+    }
+
     setState(() => _salvando = true);
 
     try {
@@ -272,10 +284,17 @@ class _CardAdminState extends State<_CardAdmin> {
         throw Exception('Jogo ${widget.jogo.id} não encontrado no Firestore.');
       }
 
-      await jogoSnap.docs.first.reference.update({
+      final updates = <String, dynamic>{
         'placar1': limpando ? null : novoP1,
         'placar2': limpando ? null : novoP2,
-      });
+      };
+      if (limpando) {
+        updates['vencedor'] = null;
+      } else if (vencedorPenaltis != null) {
+        updates['vencedor'] = vencedorPenaltis;
+      }
+
+      await jogoSnap.docs.first.reference.update(updates);
     } catch (e) {
       if (!mounted) return;
       setState(() => _salvando = false);
@@ -299,6 +318,34 @@ class _CardAdminState extends State<_CardAdmin> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) widget.onSalvo();
     });
+  }
+
+  Future<String?> _dialogVencedor() {
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Quem avançou?',
+          style: GoogleFonts.anybody(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'Placar empatado após 90 min. Selecione o time que avançou (prorrogação ou pênaltis).',
+          style: GoogleFonts.hankenGrotesk(fontSize: 14, height: 1.5),
+        ),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        actions: [
+          _BotaoVencedor(
+            nome: widget.jogo.team1,
+            onTap: () => Navigator.of(ctx).pop(widget.jogo.team1),
+          ),
+          _BotaoVencedor(
+            nome: widget.jogo.team2,
+            onTap: () => Navigator.of(ctx).pop(widget.jogo.team2),
+          ),
+        ],
+      ),
+    );
   }
 
   String get _horario {
@@ -381,12 +428,26 @@ class _CardAdminState extends State<_CardAdmin> {
           ),
           if (_jaTemPlacar)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: 4),
               child: Text(
                 'Placar atual: ${widget.jogo.placar1} × ${widget.jogo.placar2}',
                 style: GoogleFonts.hankenGrotesk(
                   fontSize: 12,
                   color: Cores.verdePrincipal,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          if (_jaTemPlacar &&
+              widget.jogo.placar1 == widget.jogo.placar2 &&
+              widget.jogo.vencedor != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Avançou: ${nomePtDe(widget.jogo.vencedor!)}',
+                style: GoogleFonts.hankenGrotesk(
+                  fontSize: 12,
+                  color: Cores.azulTerciario,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -508,6 +569,53 @@ class _Inputs extends StatelessWidget {
     );
   }
 }
+
+// ─── Botão de time no dialog de vencedor ─────────────────────────────────────
+
+class _BotaoVencedor extends StatelessWidget {
+  const _BotaoVencedor({required this.nome, required this.onTap});
+
+  final String nome;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: Cores.outlineVariant),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              clipBehavior: Clip.antiAlias,
+              decoration: const BoxDecoration(shape: BoxShape.circle),
+              child: Bandeira(nome, tamanho: 40),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              nomePtDe(nome),
+              style: GoogleFonts.anybody(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Cores.onSurface,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Campo de placar ──────────────────────────────────────────────────────────
 
 class _Campo extends StatelessWidget {
   const _Campo({required this.controller});

@@ -23,11 +23,12 @@ To populate Firestore with the 104 games, open the drawer → ADMIN → Outras D
 
 **Pattern:** screen → service → Firestore. No state management library — state is handled with `setState` and `StreamBuilder` directly.
 
-**Four Firestore collections:**
+**Five Firestore collections:**
 - `usuarios` — document ID = Firebase Auth UID
-- `jogos` — document ID = game integer ID (string-cast). Populated once from `assets/dados/jogos.json`.
+- `jogos` — document ID = game integer ID (string-cast). Populated once from `assets/dados/jogos.json`. Elimination round games (73–104) have placeholder `team1`/`team2` values (`"1A"`, `"2B"`, `"3°"`, `"Vencedor 73"`, etc.) that are replaced automatically by the admin flow.
 - `palpites` — document ID = `{uid}_{jogoId}`
 - `grupos` — document ID = auto-ID. Stores bolão groups with a unique 6-char code.
+- `config` — single document `copa2026` with group standings, special results, terceiros allocation.
 
 **Auth routing:** `main.dart` wraps the app in a `StreamBuilder<User?>` on `FirebaseAuth.instance.authStateChanges()`. Logged-in users go to `MenuPrincipal`; logged-out users go to `TelaLogin`.
 
@@ -41,7 +42,7 @@ To populate Firestore with the 104 games, open the drawer → ADMIN → Outras D
 - 0 pts — none of the above
 - −1 pt — forgot to palpite (only applies to games after the user's `criadoEm`)
 
-**Palpite cutoff:** palpites are locked 5 minutes before game start.
+**Palpite cutoff:** palpites are locked 5 minutes before game start. Games where `team1` or `team2` is still a placeholder (`ehPlaceholder()` in `biblioteca.dart`) are hidden from the palpites screen entirely until both teams are resolved.
 
 ## Code conventions
 
@@ -88,7 +89,7 @@ C:\bolao\
     main.dart                 ← Firebase init + FCM background handler + StreamBuilder de auth
     firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
     models/
-      jogo.dart               ← model com fromJson, fromMap, toMap e getter dataHora
+      jogo.dart               ← model com fromJson, fromMap, toMap e getter dataHora; campo vencedor (String?, nullable)
       usuario.dart            ← model com fromMap, toMap e copyWith; inclui campos de palpites especiais
       palpite.dart            ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
       grupo.dart              ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
@@ -117,15 +118,20 @@ C:\bolao\
       tela_tabela.dart        ← lista os 104 jogos com seções e tabs; RefreshIndicator (pull-to-refresh)
       tela_admin_placares.dart ← inserção de placares com abas Próximos/Encerrados;
                                  sem regra de 105 min; campos vazios no CORRIGIR limpam o placar
-                                 (dialog de confirmação) e devolvem o jogo para Próximos
+                                 (dialog de confirmação) e devolvem o jogo para Próximos;
+                                 em eliminatórias com placar empatado, exibe dialog "Quem avançou?"
+                                 para selecionar o vencedor (salvo no campo `vencedor` do jogo)
       tela_admin_copa.dart    ← classificação por grupo: 1º e 2º obrigatórios para todos os 12 grupos,
                                  3º limitado a 8 grupos (contador no AppBar); validação antes de salvar;
-                                 salva em config/copa2026.classificacao_real
+                                 seção "Terceiros — 16 Avos" com 8 dropdowns para alocar os terceiros
+                                 classificados nos slots "3°" dos confrontos; ao salvar, atualiza
+                                 automaticamente team1/team2 dos jogos 73–88 no Firestore;
+                                 salva em config/copa2026.classificacao_real e .terceiros_classificados
       tela_admin_especiais.dart ← resultados reais: campeão, artilheiro, melhor goleiro,
                                  equipe mais goleadora, equipe menos vazada, melhor jogador;
                                  botão CALCULAR chama calcularPalpitesEspeciais (irreversível)
       tela_admin_definicoes.dart ← ações: popular jogos (Teste/Produção), recalcular Reg. Clássica,
-                                 recalcular Reg. Copa (placeholder), limpar órfãos
+                                 recalcular Reg. Copa (placeholder), limpar dados de teste, limpar órfãos
       tela_ajuda.dart         ← FAQ estático
     services/
       jogo_service.dart       ← popularJogosNoFirestore({bool teste}), buscarTodos, buscarPorData
@@ -142,7 +148,7 @@ C:\bolao\
     utils/
       cores.dart              ← constantes de cores (Cores.verdePrincipal etc)
       biblioteca.dart         ← funções utilitárias top-level (flagDe, siglaDe,
-                                 formatarData, mostrarMensagem)
+                                 formatarData, mostrarMensagem, ehPlaceholder)
       avatares.dart           ← lista kJogadores + widgets WidgetAvatar e CardAvatar
   web/
     index.html              ← meta tags PWA iOS (apple-mobile-web-app-capable etc)
@@ -386,6 +392,7 @@ group       : String?  — "Grupo A"..."Grupo L" (null nas fases eliminatórias)
 ground      : String
 placar1     : Number?  — null até o admin inserir o resultado
 placar2     : Number?  — null até o admin inserir o resultado
+vencedor    : String?  — preenchido em eliminatórias com empate nos 90 min (pênaltis/prorrogação)
 ```
 
 **Fases eliminatórias da Copa 2026 (48 seleções, 104 jogos):**
@@ -689,12 +696,13 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 
 | Função | Tipo | O que faz |
 |---|---|---|
-| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula pontuação para cada palpite; aplica −1 para ausências; envia FCM de ranking |
+| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula pontuação para cada palpite; aplica −1 para ausências; envia FCM de ranking; propaga vencedor/perdedor para o próximo jogo da chave (eliminatórias) |
 | `lembretesPalpite` | Schedule (`*/30 * * * *`) | Notifica usuários sem palpite em jogos que começam em ~30 min |
 | `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação de todos os usuários do zero |
 | `membroEntrou` | Firestore trigger (`grupos/{grupoId}`) | Detecta novo membro e envia FCM para o dono do grupo |
 | `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Aplica pontos por campeão/artilheiro acertados; marca `palpitesEspeciaisCalculados: true` |
 | `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos |
+| `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times de eliminatórias (volta placeholders), classificação, resultados especiais e pontuações. Palpites são preservados. Acessível em Outras Definições. |
 
 **Deep linking via notificação:** `data: { tela: 'palpites' }`, `data: { tela: 'ranking' }`, `data: { tela: 'grupos' }`.
 

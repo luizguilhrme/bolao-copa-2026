@@ -25,9 +25,10 @@ C:\bolao\
     avatares/                 ← imagens dos jogadores para seleção de avatar
   functions/
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
-                                 calcularPontuacao, lembretesPalpite, recalcularTudo,
-                                 membroEntrou, calcularPalpitesEspeciais,
-                                 limparUsuariosOrfaos
+                                 calcularPontuacao (+ propaga vencedor/perdedor para próxima fase),
+                                 lembretesPalpite, recalcularTudo, membroEntrou,
+                                 calcularPalpitesEspeciais, limparUsuariosOrfaos,
+                                 limparDadosTeste
   lib/
     main.dart                 ← Firebase init + FCM background handler + StreamBuilder de auth
     firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
@@ -51,9 +52,14 @@ C:\bolao\
                                  tocar no card abre dialog de detalhes com membros e avatares;
                                  ícone de lápis (só dono) edita o nome do grupo
       tela_tabela.dart        ← lista os 104 jogos com seções e tabs
-      tela_admin.dart         ← inserção de placares; dialog Teste/Produção no popular jogos;
-                                 seção Palpites Especiais: seletor de campeão (com bandeiras),
-                                 campo artilheiro, salvar config e calcular pontuação especial
+      tela_admin_placares.dart ← inserção de placares com abas Próximos/Encerrados;
+                                 em eliminatórias com empate abre dialog "Quem avançou?" para salvar
+                                 o campo vencedor (pênaltis/prorrogação)
+      tela_admin_copa.dart    ← classificação por grupo (1º/2º obrigatórios, 3º para 8 grupos);
+                                 seção "Terceiros — 16 Avos" para alocar os 8 terceiros nos slots;
+                                 ao salvar, atualiza automaticamente team1/team2 dos jogos 73–88
+      tela_admin_especiais.dart ← resultados reais dos palpites especiais + botão CALCULAR
+      tela_admin_definicoes.dart ← popular jogos, recalcular regras, limpar dados de teste, limpar órfãos
       tela_ajuda.dart         ← FAQ estático
     services/
       jogo_service.dart       ← popularJogosNoFirestore({bool teste}), buscarTodos, buscarPorData
@@ -68,7 +74,7 @@ C:\bolao\
     utils/
       cores.dart              ← constantes de cores (Cores.verdePrincipal etc)
       biblioteca.dart         ← funções utilitárias top-level (flagDe, siglaDe,
-                                 formatarData, mostrarMensagem)
+                                 formatarData, mostrarMensagem, ehPlaceholder)
       avatares.dart           ← lista kJogadores + widgets WidgetAvatar e CardAvatar
   web/
     index.html              ← meta tags PWA iOS (apple-mobile-web-app-capable etc)
