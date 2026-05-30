@@ -370,8 +370,11 @@ melhorJogadorFinalReal       : String?
 palpitesEspeciaisCalculados  : Boolean   — true após executar calcularPalpitesEspeciais; impede execução dupla
 classificacao_real           : Map       — { "A": { "primeiro": "Brazil", "segundo": "Mexico", "terceiro": "..." }, ... }
 terceiros_classificados      : Map       — alocação dos 8 terceiros nos slots dos 16 avos
-palpitesTravados             : Boolean   — true após admin acionar "Travar Palpites"; bloqueia edição e
-                                           libera visualização dos palpites Copa e Especiais no ranking
+palpitesTravados             : Boolean   — admin aciona via Outras Definições → Travar/Destravar Palpites;
+                                           true: bloqueia edição dos palpites Copa e Especiais nas telas
+                                             de palpites + exibe esses palpites no dialog do ranking;
+                                           false: permite edição + oculta no dialog do ranking;
+                                           Modo Clássico não é afetado; resetado para false por limparDadosTeste
 ```
 
 ---

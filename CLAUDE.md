@@ -491,8 +491,10 @@ terceiros_classificados      : Map       — alocação dos 8 terceiros nos slot
 
 — Controle de visibilidade —
 palpitesTravados             : Boolean   — admin aciona via Outras Definições → Travar/Destravar Palpites;
-                                           quando true: bloqueia edição dos palpites Copa e Especiais;
-                                           libera exibição desses palpites no dialog do ranking
+                                           true: bloqueia edição dos palpites Copa e Especiais nas telas
+                                             de palpites + exibe esses palpites no dialog do ranking;
+                                           false: permite edição + oculta no dialog do ranking;
+                                           Modo Clássico não é afetado; resetado para false por limparDadosTeste
 ```
 
 ---
