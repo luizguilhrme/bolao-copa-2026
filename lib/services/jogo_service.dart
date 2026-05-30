@@ -18,6 +18,15 @@ class JogoService {
     // Converte cada Map em um objeto Jogo usando o fromJson que já existe.
     final jogos = lista.map((item) => Jogo.fromJson(item)).toList();
 
+    // Apaga todos os jogos existentes antes de inserir os novos,
+    // para que jogos removidos do JSON não fiquem órfãos no Firestore.
+    final existentes = await _colecao.get();
+    final deleteBatch = FirebaseFirestore.instance.batch();
+    for (final doc in existentes.docs) {
+      deleteBatch.delete(doc.reference);
+    }
+    if (existentes.docs.isNotEmpty) await deleteBatch.commit();
+
     // Cria o batch — é a nossa "lista de compras" que vamos
     // entregar de uma vez para o Firestore.
     final batch = FirebaseFirestore.instance.batch();

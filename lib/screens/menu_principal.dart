@@ -73,11 +73,13 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
     });
 
     // App em foreground — exibe SnackBar com botão "Ver".
+    // Notificações de ranking não mostram SnackBar; o sistema de notificações do celular já cuida.
     FirebaseMessaging.onMessage.listen((message) {
       final titulo = message.notification?.title ?? '';
       final corpo = message.notification?.body ?? '';
       if (!mounted || corpo.isEmpty) return;
       final tela = message.data['tela'] as String?;
+      if (tela == 'ranking') return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Cores.verdePrincipal,
@@ -467,7 +469,7 @@ class _CabecalhoDrawer extends StatelessWidget {
                   color: Color(0xFFFCD400), size: 18),
               const SizedBox(width: 4),
               Text(
-                '${usuario?.pontuacao ?? 0} pts',
+                '${usuario?.pontuacaoClassicaTotal ?? 0} pts',
                 style: GoogleFonts.hankenGrotesk(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,

@@ -20,9 +20,11 @@ C:\bolao\
   assets/
     dados/
       jogos.json              ← 104 jogos com datas reais da Copa 2026
-      jogos_teste.json        ← 104 jogos idênticos ao jogos.json (mesmas datas);
-                                 únicos campos diferentes: placar1=1 e placar2=0
-                                 nos 72 jogos da Fase de Grupos
+      jogos_teste.json        ← 99 jogos para testes: IDs 1–5 com placar1=1/placar2=0
+                                 (todos Grupo A, datas 2026-05-30/31); IDs 6–72 sem placar
+                                 (datas originais do jogos.json); IDs 73–104 idênticos ao
+                                 jogos.json. popularJogosNoFirestore apaga todos os docs
+                                 existentes antes de inserir os novos.
     avatares/                 ← imagens dos jogadores para seleção de avatar
   functions/
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
@@ -297,9 +299,12 @@ ID do documento = UID do Firebase Auth.
 ```
 uid             : String
 email           : String
-nome            : String    — parte antes do @ no cadastro
-pontuacao       : Number    — começa em 0; atualizado via FieldValue.increment()
-criadoEm        : Timestamp
+nome                   : String
+pontuacaoClassica      : Number    — fase de grupos Clássico + penalidades; começa em 0
+pontuacaoCopa          : Number    — fase de grupos Copa (SET por recalcularCopa); começa em 0
+pontuacaoEliminatorias : Number    — mata-mata; compartilhado pelos dois modos; começa em 0
+pontuacaoEspeciais     : Number    — palpites especiais; compartilhado pelos dois modos; começa em 0
+criadoEm               : Timestamp
 avatar          : String?   — id do jogador selecionado no setup de perfil
 isAdmin         : Boolean   — campo opcional; adicionado manualmente no Console
 fcmToken        : String?   — token FCM do dispositivo; salvo pelo NotificacoesService
@@ -666,14 +671,14 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 
 | Função | Tipo | O que faz |
 |---|---|---|
-| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula delta de pontuação para cada palpite; na primeira inserção de resultado aplica −10 para usuários sem palpite registrados antes do jogo; envia FCM de ranking para quem mudou de posição; propaga vencedor/perdedor para próxima fase (eliminatórias) |
+| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Jogos 1–72 → incrementa `pontuacaoClassica`; jogos 73–104 → incrementa `pontuacaoEliminatorias`; aplica −10 para ausências; envia FCM de ranking; propaga vencedor/perdedor |
 | `lembretesPalpite` | Schedule (`*/30 * * * *`) | Notifica usuários sem palpite em jogos que começam em ~30 min |
-| `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação clássica de todos os usuários do zero |
+| `recalcularTudo` | HTTPS Callable (admin only) | Recalcula `pontuacaoClassica` (jogos 1–72) e `pontuacaoEliminatorias` (jogos 73–104) do zero. Não toca em `pontuacaoEspeciais` nem `pontuacaoCopa`. |
 | `membroEntrou` | Firestore trigger (`grupos/{grupoId}`) | Detecta novo membro no array `membros` e envia FCM para o dono do grupo |
-| `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Aplica pontos dos 6 palpites especiais; marca `palpitesEspeciaisCalculados: true` para evitar execução dupla |
-| `recalcularCopa` | HTTPS Callable (admin only) | Calcula pontos Modo Copa (fase de grupos) para todos os usuários; grava em `pontuacaoCopa`; marca `copaGruposCalculado: true` |
+| `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Grava resultados reais e aplica pontos em `pontuacaoEspeciais`; marca `palpitesEspeciaisCalculados: true`. Botão CALCULAR sempre salva antes de chamar. |
+| `recalcularCopa` | HTTPS Callable (admin only) | Calcula pontos Copa fase de grupos (SET em `pontuacaoCopa`); marca `copaGruposCalculado: true` |
 | `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos |
-| `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times eliminatórias, classificação, pontuações e flags; palpites preservados |
+| `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times eliminatórias, classificação, `pontuacaoClassica`, `pontuacaoCopa`, `pontuacaoEliminatorias`, `pontuacaoEspeciais` e flags; palpites preservados |
 
 **FCM token management:** token salvo em `usuarios/{uid}.fcmToken`. Tokens inválidos são removidos automaticamente (`messaging/registration-token-not-registered`).
 

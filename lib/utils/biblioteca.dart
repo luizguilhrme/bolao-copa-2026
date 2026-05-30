@@ -371,13 +371,19 @@ int calcularPontosCopaGrupo(
 
   for (final pos in ['primeiro', 'segundo', 'terceiro']) {
     final p = palpite[pos];
+    if (p == null) continue; // não palpitou esta posição
     final r = real[pos];
-    if (p == null || r == null) continue; // não palpitou ou sem resultado
-    validos++;
-    if (p == r) {
-      pontos += 200;
-      exatos++;
+    if (r != null) {
+      // há resultado real para esta posição: conta como válido para o bônus
+      validos++;
+      if (p == r) {
+        pontos += 200;
+        exatos++;
+      } else if (classificadosReais.contains(p)) {
+        pontos += 100;
+      }
     } else if (classificadosReais.contains(p)) {
+      // sem resultado nessa posição (ex: grupo sem 3º), mas o time classificou em outra
       pontos += 100;
     }
   }

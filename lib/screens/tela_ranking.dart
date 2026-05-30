@@ -29,9 +29,12 @@ class _TelaRankingState extends State<TelaRanking> {
 
   final Stream<List<Usuario>> _streamClassico = FirebaseFirestore.instance
       .collection('usuarios')
-      .orderBy('pontuacao', descending: true)
       .snapshots()
-      .map((snap) => snap.docs.map((d) => Usuario.fromMap(d.data())).toList());
+      .map((snap) {
+        final lista = snap.docs.map((d) => Usuario.fromMap(d.data())).toList();
+        lista.sort((a, b) => b.pontuacaoClassicaTotal.compareTo(a.pontuacaoClassicaTotal));
+        return lista;
+      });
 
   // Copa: busca todos os usuários e ordena em memória por pontuacaoCopa.
   // Não usa orderBy no Firestore porque documentos sem o campo seriam excluídos.
@@ -40,7 +43,7 @@ class _TelaRankingState extends State<TelaRanking> {
       .snapshots()
       .map((snap) {
         final lista = snap.docs.map((d) => Usuario.fromMap(d.data())).toList();
-        lista.sort((a, b) => b.pontuacaoCopa.compareTo(a.pontuacaoCopa));
+        lista.sort((a, b) => b.pontuacaoCopaTotal.compareTo(a.pontuacaoCopaTotal));
         return lista;
       });
 
@@ -525,7 +528,7 @@ class _ColunaPodio extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                '${modoCopa ? usuario.pontuacaoCopa : usuario.pontuacao}',
+                '${modoCopa ? usuario.pontuacaoCopaTotal : usuario.pontuacaoClassicaTotal}',
                 style: GoogleFonts.anybody(
                   fontSize: _fontePontos,
                   fontWeight: FontWeight.w800,
@@ -666,7 +669,7 @@ class _ItemRanking extends StatelessWidget {
 
           // Pontuação
           Text(
-            '${modoCopa ? usuario.pontuacaoCopa : usuario.pontuacao} pts',
+            '${modoCopa ? usuario.pontuacaoCopaTotal : usuario.pontuacaoClassicaTotal} pts',
             style: GoogleFonts.anybody(
               fontSize: euSou ? 18 : 16,
               fontWeight: FontWeight.w700,
@@ -698,6 +701,13 @@ class _DadosDialog {
     required this.palpitesCopa,
     required this.classificacaoReal,
     required this.palpitesTravados,
+    required this.especiaisCalculados,
+    this.campeaoReal,
+    this.artilheiroReal,
+    this.goleiroReal,
+    this.melhorJogadorReal,
+    this.maisGoleadoraReal,
+    this.menosVazadaReal,
   });
 
   final List<Jogo> jogos;
@@ -705,25 +715,34 @@ class _DadosDialog {
   final Map<String, Map<String, String?>> palpitesCopa;
   final Map<String, dynamic> classificacaoReal;
   final bool palpitesTravados;
+  final bool especiaisCalculados;
+  final String? campeaoReal;
+  final String? artilheiroReal;
+  final String? goleiroReal;
+  final String? melhorJogadorReal;
+  final String? maisGoleadoraReal;
+  final String? menosVazadaReal;
 
   bool get temMataMata => jogos.any((j) => j.id > 72 && j.placar1 != null);
 }
 
 class _ItemPalpiteClassico {
   const _ItemPalpiteClassico(
-      {required this.jogo, required this.palpite, required this.pontos});
+      {required this.jogo, this.palpite, required this.pontos, this.semPalpite = false});
   final Jogo jogo;
-  final Palpite palpite;
+  final Palpite? palpite;
   final int pontos;
+  final bool semPalpite;
 }
 
 class _ItemEspecial {
   const _ItemEspecial(this.icone, this.label, this.valor,
-      {this.isTime = false});
+      {this.isTime = false, this.acertou});
   final IconData icone;
   final String label;
   final String valor;
   final bool isTime;
+  final bool? acertou;
 }
 
 class _DialogPalpitesUsuario extends StatefulWidget {
@@ -766,11 +785,22 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
 
     Map<String, dynamic> classificacaoReal = {};
     bool palpitesTravados = false;
+    bool especiaisCalculados = false;
+    String? campeaoReal, artilheiroReal, goleiroReal, melhorJogadorReal, maisGoleadoraReal, menosVazadaReal;
     if (configSnap.exists) {
       final data = configSnap.data() as Map<String, dynamic>?;
       classificacaoReal =
           (data?['classificacao_real'] as Map<String, dynamic>?) ?? {};
       palpitesTravados = (data?['palpitesTravados'] as bool?) ?? false;
+      especiaisCalculados = (data?['palpitesEspeciaisCalculados'] as bool?) ?? false;
+      if (especiaisCalculados) {
+        campeaoReal = data?['campeaoReal'] as String?;
+        artilheiroReal = data?['artilheiroReal'] as String?;
+        goleiroReal = data?['melhorGoleiroReal'] as String?;
+        melhorJogadorReal = data?['melhorJogadorFinalReal'] as String?;
+        maisGoleadoraReal = data?['maisGoleadoraReal'] as String?;
+        menosVazadaReal = data?['maisVazadaReal'] as String?;
+      }
     }
 
     return _DadosDialog(
@@ -779,33 +809,47 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
       palpitesCopa: palpitesCopa,
       classificacaoReal: classificacaoReal,
       palpitesTravados: palpitesTravados,
+      especiaisCalculados: especiaisCalculados,
+      campeaoReal: campeaoReal,
+      artilheiroReal: artilheiroReal,
+      goleiroReal: goleiroReal,
+      melhorJogadorReal: melhorJogadorReal,
+      maisGoleadoraReal: maisGoleadoraReal,
+      menosVazadaReal: menosVazadaReal,
     );
   }
 
-  List<_ItemEspecial> _especiais(bool travados) {
-    if (!travados) return [];
+  bool? _acertou(String? palpite, String? real) {
+    if (palpite == null || real == null) return null;
+    return palpite.toLowerCase().trim() == real.toLowerCase().trim();
+  }
+
+  List<_ItemEspecial> _especiais(_DadosDialog dados) {
+    if (!dados.palpitesTravados) return [];
     final u = widget.usuario;
+    final calc = dados.especiaisCalculados;
     return [
       if (u.palpiteCampeao != null)
         _ItemEspecial(Icons.emoji_events, 'Campeão', u.palpiteCampeao!,
-            isTime: true),
+            isTime: true,
+            acertou: calc ? _acertou(u.palpiteCampeao, dados.campeaoReal) : null),
       if (u.palpiteArtilheiro != null)
-        _ItemEspecial(
-            Icons.sports_soccer, 'Artilheiro', u.palpiteArtilheiro!),
+        _ItemEspecial(Icons.sports_soccer, 'Artilheiro', u.palpiteArtilheiro!,
+            acertou: calc ? _acertou(u.palpiteArtilheiro, dados.artilheiroReal) : null),
       if (u.palpiteGoleiro != null)
-        _ItemEspecial(
-            Icons.sports_handball, 'Melhor Goleiro', u.palpiteGoleiro!),
+        _ItemEspecial(Icons.sports_handball, 'Melhor Goleiro', u.palpiteGoleiro!,
+            acertou: calc ? _acertou(u.palpiteGoleiro, dados.goleiroReal) : null),
       if (u.palpiteMelhorJogador != null)
-        _ItemEspecial(Icons.star_rounded, 'Melhor Jogador',
-            u.palpiteMelhorJogador!),
+        _ItemEspecial(Icons.star_rounded, 'Melhor Jogador', u.palpiteMelhorJogador!,
+            acertou: calc ? _acertou(u.palpiteMelhorJogador, dados.melhorJogadorReal) : null),
       if (u.palpiteMaisGoleadora != null)
-        _ItemEspecial(
-            Icons.trending_up_rounded, 'Mais Goleadora', u.palpiteMaisGoleadora!,
-            isTime: true),
+        _ItemEspecial(Icons.trending_up_rounded, 'Mais Goleadora', u.palpiteMaisGoleadora!,
+            isTime: true,
+            acertou: calc ? _acertou(u.palpiteMaisGoleadora, dados.maisGoleadoraReal) : null),
       if (u.palpiteMenosVazada != null)
-        _ItemEspecial(Icons.shield_rounded, 'Menos Vazada',
-            u.palpiteMenosVazada!,
-            isTime: true),
+        _ItemEspecial(Icons.shield_rounded, 'Menos Vazada', u.palpiteMenosVazada!,
+            isTime: true,
+            acertou: calc ? _acertou(u.palpiteMenosVazada, dados.menosVazadaReal) : null),
     ];
   }
 
@@ -826,7 +870,7 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
           future: _future,
           builder: (ctx, snap) {
             final dados = snap.data;
-            final especiais = _especiais(dados?.palpitesTravados ?? false);
+            final especiais = dados != null ? _especiais(dados) : <_ItemEspecial>[];
             return Column(
               mainAxisSize: MainAxisSize.max,
               children: [
@@ -965,6 +1009,14 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
             color: Colors.white,
           ),
         ),
+        if (e.acertou != null) ...[
+          const SizedBox(width: 6),
+          Icon(
+            e.acertou! ? Icons.check_circle_rounded : Icons.cancel_rounded,
+            size: 16,
+            color: e.acertou! ? const Color(0xFF69F0AE) : const Color(0xFFFF5252),
+          ),
+        ],
       ],
     );
   }
@@ -1057,39 +1109,45 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
 
   Widget _buildListaClassico(_DadosDialog dados, {required bool mataMata}) {
     final palpitesMap = {for (final p in dados.palpites) p.jogoId: p};
+    final criadoEm = widget.usuario.criadoEm;
 
-    final itens = dados.jogos
-        .where((j) {
-          if (j.placar1 == null) return false;
-          if (!palpitesMap.containsKey(j.id)) return false;
-          return mataMata
-              ? j.id > 72
-              : j.id <= 72 && j.group == 'Grupo $_filtroGrupo';
-        })
-        .map((j) {
-          final p = palpitesMap[j.id]!;
-          return _ItemPalpiteClassico(
-            jogo: j,
-            palpite: p,
-            pontos: calcularPontosComFase(
-                p.palpite1, p.palpite2, j.placar1!, j.placar2!, j.round),
-          );
-        })
-        .toList()
-      ..sort((a, b) => a.jogo.dataHora.compareTo(b.jogo.dataHora));
+    final jogosRelevantes = dados.jogos.where((j) {
+      if (j.placar1 == null) return false;
+      return mataMata
+          ? j.id > 72
+          : j.id <= 72 && j.group == 'Grupo $_filtroGrupo';
+    }).toList()
+      ..sort((a, b) => a.dataHora.compareTo(b.dataHora));
 
-    if (itens.isEmpty) {
+    if (jogosRelevantes.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
-            'Nenhum palpite registrado.',
-            style: GoogleFonts.hankenGrotesk(
-                color: Cores.onSurfaceVariant),
+            'Nenhum resultado ainda.',
+            style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
           ),
         ),
       );
     }
+
+    final itens = jogosRelevantes.map((j) {
+      final p = palpitesMap[j.id];
+      if (p != null) {
+        return _ItemPalpiteClassico(
+          jogo: j,
+          palpite: p,
+          pontos: calcularPontosComFase(
+              p.palpite1, p.palpite2, j.placar1!, j.placar2!, j.round),
+        );
+      }
+      final deveMultar = j.dataHora.isAfter(criadoEm);
+      return _ItemPalpiteClassico(
+        jogo: j,
+        pontos: deveMultar ? -10 : 0,
+        semPalpite: true,
+      );
+    }).toList();
 
     return ListView.separated(
       itemCount: itens.length,
@@ -1129,13 +1187,22 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
           const SizedBox(width: 5),
           Bandeira(item.jogo.team2, tamanho: 20),
           const Spacer(),
-          Text(
-            '${item.palpite.palpite1}–${item.palpite.palpite2}',
-            style: GoogleFonts.hankenGrotesk(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Cores.onSurfaceVariant),
-          ),
+          if (item.semPalpite)
+            Text(
+              'Não palpitado',
+              style: GoogleFonts.hankenGrotesk(
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                  color: Cores.onSurfaceVariant),
+            )
+          else
+            Text(
+              '${item.palpite!.palpite1}–${item.palpite!.palpite2}',
+              style: GoogleFonts.hankenGrotesk(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Cores.onSurfaceVariant),
+            ),
           const SizedBox(width: 8),
           _BadgePontos(item.pontos),
         ],

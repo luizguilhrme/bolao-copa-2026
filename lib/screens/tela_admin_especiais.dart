@@ -152,7 +152,7 @@ class _TelaAdminEspeciaisState extends State<TelaAdminEspeciais> {
         title: Text('Calcular pontuação especial?',
             style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
         content: Text(
-          'Pontuações dos palpites especiais serão aplicadas a todos os usuários.\n\nEsta ação não pode ser desfeita.',
+          'Os resultados serão salvos e as pontuações dos palpites especiais serão aplicadas a todos os usuários.\n\nEsta ação não pode ser desfeita.',
           style: GoogleFonts.hankenGrotesk(fontSize: 14, height: 1.5),
         ),
         actions: [
@@ -174,6 +174,10 @@ class _TelaAdminEspeciaisState extends State<TelaAdminEspeciais> {
 
     setState(() => _calculando = true);
     try {
+      // Sempre salva os resultados antes de calcular para garantir consistência.
+      await _salvarConfig();
+      if (!mounted) return;
+
       final fn = FirebaseFunctions.instanceFor(region: 'southamerica-east1');
       final result = await fn.httpsCallable('calcularPalpitesEspeciais').call();
       final atualizados = result.data['atualizados'];
@@ -181,6 +185,14 @@ class _TelaAdminEspeciaisState extends State<TelaAdminEspeciais> {
         setState(() => _palpitesCalculados = true);
         mostrarMensagem(context,
             'Pontuação especial calculada! $atualizados usuário(s) acertaram.');
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      if (e.code == 'already-exists') {
+        mostrarMensagem(context,
+            'Pontuação especial já foi calculada. Para recalcular, use Limpar Dados de Teste primeiro.');
+      } else {
+        mostrarMensagem(context, 'Erro ao calcular: ${e.message}');
       }
     } catch (e) {
       if (mounted) mostrarMensagem(context, 'Erro: $e');
