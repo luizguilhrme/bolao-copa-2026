@@ -53,7 +53,7 @@ void mostrarSnackBarInfo(BuildContext context, String mensagem,
 /// Dialog de seleção de ambiente (Produção / Teste) para popular jogos.
 /// Retorna `'producao'`, `'teste'` ou `null` (cancelado).
 ///
-/// Usado em: tela_admin_definicoes.dart, tela_admin.dart
+/// Usado em: tela_admin_definicoes.dart
 class DialogAmbiente extends StatelessWidget {
   const DialogAmbiente({super.key});
 

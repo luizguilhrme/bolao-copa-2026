@@ -230,14 +230,8 @@ class _TelaPalpitesState extends State<TelaPalpites> {
       _temModoClassico && _temModoCopa &&
       (!_faseGruposEncerrada || _classificacaoReal.isNotEmpty);
 
-  /// Palpites Copa bloqueados pelo admin ou 5 min antes do primeiro jogo.
-  bool get _copaBloqueada {
-    if (_palpitesTravados) return true;
-    if (_todosJogos.isEmpty) return false;
-    final primeiro = _todosJogos.reduce((a, b) => a.id < b.id ? a : b);
-    return DateTime.now().isAfter(
-        primeiro.dataHora.toLocal().subtract(const Duration(minutes: 5)));
-  }
+  /// Palpites Copa bloqueados apenas quando admin trava.
+  bool get _copaBloqueada => _palpitesTravados;
 
   /// Times de cada grupo extraídos dos jogos da Fase de Grupos.
   Map<String, List<String>> get _timesPorGrupo {
