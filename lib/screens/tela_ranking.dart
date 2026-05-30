@@ -783,6 +783,7 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
   }
 
   List<_ItemEspecial> _especiais(bool travados) {
+    if (!travados) return [];
     final u = widget.usuario;
     return [
       if (u.palpiteCampeao != null)
@@ -1022,9 +1023,34 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
       return _buildListaClassico(dados, mataMata: true);
     }
     if (widget.modoCopa) {
+      if (!dados.palpitesTravados) return _buildPalpitesOcultos();
       return _buildGrupoCopa(dados);
     }
     return _buildListaClassico(dados, mataMata: false);
+  }
+
+  Widget _buildPalpitesOcultos() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock_rounded, size: 40, color: Cores.outlineVariant),
+            const SizedBox(height: 12),
+            Text(
+              'Palpites ocultos até o travamento pelo admin',
+              style: GoogleFonts.anybody(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: Cores.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ── Lista de palpites clássicos (fase de grupos ou mata-mata) ──────────
