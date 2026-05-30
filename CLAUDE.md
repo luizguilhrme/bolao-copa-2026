@@ -103,7 +103,8 @@ C:\bolao\
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
                                  calcularPontuacao, lembretesPalpite, recalcularTudo,
                                  membroEntrou, calcularPalpitesEspeciais,
-                                 limparUsuariosOrfaos
+                                 limparUsuariosOrfaos, limparDadosTeste,
+                                 recalcularCopa, popularPlacaresTeste (temporária)
   lib/
     main.dart                 ← Firebase init + FCM background handler + StreamBuilder de auth
     firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
@@ -390,7 +391,8 @@ ID do documento = UID do Firebase Auth.
 uid                  : String
 email                : String
 nome                 : String    — parte antes do @ no cadastro
-pontuacao            : Number    — começa em 0; atualizado via FieldValue.increment()
+pontuacao            : Number    — Modo Clássico + Palpites Especiais; começa em 0
+pontuacaoCopa        : Number    — Modo Copa fase de grupos; gravado por recalcularCopa
 criadoEm             : Timestamp
 avatar               : String?   — id do jogador selecionado no setup de perfil
 isAdmin              : Boolean   — campo opcional; adicionado manualmente no Console
@@ -765,7 +767,9 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 | `membroEntrou` | Firestore trigger (`grupos/{grupoId}`) | Detecta novo membro e envia FCM para o dono do grupo |
 | `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Aplica pontos por campeão/artilheiro acertados; marca `palpitesEspeciaisCalculados: true` |
 | `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos |
-| `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times de eliminatórias (volta placeholders), classificação, resultados especiais e pontuações. Palpites são preservados. Acessível em Outras Definições. |
+| `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times de eliminatórias (volta placeholders), classificação, resultados especiais, `pontuacao`, `pontuacaoCopa` e flags. Palpites preservados. |
+| `recalcularCopa` | HTTPS Callable (admin only) | Calcula pontos da fase de grupos do Modo Copa para todos os usuários; grava em `pontuacaoCopa` (separado de `pontuacao`); marca `copaGruposCalculado: true`. Executar APÓS `recalcularTudo`. |
+| `popularPlacaresTeste` | HTTPS Callable (admin only) | **TEMPORÁRIA** — insere placar 1×0 em todos os 72 jogos da Fase de Grupos. Remover após validação. |
 
 **Deep linking via notificação:** `data: { tela: 'palpites' }`, `data: { tela: 'ranking' }`, `data: { tela: 'grupos' }`.
 
@@ -817,7 +821,6 @@ Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regene
 
 ## Próximos passos
 
-1. Implementar cálculo e exibição de pontos do MODO COPA (aba Encerrados mostra classificação real vs palpite).
-2. Atualizar tela de ranking para exibir pontuação separada por modo (CLÁSSICO vs COPA).
-3. Implementar recalcularTudo para MODO COPA (Cloud Function).
-4. Publicar nova versão na Play Store quando o conjunto de features estiver estável.
+1. Remover `popularPlacaresTeste` (Cloud Function e botão no admin) após validação dos testes.
+2. Atualizar tela de ranking para exibir histórico de palpites Copa (dialog hoje só mostra Clássico).
+3. Publicar nova versão na Play Store quando o conjunto de features estiver estável.

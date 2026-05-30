@@ -730,7 +730,6 @@ Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regene
 
 ## Próximos passos (na ordem recomendada)
 
-1. Implementar cálculo e exibição de pontos do MODO COPA (aba Encerrados mostra classificação real vs palpite + pontuação).
-2. Atualizar tela de ranking para exibir pontuação separada por modo (CLÁSSICO vs COPA).
-3. Implementar Cloud Function de recalcularTudo para MODO COPA.
-4. Publicar nova versão na Play Store quando o conjunto de features estiver estável.
+1. Remover `popularPlacaresTeste` (Cloud Function e botão no admin) após validação dos testes.
+2. Atualizar tela de ranking para exibir histórico de palpites Copa no dialog (hoje só mostra Clássico).
+3. Publicar nova versão na Play Store quando o conjunto de features estiver estável.
