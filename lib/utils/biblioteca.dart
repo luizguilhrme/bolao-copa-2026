@@ -348,6 +348,45 @@ double multiplicadorFase(String round) {
   }
 }
 
+/// Calcula os pontos do Modo Copa para um grupo.
+///
+/// [palpite] e [real] têm as chaves 'primeiro', 'segundo', 'terceiro'.
+/// Regras:
+/// - Posição exata:               +200 pts por time
+/// - Classificou, posição errada: +100 pts por time
+/// - Não classificou:               +0 pts
+/// - Bônus (todas as posições palpitadas e exatas, min 2): +100 pts
+int calcularPontosCopaGrupo(
+  Map<String, String?> palpite,
+  Map<String, String?> real,
+) {
+  final classificadosReais = {real['primeiro'], real['segundo'], real['terceiro']}
+      .whereType<String>()
+      .toSet();
+
+  int pontos = 0;
+  int exatos = 0;
+  int validos = 0;
+
+  for (final pos in ['primeiro', 'segundo', 'terceiro']) {
+    final p = palpite[pos];
+    final r = real[pos];
+    if (p == null || r == null) continue; // não palpitou ou sem resultado
+    validos++;
+    if (p == r) {
+      pontos += 200;
+      exatos++;
+    } else if (classificadosReais.contains(p)) {
+      pontos += 100;
+    }
+  }
+
+  // Bônus: todos os palpites válidos exatos e pelo menos 2 posições
+  if (validos >= 2 && exatos == validos) pontos += 100;
+
+  return pontos;
+}
+
 /// Pontos reais considerando a fase do jogo.
 int calcularPontosComFase(int p1, int p2, int r1, int r2, String round) {
   final base = calcularPontos(p1, p2, r1, r2);
