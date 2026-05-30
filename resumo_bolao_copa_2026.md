@@ -20,15 +20,16 @@ C:\bolao\
   assets/
     dados/
       jogos.json              ← 104 jogos com datas reais da Copa 2026
-      jogos_teste.json        ← 104 jogos com datas deslocadas -25 dias;
-                                 jogos antes de 21/05/2026 já têm resultados
+      jogos_teste.json        ← 104 jogos idênticos ao jogos.json (mesmas datas);
+                                 únicos campos diferentes: placar1=1 e placar2=0
+                                 nos 72 jogos da Fase de Grupos
     avatares/                 ← imagens dos jogadores para seleção de avatar
   functions/
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
-                                 calcularPontuacao (+ propaga vencedor/perdedor para próxima fase),
-                                 lembretesPalpite, recalcularTudo, membroEntrou,
-                                 calcularPalpitesEspeciais, limparUsuariosOrfaos,
-                                 limparDadosTeste
+                                 calcularPontuacao, lembretesPalpite, recalcularTudo,
+                                 membroEntrou, calcularPalpitesEspeciais,
+                                 limparUsuariosOrfaos, limparDadosTeste,
+                                 recalcularCopa
   lib/
     main.dart                 ← Firebase init + FCM background handler + StreamBuilder de auth
     firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
@@ -49,8 +50,11 @@ C:\bolao\
       tela_perfil.dart        ← exibe/edita nome e avatar; alterar senha; excluir conta
       tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
       tela_palpites.dart      ← abas MODO CLÁSSICO/MODO COPA (condicionais) + sub-abas Próximos/Encerrados;
-                                 MODO COPA: form de palpite de classificação dos 12 grupos
-      tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos
+                                 MODO COPA: form de palpite de classificação dos 12 grupos;
+                                 bloqueio por palpitesTravados (flag admin) ou 5 min antes do 1º jogo
+      tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos;
+                                 dialog de palpites com filtro A–L + MATA-MATA, palpites especiais
+                                 completos (6 campos) e suporte a Modo Copa com pontuação por posição
       tela_grupos.dart        ← lista grupos do usuário; criar grupo com seleção de modo CLÁSSICO/COPA;
                                  card exibe chip de modo; entrar com código; sair;
                                  tocar no card abre dialog de detalhes com membros e avatares;
@@ -63,7 +67,8 @@ C:\bolao\
                                  seção "Terceiros — 16 Avos" para alocar os 8 terceiros nos slots;
                                  ao salvar, atualiza automaticamente team1/team2 dos jogos 73–88
       tela_admin_especiais.dart ← resultados reais dos palpites especiais + botão CALCULAR
-      tela_admin_definicoes.dart ← popular jogos, recalcular regras, limpar dados de teste, limpar órfãos
+      tela_admin_definicoes.dart ← popular jogos, recalcular regras, limpar dados de teste, limpar órfãos;
+                                 botão Travar/Destravar Palpites (grava palpitesTravados em config/copa2026)
       tela_ajuda.dart         ← FAQ estático
     services/
       jogo_service.dart       ← popularJogosNoFirestore({bool teste}), buscarTodos, buscarPorData
@@ -358,7 +363,15 @@ ID do documento = `copa2026` (documento único).
 ```
 campeaoReal                  : String?   — nome em inglês do campeão real (ex: "Brazil")
 artilheiroReal               : String?   — nome do artilheiro real (comparação case-insensitive)
+melhorGoleiroReal            : String?
+maisGoleadoraReal            : String?
+maisVazadaReal               : String?
+melhorJogadorFinalReal       : String?
 palpitesEspeciaisCalculados  : Boolean   — true após executar calcularPalpitesEspeciais; impede execução dupla
+classificacao_real           : Map       — { "A": { "primeiro": "Brazil", "segundo": "Mexico", "terceiro": "..." }, ... }
+terceiros_classificados      : Map       — alocação dos 8 terceiros nos slots dos 16 avos
+palpitesTravados             : Boolean   — true após admin acionar "Travar Palpites"; bloqueia edição e
+                                           libera visualização dos palpites Copa e Especiais no ranking
 ```
 
 ---
@@ -479,8 +492,12 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 - Pódio visual para top 3: avatar real (foto do jogador via `WidgetAvatar`); fundo do degrau dourado/prata (`Color(0xFFC0C0C0)`)/bronze (`Color(0xFFCD7F32)`)
 - Lista para 4º em diante com avatar real; usuário logado destacado com borda verde
 - Tocar em qualquer card (pódio ou lista) abre `_DialogPalpitesUsuario`:
-  - Cabeçalho verde com avatar + nome; se o usuário tiver palpiteCampeao/palpiteArtilheiro, exibe em destaque (container semitransparente) com bandeira do campeão e nome do artilheiro
-  - Lista dos palpites nos jogos encerrados, ordenados do mais recente para o mais antigo; cada linha mostra bandeiras + siglas + resultado, palpite e badge de pontos
+  - Cabeçalho verde (Clássico) ou azul (Copa) com avatar + nome
+  - Bloco de Palpites Especiais (6 campos: campeão, artilheiro, goleiro, melhor jogador, mais goleadora, menos vazada) — visível somente após `palpitesTravados=true`
+  - Filtro de chips A–L + chip MATA-MATA (aparece quando admin registra pelo menos um jogo 73+)
+  - **Modo Clássico + grupo A–L:** lista os 6 jogos daquele grupo com placar real, palpite e badge de pontos (só jogos com placar registrado)
+  - **Modo Copa + grupo A–L:** 3 posições palpitadas; se classificação real salva, mostra seta/check por posição, badge de pontos e linha de bônus (+100 se grupo perfeito) — visível somente após `palpitesTravados=true`
+  - **MATA-MATA (ambos os modos):** palpites de placar exato dos jogos 73–104 com resultado registrado
 
 ### `tela_grupos.dart` — implementada (acesso via drawer → GRUPOS → Meus Grupos)
 - `StreamBuilder` em `GrupoService().buscarGruposDoUsuario(uid)` → lista reativa de grupos
@@ -648,12 +665,14 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 
 | Função | Tipo | O que faz |
 |---|---|---|
-| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula delta de pontuação para cada palpite; na primeira inserção de resultado aplica −1 para usuários sem palpite registrados antes do jogo; envia FCM de ranking para quem mudou de posição |
+| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula delta de pontuação para cada palpite; na primeira inserção de resultado aplica −10 para usuários sem palpite registrados antes do jogo; envia FCM de ranking para quem mudou de posição; propaga vencedor/perdedor para próxima fase (eliminatórias) |
 | `lembretesPalpite` | Schedule (`*/30 * * * *`) | Notifica usuários sem palpite em jogos que começam em ~30 min |
-| `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação de todos os usuários do zero, incluindo a penalidade de −1 por ausência de palpite |
+| `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação clássica de todos os usuários do zero |
 | `membroEntrou` | Firestore trigger (`grupos/{grupoId}`) | Detecta novo membro no array `membros` e envia FCM para o dono do grupo |
-| `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Lê `config/copa2026` (campeaoReal + artilheiroReal) e aplica +50 / +25 pts para cada usuário que acertou; marca `palpitesEspeciaisCalculados: true` para evitar execução dupla |
-| `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` cujo UID não tem conta Auth + todos os `palpites` cujo uid não existe em `usuarios`; cobre casos onde o doc de usuário já foi deletado antes |
+| `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Aplica pontos dos 6 palpites especiais; marca `palpitesEspeciaisCalculados: true` para evitar execução dupla |
+| `recalcularCopa` | HTTPS Callable (admin only) | Calcula pontos Modo Copa (fase de grupos) para todos os usuários; grava em `pontuacaoCopa`; marca `copaGruposCalculado: true` |
+| `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos |
+| `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times eliminatórias, classificação, pontuações e flags; palpites preservados |
 
 **FCM token management:** token salvo em `usuarios/{uid}.fcmToken`. Tokens inválidos são removidos automaticamente (`messaging/registration-token-not-registered`).
 
@@ -730,6 +749,4 @@ Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regene
 
 ## Próximos passos (na ordem recomendada)
 
-1. Remover `popularPlacaresTeste` (Cloud Function e botão no admin) após validação dos testes.
-2. Atualizar tela de ranking para exibir histórico de palpites Copa no dialog (hoje só mostra Clássico).
-3. Publicar nova versão na Play Store quando o conjunto de features estiver estável.
+1. Publicar nova versão na Play Store quando o conjunto de features estiver estável.
