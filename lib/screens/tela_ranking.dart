@@ -1167,6 +1167,7 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
     final segundoReal = grupoReal?['segundo'] as String?;
     final terceiroReal = grupoReal?['terceiro'] as String?;
     final temReal = primeiroReal != null && segundoReal != null;
+    final aguardandoResultado = !temReal;
 
     final qualificados = <String>{
       if (primeiroReal != null) primeiroReal,
@@ -1225,6 +1226,26 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
                 ),
                 const Spacer(),
                 _BadgePontos(100),
+              ],
+            ),
+          ),
+        ],
+        if (aguardandoResultado) ...[
+          const Divider(height: 1, color: Cores.outlineVariant),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+            child: Row(
+              children: [
+                const Icon(Icons.schedule_rounded,
+                    size: 14, color: Cores.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Text(
+                  'Resultado do grupo ainda não divulgado',
+                  style: GoogleFonts.hankenGrotesk(
+                    fontSize: 12,
+                    color: Cores.onSurfaceVariant,
+                  ),
+                ),
               ],
             ),
           ),

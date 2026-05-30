@@ -709,6 +709,7 @@ exports.limparDadosTeste = onCall(
       melhorJogadorFinalReal:      FieldValue.delete(),
       palpitesEspeciaisCalculados: FieldValue.delete(),
       copaGruposCalculado:         FieldValue.delete(),
+      palpitesTravados:            false,
     }, { merge: true });
 
     const usuariosSnap = await db.collection('usuarios').get();
