@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -18,21 +19,48 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
   bool _recalculando = false;
   // ignore: prefer_final_fields
   bool _recalculandoCopa = false;
-  bool _popularandoPlacares = false;
   bool _limpando = false;
   bool _limpandoTeste = false;
+  bool _travando = false;
+  bool? _palpitesTravados; // null = ainda carregando
 
-  // TEMPORÁRIO — remover após validação
-  Future<void> _popularPlacaresTeste() async {
+  @override
+  void initState() {
+    super.initState();
+    _carregarStatusTravamento();
+  }
+
+  Future<void> _carregarStatusTravamento() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('config')
+        .doc('copa2026')
+        .get();
+    if (!mounted) return;
+    setState(() {
+      _palpitesTravados =
+          (doc.data()?['palpitesTravados'] as bool?) ?? false;
+    });
+  }
+
+  Future<void> _alternarTravamento() async {
+    final novoEstado = !(_palpitesTravados ?? false);
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Cores.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('[TESTE] Popular Placares 1×0?',
-            style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          novoEstado ? 'Travar palpites?' : 'Destravar palpites?',
+          style: GoogleFonts.anybody(fontWeight: FontWeight.w700),
+        ),
         content: Text(
-          'Insere placar 1×0 em todos os 72 jogos da Fase de Grupos.',
+          novoEstado
+              ? 'Os palpites do Modo Copa e os Palpites Especiais ficarão '
+                'visíveis para todos os participantes e não poderão mais ser '
+                'alterados.'
+              : 'Os palpites do Modo Copa e os Palpites Especiais voltarão a '
+                'ficar ocultos e poderão ser editados pelos participantes.',
           style: GoogleFonts.hankenGrotesk(fontSize: 14, height: 1.5),
         ),
         actions: [
@@ -43,23 +71,37 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Cores.error),
-            child: Text('POPULAR',
-                style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+            style: FilledButton.styleFrom(
+                backgroundColor:
+                    novoEstado ? Cores.error : Cores.verdePrincipal),
+            child: Text(
+              novoEstado ? 'TRAVAR' : 'DESTRAVAR',
+              style: GoogleFonts.anybody(fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
     );
     if (confirmar != true || !mounted) return;
-    setState(() => _popularandoPlacares = true);
+    setState(() => _travando = true);
     try {
-      final fn = FirebaseFunctions.instanceFor(region: 'southamerica-east1');
-      final result = await fn.httpsCallable('popularPlacaresTeste').call();
-      if (mounted) mostrarMensagem(context, '${result.data['atualizados']} jogos atualizados.');
+      await FirebaseFirestore.instance
+          .collection('config')
+          .doc('copa2026')
+          .set({'palpitesTravados': novoEstado}, SetOptions(merge: true));
+      if (mounted) {
+        setState(() => _palpitesTravados = novoEstado);
+        mostrarMensagem(
+          context,
+          novoEstado
+              ? 'Palpites travados com sucesso.'
+              : 'Palpites destravados com sucesso.',
+        );
+      }
     } catch (e) {
       if (mounted) mostrarMensagem(context, 'Erro: $e');
     } finally {
-      if (mounted) setState(() => _popularandoPlacares = false);
+      if (mounted) setState(() => _travando = false);
     }
   }
 
@@ -320,14 +362,10 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // TEMPORÁRIO — remover após validação
-          _CardOpcao(
-            icone: Icons.sports_soccer_rounded,
-            corIcone: Cores.error,
-            titulo: '[TESTE] Popular Placares 1×0',
-            descricao: 'Insere placar 1×0 em todos os 72 jogos da Fase de Grupos.',
-            carregando: _popularandoPlacares,
-            onTap: _popularPlacaresTeste,
+          _CardTravar(
+            travado: _palpitesTravados ?? false,
+            carregando: _travando || _palpitesTravados == null,
+            onTap: _alternarTravamento,
           ),
           const SizedBox(height: 12),
           _CardOpcao(
@@ -380,6 +418,102 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
             onTap: _limparOrfaos,
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Card de travamento de palpites ──────────────────────────────────────────
+
+class _CardTravar extends StatelessWidget {
+  const _CardTravar({
+    required this.travado,
+    required this.carregando,
+    required this.onTap,
+  });
+
+  final bool travado;
+  final bool carregando;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cor = travado ? Cores.onSurfaceVariant : Cores.error;
+    return Material(
+      color: travado
+          ? Cores.surfaceContainer
+          : Cores.error.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: carregando ? null : onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+                color: travado ? Cores.outlineVariant : Cores.error),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: carregando
+                    ? Center(
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2.5, color: cor),
+                        ),
+                      )
+                    : Icon(
+                        travado
+                            ? Icons.lock_rounded
+                            : Icons.lock_open_rounded,
+                        color: cor,
+                        size: 26,
+                      ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      travado
+                          ? 'Palpites Travados'
+                          : 'Travar Palpites',
+                      style: GoogleFonts.anybody(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: travado
+                            ? Cores.onSurfaceVariant
+                            : Cores.error,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      travado
+                          ? 'Palpites Especiais e Modo Copa já estão visíveis para todos.'
+                          : 'Usar no início do jogo de abertura — torna visíveis os Palpites Especiais e o Modo Copa de todos.',
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 12,
+                        color: Cores.onSurfaceVariant,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded,
+                  color: Cores.outlineVariant),
+            ],
+          ),
+        ),
       ),
     );
   }

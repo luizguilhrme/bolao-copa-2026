@@ -60,6 +60,7 @@ class _TelaPalpitesState extends State<TelaPalpites> {
   List<Grupo> _meusGrupos = [];
   Map<String, Map<String, String?>> _palpitesCopa = {};
   Map<String, Map<String, String?>> _classificacaoReal = {};
+  bool _palpitesTravados = false;
 
   // Dados derivados — atualizados pelo timer
   Map<String, List<Jogo>> _gruposProximos = {};
@@ -118,7 +119,8 @@ class _TelaPalpitesState extends State<TelaPalpites> {
             .collection('config')
             .doc('copa2026')
             .get();
-        final cr = doc.data()?['classificacao_real'] as Map<String, dynamic>?;
+        final data = doc.data();
+        final cr = data?['classificacao_real'] as Map<String, dynamic>?;
         if (cr != null) {
           _classificacaoReal = cr.map((k, v) {
             final m = v as Map<String, dynamic>;
@@ -129,6 +131,7 @@ class _TelaPalpitesState extends State<TelaPalpites> {
             });
           });
         }
+        _palpitesTravados = (data?['palpitesTravados'] as bool?) ?? false;
       } catch (_) {
         _classificacaoReal = {};
       }
@@ -227,8 +230,9 @@ class _TelaPalpitesState extends State<TelaPalpites> {
       _temModoClassico && _temModoCopa &&
       (!_faseGruposEncerrada || _classificacaoReal.isNotEmpty);
 
-  /// Palpites Copa bloqueados 5 min antes do primeiro jogo.
+  /// Palpites Copa bloqueados pelo admin ou 5 min antes do primeiro jogo.
   bool get _copaBloqueada {
+    if (_palpitesTravados) return true;
     if (_todosJogos.isEmpty) return false;
     final primeiro = _todosJogos.reduce((a, b) => a.id < b.id ? a : b);
     return DateTime.now().isAfter(

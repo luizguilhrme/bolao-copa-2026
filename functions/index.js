@@ -724,33 +724,6 @@ exports.limparDadosTeste = onCall(
   }
 );
 
-// ─── popularPlacaresTeste [TEMPORÁRIO] ────────────────────────────────────────
-// Insere placar 1×0 em todos os 72 jogos da Fase de Grupos.
-// Usado apenas para testes — remover após validação.
-
-exports.popularPlacaresTeste = onCall(
-  { region: 'southamerica-east1' },
-  async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Não autenticado.');
-    const db = getFirestore();
-    const userDoc = await db.collection('usuarios').doc(request.auth.uid).get();
-    if (!userDoc.exists || userDoc.data().isAdmin !== true) {
-      throw new HttpsError('permission-denied', 'Acesso restrito ao admin.');
-    }
-
-    const snap = await db.collection('jogos').where('id', '<=', 72).get();
-    const docs = snap.docs;
-    for (let i = 0; i < docs.length; i += 400) {
-      const batch = db.batch();
-      docs.slice(i, i + 400).forEach(doc =>
-        batch.update(doc.ref, { placar1: 1, placar2: 0 })
-      );
-      await batch.commit();
-    }
-    return { atualizados: docs.length };
-  }
-);
-
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 
 // Envia notificação FCM e remove token inválido do Firestore se necessário.

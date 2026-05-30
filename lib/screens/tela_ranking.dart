@@ -8,6 +8,7 @@ import '../models/palpite.dart';
 import '../models/usuario.dart';
 import '../services/grupo_service.dart';
 import '../services/jogo_service.dart';
+import '../services/palpite_copa_service.dart';
 import '../services/palpite_service.dart';
 import '../utils/avatares.dart';
 import '../utils/biblioteca.dart';
@@ -415,7 +416,7 @@ class _ColunaPodio extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => _mostrarPalpitesUsuario(context, usuario),
+      onTap: () => _mostrarPalpitesUsuario(context, usuario, modoCopa),
       child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -590,7 +591,7 @@ class _ItemRanking extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => _mostrarPalpitesUsuario(context, usuario),
+      onTap: () => _mostrarPalpitesUsuario(context, usuario, modoCopa),
       child: AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       decoration: BoxDecoration(
@@ -681,31 +682,67 @@ class _ItemRanking extends StatelessWidget {
 
 // ─── Diálogo: palpites de um usuário ─────────────────────────────────────────
 
-Future<void> _mostrarPalpitesUsuario(BuildContext context, Usuario usuario) {
+Future<void> _mostrarPalpitesUsuario(
+    BuildContext context, Usuario usuario, bool modoCopa) {
   return showDialog(
     context: context,
-    builder: (_) => _DialogPalpitesUsuario(usuario: usuario),
+    builder: (_) =>
+        _DialogPalpitesUsuario(usuario: usuario, modoCopa: modoCopa),
   );
 }
 
-class _ItemPalpiteUsuario {
-  const _ItemPalpiteUsuario(
+class _DadosDialog {
+  const _DadosDialog({
+    required this.jogos,
+    required this.palpites,
+    required this.palpitesCopa,
+    required this.classificacaoReal,
+    required this.palpitesTravados,
+  });
+
+  final List<Jogo> jogos;
+  final List<Palpite> palpites;
+  final Map<String, Map<String, String?>> palpitesCopa;
+  final Map<String, dynamic> classificacaoReal;
+  final bool palpitesTravados;
+
+  bool get temMataMata => jogos.any((j) => j.id > 72 && j.placar1 != null);
+}
+
+class _ItemPalpiteClassico {
+  const _ItemPalpiteClassico(
       {required this.jogo, required this.palpite, required this.pontos});
   final Jogo jogo;
   final Palpite palpite;
   final int pontos;
 }
 
+class _ItemEspecial {
+  const _ItemEspecial(this.icone, this.label, this.valor,
+      {this.isTime = false});
+  final IconData icone;
+  final String label;
+  final String valor;
+  final bool isTime;
+}
+
 class _DialogPalpitesUsuario extends StatefulWidget {
-  const _DialogPalpitesUsuario({required this.usuario});
+  const _DialogPalpitesUsuario(
+      {required this.usuario, required this.modoCopa});
   final Usuario usuario;
+  final bool modoCopa;
 
   @override
   State<_DialogPalpitesUsuario> createState() => _DialogPalpitesUsuarioState();
 }
 
 class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
-  late final Future<List<_ItemPalpiteUsuario>> _future;
+  late final Future<_DadosDialog> _future;
+  String _filtroGrupo = 'A';
+
+  static const _grupos = [
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L',
+  ];
 
   @override
   void initState() {
@@ -713,272 +750,559 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
     _future = _carregar();
   }
 
-  Future<List<_ItemPalpiteUsuario>> _carregar() async {
+  Future<_DadosDialog> _carregar() async {
+    final uid = widget.usuario.uid;
     final results = await Future.wait([
-      PalpiteService().buscarTodosPorUsuario(widget.usuario.uid),
+      PalpiteService().buscarTodosPorUsuario(uid),
       JogoService().buscarTodos(),
+      PalpiteCopaService().buscarPorUid(uid),
+      FirebaseFirestore.instance.collection('config').doc('copa2026').get(),
     ]);
     final palpites = results[0] as List<Palpite>;
     final jogos = results[1] as List<Jogo>;
+    final palpitesCopa =
+        results[2] as Map<String, Map<String, String?>>;
+    final configSnap = results[3] as DocumentSnapshot;
 
-    final palpitesMap = {for (final p in palpites) p.jogoId: p};
+    Map<String, dynamic> classificacaoReal = {};
+    bool palpitesTravados = false;
+    if (configSnap.exists) {
+      final data = configSnap.data() as Map<String, dynamic>?;
+      classificacaoReal =
+          (data?['classificacao_real'] as Map<String, dynamic>?) ?? {};
+      palpitesTravados = (data?['palpitesTravados'] as bool?) ?? false;
+    }
 
-    return jogos
-        .where((j) => j.placar1 != null && palpitesMap.containsKey(j.id))
-        .map((j) {
-          final p = palpitesMap[j.id]!;
-          return _ItemPalpiteUsuario(
-            jogo: j,
-            palpite: p,
-            pontos: calcularPontosComFase(p.palpite1, p.palpite2, j.placar1!, j.placar2!, j.round),
-          );
-        })
-        .toList()
-      ..sort((a, b) => b.jogo.dataHora.compareTo(a.jogo.dataHora));
+    return _DadosDialog(
+      jogos: jogos,
+      palpites: palpites,
+      palpitesCopa: palpitesCopa,
+      classificacaoReal: classificacaoReal,
+      palpitesTravados: palpitesTravados,
+    );
+  }
+
+  List<_ItemEspecial> _especiais(bool travados) {
+    if (!travados) return [];
+    final u = widget.usuario;
+    return [
+      if (u.palpiteCampeao != null)
+        _ItemEspecial(Icons.emoji_events, 'Campeão', u.palpiteCampeao!,
+            isTime: true),
+      if (u.palpiteArtilheiro != null)
+        _ItemEspecial(
+            Icons.sports_soccer, 'Artilheiro', u.palpiteArtilheiro!),
+      if (u.palpiteGoleiro != null)
+        _ItemEspecial(
+            Icons.sports_handball, 'Melhor Goleiro', u.palpiteGoleiro!),
+      if (u.palpiteMelhorJogador != null)
+        _ItemEspecial(Icons.star_rounded, 'Melhor Jogador',
+            u.palpiteMelhorJogador!),
+      if (u.palpiteMaisGoleadora != null)
+        _ItemEspecial(
+            Icons.trending_up_rounded, 'Mais Goleadora', u.palpiteMaisGoleadora!,
+            isTime: true),
+      if (u.palpiteMenosVazada != null)
+        _ItemEspecial(Icons.shield_rounded, 'Menos Vazada',
+            u.palpiteMenosVazada!,
+            isTime: true),
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
+    final corAcento =
+        widget.modoCopa ? Cores.azulTerciario : Cores.verdePrincipal;
+
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.82,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.max,
-          children: [
-          // Cabeçalho verde
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-            color: Cores.verdePrincipal,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: FutureBuilder<_DadosDialog>(
+          future: _future,
+          builder: (ctx, snap) {
+            final dados = snap.data;
+            final especiais = _especiais(dados?.palpitesTravados ?? false);
+            return Column(
+              mainAxisSize: MainAxisSize.max,
               children: [
-                Row(
-                  children: [
-                    WidgetAvatar(
-                      avatarId: widget.usuario.avatar,
-                      nome: widget.usuario.nome,
-                      tamanho: 44,
-                      corFundo: Colors.white24,
-                      corTexto: Colors.white,
-                      borderColor: Colors.white,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                // ── Cabeçalho ──────────────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+                  color: corAcento,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Text(
-                            widget.usuario.nome,
-                            style: GoogleFonts.anybody(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          WidgetAvatar(
+                            avatarId: widget.usuario.avatar,
+                            nome: widget.usuario.nome,
+                            tamanho: 44,
+                            corFundo: Colors.white24,
+                            corTexto: Colors.white,
+                            borderColor: Colors.white,
                           ),
-                          Text(
-                            'Palpites nos jogos encerrados',
-                            style: GoogleFonts.hankenGrotesk(
-                              fontSize: 12,
-                              color: Colors.white70,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              widget.usuario.nome,
+                              style: GoogleFonts.anybody(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
-                if (widget.usuario.palpiteCampeao != null ||
-                    widget.usuario.palpiteArtilheiro != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      children: [
-                        if (widget.usuario.palpiteCampeao != null)
-                          Row(
+                      if (especiais.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color:
+                                Colors.white.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
                             children: [
-                              const Icon(Icons.emoji_events,
-                                  size: 15, color: Colors.white70),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Campeão',
-                                style: GoogleFonts.hankenGrotesk(
-                                    fontSize: 12, color: Colors.white70),
-                              ),
-                              const Spacer(),
-                              Container(
-                                width: 20,
-                                height: 20,
-                                clipBehavior: Clip.antiAlias,
-                                decoration: const BoxDecoration(
-                                    shape: BoxShape.circle),
-                                child: Bandeira(widget.usuario.palpiteCampeao!,
-                                    tamanho: 20),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                nomePtDe(widget.usuario.palpiteCampeao!),
-                                style: GoogleFonts.hankenGrotesk(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
+                              for (int i = 0;
+                                  i < especiais.length;
+                                  i++) ...[
+                                if (i > 0)
+                                  const Divider(
+                                      color: Colors.white24,
+                                      height: 14),
+                                _buildLinhaEspecial(especiais[i]),
+                              ],
                             ],
                           ),
-                        if (widget.usuario.palpiteCampeao != null &&
-                            widget.usuario.palpiteArtilheiro != null)
-                          const Divider(color: Colors.white24, height: 14),
-                        if (widget.usuario.palpiteArtilheiro != null)
-                          Row(
-                            children: [
-                              const Icon(Icons.sports_soccer,
-                                  size: 15, color: Colors.white70),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Artilheiro',
-                                style: GoogleFonts.hankenGrotesk(
-                                    fontSize: 12, color: Colors.white70),
-                              ),
-                              const Spacer(),
-                              Text(
-                                widget.usuario.palpiteArtilheiro!,
-                                style: GoogleFonts.hankenGrotesk(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
+                        ),
                       ],
+                    ],
+                  ),
+                ),
+
+                // ── Filtro de grupos ───────────────────────────────────
+                if (dados != null) _buildFiltro(dados, corAcento),
+
+                // ── Conteúdo ───────────────────────────────────────────
+                Expanded(
+                  child: snap.connectionState == ConnectionState.waiting
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(32),
+                            child: CircularProgressIndicator(
+                                color: Cores.verdePrincipal),
+                          ),
+                        )
+                      : snap.hasError
+                          ? Center(
+                              child: Text('Erro ao carregar.',
+                                  style: GoogleFonts.hankenGrotesk(
+                                      color: Cores.onSurfaceVariant)),
+                            )
+                          : _buildConteudo(dados!),
+                ),
+
+                // ── Botão fechar ───────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: corAcento,
+                        side: BorderSide(color: corAcento),
+                      ),
+                      child: Text('FECHAR',
+                          style: GoogleFonts.anybody(
+                              fontWeight: FontWeight.w700)),
                     ),
                   ),
-                ],
-              ],
-            ),
-          ),
-
-          // Lista de palpites
-          Expanded(
-            child: FutureBuilder<List<_ItemPalpiteUsuario>>(
-              future: _future,
-              builder: (ctx, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: CircularProgressIndicator(color: Cores.verdePrincipal),
-                    ),
-                  );
-                }
-                final itens = snap.data ?? [];
-                if (itens.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        'Nenhum palpite registrado.',
-                        style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
-                      ),
-                    ),
-                  );
-                }
-                return ListView.separated(
-                  itemCount: itens.length,
-                  separatorBuilder: (_, __) =>
-                      const Divider(height: 1, color: Cores.outlineVariant),
-                  itemBuilder: (_, i) => _buildLinha(itens[i]),
-                );
-              },
-            ),
-          ),
-
-          // Botão fechar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Cores.verdePrincipal,
-                  side: const BorderSide(color: Cores.verdePrincipal),
                 ),
-                child: Text('FECHAR',
-                    style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ),
-        ],
+              ],
+            );
+          },
+        ),
       ),
-      ), // ConstrainedBox
     );
   }
 
-  Widget _buildLinha(_ItemPalpiteUsuario item) {
+  Widget _buildLinhaEspecial(_ItemEspecial e) {
+    return Row(
+      children: [
+        Icon(e.icone, size: 15, color: Colors.white70),
+        const SizedBox(width: 8),
+        Text(e.label,
+            style: GoogleFonts.hankenGrotesk(
+                fontSize: 12, color: Colors.white70)),
+        const Spacer(),
+        if (e.isTime) ...[
+          Container(
+            width: 20,
+            height: 20,
+            clipBehavior: Clip.antiAlias,
+            decoration: const BoxDecoration(shape: BoxShape.circle),
+            child: Bandeira(e.valor, tamanho: 20),
+          ),
+          const SizedBox(width: 6),
+        ],
+        Text(
+          e.isTime ? nomePtDe(e.valor) : e.valor,
+          style: GoogleFonts.hankenGrotesk(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFiltro(_DadosDialog dados, Color corAcento) {
+    final filtros = [
+      ..._grupos,
+      if (dados.temMataMata) 'MATA-MATA',
+    ];
+    return Container(
+      color: Cores.surfaceContainer,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            for (int i = 0; i < filtros.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              _buildChipFiltro(filtros[i], corAcento),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChipFiltro(String label, Color corAcento) {
+    final sel = _filtroGrupo == label;
+    return GestureDetector(
+      onTap: () => setState(() => _filtroGrupo = label),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: sel ? corAcento : Cores.surface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+              color: sel ? corAcento : Cores.outlineVariant),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.anybody(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: sel ? Colors.white : Cores.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConteudo(_DadosDialog dados) {
+    if (_filtroGrupo == 'MATA-MATA') {
+      return _buildListaClassico(dados, mataMata: true);
+    }
+    if (widget.modoCopa) {
+      if (!dados.palpitesTravados) return _buildPalpitesOcultos();
+      return _buildGrupoCopa(dados);
+    }
+    return _buildListaClassico(dados, mataMata: false);
+  }
+
+  Widget _buildPalpitesOcultos() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock_rounded, size: 40, color: Cores.outlineVariant),
+            const SizedBox(height: 12),
+            Text(
+              'Palpites ocultos até o início da Copa',
+              style: GoogleFonts.anybody(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: Cores.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Lista de palpites clássicos (fase de grupos ou mata-mata) ──────────
+
+  Widget _buildListaClassico(_DadosDialog dados, {required bool mataMata}) {
+    final palpitesMap = {for (final p in dados.palpites) p.jogoId: p};
+
+    final itens = dados.jogos
+        .where((j) {
+          if (j.placar1 == null) return false;
+          if (!palpitesMap.containsKey(j.id)) return false;
+          return mataMata
+              ? j.id > 72
+              : j.id <= 72 && j.group == 'Grupo $_filtroGrupo';
+        })
+        .map((j) {
+          final p = palpitesMap[j.id]!;
+          return _ItemPalpiteClassico(
+            jogo: j,
+            palpite: p,
+            pontos: calcularPontosComFase(
+                p.palpite1, p.palpite2, j.placar1!, j.placar2!, j.round),
+          );
+        })
+        .toList()
+      ..sort((a, b) => a.jogo.dataHora.compareTo(b.jogo.dataHora));
+
+    if (itens.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Nenhum palpite registrado.',
+            style: GoogleFonts.hankenGrotesk(
+                color: Cores.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      itemCount: itens.length,
+      separatorBuilder: (_, __) =>
+          const Divider(height: 1, color: Cores.outlineVariant),
+      itemBuilder: (_, i) => _buildLinhaClassico(itens[i]),
+    );
+  }
+
+  Widget _buildLinhaClassico(_ItemPalpiteClassico item) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
-          // Times e resultado
           Bandeira(item.jogo.team1, tamanho: 20),
           const SizedBox(width: 5),
-          Text(
-            siglaDe(item.jogo.team1),
-            style: GoogleFonts.anybody(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Cores.onSurface,
-            ),
-          ),
+          Text(siglaDe(item.jogo.team1),
+              style: GoogleFonts.anybody(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Cores.onSurface)),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 5),
             child: Text(
               '${item.jogo.placar1}–${item.jogo.placar2}',
               style: GoogleFonts.anybody(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: Cores.verdePrincipal,
-              ),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Cores.verdePrincipal),
             ),
           ),
-          Text(
-            siglaDe(item.jogo.team2),
-            style: GoogleFonts.anybody(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Cores.onSurface,
-            ),
-          ),
+          Text(siglaDe(item.jogo.team2),
+              style: GoogleFonts.anybody(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Cores.onSurface)),
           const SizedBox(width: 5),
           Bandeira(item.jogo.team2, tamanho: 20),
-
           const Spacer(),
-
-          // Palpite do usuário
           Text(
             '${item.palpite.palpite1}–${item.palpite.palpite2}',
             style: GoogleFonts.hankenGrotesk(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Cores.onSurfaceVariant,
-            ),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Cores.onSurfaceVariant),
           ),
           const SizedBox(width: 8),
-
-          // Badge de pontos
           _BadgePontos(item.pontos),
+        ],
+      ),
+    );
+  }
+
+  // ── Palpite Copa: classificação de grupo ──────────────────────────────
+
+  Widget _buildGrupoCopa(_DadosDialog dados) {
+    final grupoPalpite = dados.palpitesCopa[_filtroGrupo];
+    final grupoReal =
+        dados.classificacaoReal[_filtroGrupo] as Map<String, dynamic>?;
+
+    if (grupoPalpite == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Sem palpite para o Grupo $_filtroGrupo.',
+            style: GoogleFonts.hankenGrotesk(
+                color: Cores.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+
+    final primeiroReal = grupoReal?['primeiro'] as String?;
+    final segundoReal = grupoReal?['segundo'] as String?;
+    final terceiroReal = grupoReal?['terceiro'] as String?;
+    final temReal = primeiroReal != null && segundoReal != null;
+
+    final qualificados = <String>{
+      if (primeiroReal != null) primeiroReal,
+      if (segundoReal != null) segundoReal,
+      if (terceiroReal != null) terceiroReal,
+    };
+
+    final palpitadoPrimeiro = grupoPalpite['primeiro'];
+    final palpitadoSegundo = grupoPalpite['segundo'];
+    final palpitadoTerceiro = grupoPalpite['terceiro'];
+
+    int? calcPts(String? palpitado, String? real) {
+      if (!temReal || palpitado == null) return null;
+      if (palpitado == real) return 200;
+      if (qualificados.contains(palpitado)) return 100;
+      return 0;
+    }
+
+    final posicoes = [
+      ('1º', palpitadoPrimeiro, primeiroReal, calcPts(palpitadoPrimeiro, primeiroReal)),
+      ('2º', palpitadoSegundo, segundoReal, calcPts(palpitadoSegundo, segundoReal)),
+      if (palpitadoTerceiro != null || terceiroReal != null)
+        ('3º', palpitadoTerceiro, terceiroReal, calcPts(palpitadoTerceiro, terceiroReal)),
+    ];
+
+    // Bônus: todas as posições exatas
+    int? bonus;
+    if (temReal) {
+      final todasExatas = palpitadoPrimeiro == primeiroReal &&
+          palpitadoSegundo == segundoReal &&
+          (terceiroReal == null || palpitadoTerceiro == terceiroReal);
+      bonus = todasExatas ? 100 : 0;
+    }
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      children: [
+        for (final (pos, palpitado, real, pts) in posicoes)
+          _buildLinhaCopa(pos, palpitado, real, pts),
+        if (bonus != null && bonus > 0) ...[
+          const Divider(height: 1, color: Cores.outlineVariant),
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                const Icon(Icons.stars_rounded,
+                    size: 16, color: Cores.azulTerciario),
+                const SizedBox(width: 8),
+                Text(
+                  'Bônus — grupo perfeito',
+                  style: GoogleFonts.hankenGrotesk(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Cores.onSurface),
+                ),
+                const Spacer(),
+                _BadgePontos(100),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildLinhaCopa(
+      String posicao, String? palpitado, String? real, int? pontos) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 24,
+            child: Text(posicao,
+                style: GoogleFonts.anybody(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Cores.onSurfaceVariant)),
+          ),
+          const SizedBox(width: 8),
+          if (palpitado != null) ...[
+            Container(
+              width: 22,
+              height: 22,
+              clipBehavior: Clip.antiAlias,
+              decoration: const BoxDecoration(shape: BoxShape.circle),
+              child: Bandeira(palpitado, tamanho: 22),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                nomePtDe(palpitado),
+                style: GoogleFonts.hankenGrotesk(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Cores.onSurface),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ] else
+            Expanded(
+              child: Text('—',
+                  style: GoogleFonts.hankenGrotesk(
+                      color: Cores.onSurfaceVariant)),
+            ),
+          // Resultado real (só quando diferente do palpitado)
+          if (real != null && real != palpitado) ...[
+            const SizedBox(width: 8),
+            const Icon(Icons.arrow_forward_rounded,
+                size: 14, color: Cores.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Container(
+              width: 22,
+              height: 22,
+              clipBehavior: Clip.antiAlias,
+              decoration: const BoxDecoration(shape: BoxShape.circle),
+              child: Bandeira(real, tamanho: 22),
+            ),
+            const SizedBox(width: 4),
+            Text(siglaDe(real),
+                style: GoogleFonts.anybody(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Cores.onSurfaceVariant)),
+          ] else if (real != null)
+            const Padding(
+              padding: EdgeInsets.only(left: 8),
+              child: Icon(Icons.check_circle_rounded,
+                  size: 16, color: Cores.verdePrincipal),
+            ),
+          if (pontos != null) ...[
+            const SizedBox(width: 8),
+            _BadgePontos(pontos),
+          ],
         ],
       ),
     );
@@ -991,15 +1315,12 @@ class _BadgePontos extends StatelessWidget {
   const _BadgePontos(this.pontos);
   final int pontos;
 
-  Color get _cor => corPontuacao(pontos);
-  Color get _corTexto => Colors.white;
-
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: _cor,
+        color: corPontuacao(pontos),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -1007,7 +1328,7 @@ class _BadgePontos extends StatelessWidget {
         style: GoogleFonts.anybody(
           fontSize: 11,
           fontWeight: FontWeight.w700,
-          color: _corTexto,
+          color: Colors.white,
         ),
       ),
     );
