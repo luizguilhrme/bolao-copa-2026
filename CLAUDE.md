@@ -775,9 +775,14 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 
 O repositório é **público** no GitHub. Os arquivos `google-services.json` e `firebase_options.dart` foram removidos do tracking git e adicionados ao `.gitignore`. As API keys são restritas no Google Cloud Console → APIs & Services → Credentials:
 
-- **Android key:** restrita por package name `com.luizdeveloper.bolao.bolao` + SHA-1 do upload keystore
+- **Android key:** restrita por package name `com.luizdeveloper.bolao.bolao` + três SHA-1 cadastrados:
+  - `85:A9:45:98:52:84:56:96:87:11:DD:A2:30:1F:55:35:5B:77:4F:68` — upload keystore (release local / AAB)
+  - `0E:B5:82:48:A9:AE:FE:4B:BA:05:C1:95:9F:91:AE:11:27:DD:EC:68` — debug keystore (emulador/IDE)
+  - `2B:81:F1:6C:60:F5:CD:6B:19:E7:2A:3B:63:F5:18:2B:CB:CD:3A:D9` — Google Play App Signing (APK distribuído pela loja)
 - **Browser key:** restrita por HTTP referrer `bolaodasoci2026.web.app/*` e `bolaodasoci2026.firebaseapp.com/*`
 - **Keystore e senhas** (`key.properties`, `upload-keystore.jks`) nunca foram commitados; protegidos pelo `.gitignore`
+
+> **Atenção Google Play App Signing:** o Google re-assina o APK com a chave dele antes de distribuir. O SHA-1 do APK instalado via Play Store é diferente do upload keystore. Os três SHA-1 acima devem estar cadastrados na Android key para o Google Sign-In funcionar em todos os ambientes.
 
 Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regenerar `firebase_options.dart` e baixar `google-services.json` do Firebase Console.
 
