@@ -1,4 +1,5 @@
 ﻿import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -58,6 +59,7 @@ class _TelaPalpitesState extends State<TelaPalpites> {
   Map<int, Palpite> _palpitesMap = {};
   List<Grupo> _meusGrupos = [];
   Map<String, Map<String, String?>> _palpitesCopa = {};
+  Map<String, Map<String, String?>> _classificacaoReal = {};
 
   // Dados derivados — atualizados pelo timer
   Map<String, List<Jogo>> _gruposProximos = {};
@@ -103,12 +105,32 @@ class _TelaPalpitesState extends State<TelaPalpites> {
       _meusGrupos = results[3] as List<Grupo>;
       _palpitesMap = {for (final p in palpites) p.jogoId: p};
 
-      // Palpites Copa carregados separadamente — um erro de permissão aqui
-      // não deve derrubar o carregamento dos jogos e palpites clássicos.
+      // Palpites Copa e classificação real carregados separadamente — um erro
+      // aqui não deve derrubar o carregamento dos jogos e palpites clássicos.
       try {
         _palpitesCopa = await PalpiteCopaService().buscarPorUid(_uid);
       } catch (_) {
         _palpitesCopa = {};
+      }
+
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('config')
+            .doc('copa2026')
+            .get();
+        final cr = doc.data()?['classificacao_real'] as Map<String, dynamic>?;
+        if (cr != null) {
+          _classificacaoReal = cr.map((k, v) {
+            final m = v as Map<String, dynamic>;
+            return MapEntry(k, {
+              'primeiro': m['primeiro'] as String?,
+              'segundo':  m['segundo']  as String?,
+              'terceiro': m['terceiro'] as String?,
+            });
+          });
+        }
+      } catch (_) {
+        _classificacaoReal = {};
       }
 
       _reclassificar(preservarDatasVisiveis: false);
@@ -303,8 +325,10 @@ class _TelaPalpitesState extends State<TelaPalpites> {
                         bloqueado: _copaBloqueada,
                         onSalvar: _salvarPalpitesCopa,
                       )
-                    : const _AbaCopaEncerrados(
-                        key: ValueKey('copa-encerrados'),
+                    : _AbaCopaEncerrados(
+                        key: const ValueKey('copa-encerrados'),
+                        palpites: _palpitesCopa,
+                        classificacaoReal: _classificacaoReal,
                       ))
                 : (_abaProximos
                     ? _AbaProximos(
@@ -1852,30 +1876,347 @@ class _BotaoSalvarCopa extends StatelessWidget {
 // ─── Aba Copa — Encerrados ────────────────────────────────────────────────────
 
 class _AbaCopaEncerrados extends StatelessWidget {
-  const _AbaCopaEncerrados({super.key});
+  const _AbaCopaEncerrados({
+    super.key,
+    required this.palpites,
+    required this.classificacaoReal,
+  });
+
+  final Map<String, Map<String, String?>> palpites;
+  final Map<String, Map<String, String?>> classificacaoReal;
+
+  static const _ordem = ['A','B','C','D','E','F','G','H','I','J','K','L'];
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.bar_chart_rounded, size: 64, color: Cores.outlineVariant),
-            const SizedBox(height: 16),
-            Text('Resultados em breve',
-                style: GoogleFonts.anybody(
-                    fontSize: 18, fontWeight: FontWeight.w700, color: Cores.onSurface)),
-            const SizedBox(height: 8),
-            Text(
-              'Quando o admin confirmar a classificação dos grupos, seus pontos do MODO COPA aparecerão aqui.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.hankenGrotesk(
-                  fontSize: 14, color: Cores.onSurfaceVariant, height: 1.5),
-            ),
-          ],
+    if (classificacaoReal.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.bar_chart_rounded, size: 64, color: Cores.outlineVariant),
+              const SizedBox(height: 16),
+              Text('Classificação não divulgada',
+                  style: GoogleFonts.anybody(
+                      fontSize: 18, fontWeight: FontWeight.w700,
+                      color: Cores.onSurface)),
+              const SizedBox(height: 8),
+              Text(
+                'Quando o admin confirmar a classificação dos grupos, seus pontos do MODO COPA aparecerão aqui.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.hankenGrotesk(
+                    fontSize: 14, color: Cores.onSurfaceVariant, height: 1.5),
+              ),
+            ],
+          ),
         ),
+      );
+    }
+
+    // Calcula total de pontos somando todos os grupos disponíveis
+    int totalPontos = 0;
+    for (final letra in _ordem) {
+      final real = classificacaoReal[letra];
+      if (real == null) continue;
+      totalPontos += calcularPontosCopaGrupo(palpites[letra] ?? {}, real);
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+      children: [
+        // Banner de total de pontos
+        _BannerTotalCopa(pontos: totalPontos),
+        const SizedBox(height: 20),
+        // Cards de cada grupo
+        for (final letra in _ordem)
+          if (classificacaoReal.containsKey(letra))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _CardGrupoResultado(
+                letra: letra,
+                real: classificacaoReal[letra]!,
+                palpite: palpites[letra] ?? {},
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+// Banner de total de pontos do Modo Copa
+class _BannerTotalCopa extends StatelessWidget {
+  const _BannerTotalCopa({required this.pontos});
+  final int pontos;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: Cores.azulTerciario,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.emoji_events_rounded, color: Colors.white, size: 32),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('MODO COPA — FASE DE GRUPOS',
+                    style: GoogleFonts.anybody(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white70,
+                        letterSpacing: 0.5)),
+                const SizedBox(height: 2),
+                Text('Total de pontos',
+                    style: GoogleFonts.hankenGrotesk(
+                        fontSize: 13, color: Colors.white70)),
+              ],
+            ),
+          ),
+          Text('$pontos pts',
+              style: GoogleFonts.anybody(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white)),
+        ],
+      ),
+    );
+  }
+}
+
+// Card de resultado de um grupo
+class _CardGrupoResultado extends StatelessWidget {
+  const _CardGrupoResultado({
+    required this.letra,
+    required this.real,
+    required this.palpite,
+  });
+
+  final String letra;
+  final Map<String, String?> real;
+  final Map<String, String?> palpite;
+
+  @override
+  Widget build(BuildContext context) {
+    final pontos = calcularPontosCopaGrupo(palpite, real);
+    final classificadosReais = {real['primeiro'], real['segundo'], real['terceiro']}
+        .whereType<String>()
+        .toSet();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Cores.surface,
+        border: Border.all(color: Cores.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Cabeçalho
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: const BoxDecoration(
+              color: Cores.surfaceContainer,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('GRUPO $letra',
+                    style: GoogleFonts.anybody(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: Cores.azulTerciario,
+                        letterSpacing: 0.5)),
+                _BadgePontosGrupoCopa(pontos: pontos),
+              ],
+            ),
+          ),
+          // Linhas de posição
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+            child: Column(
+              children: [
+                for (final entry in [
+                  ('primeiro', '🥇'),
+                  ('segundo', '🥈'),
+                  ('terceiro', '🥉'),
+                ])
+                  if (real[entry.$1] != null)
+                    _LinhaResultadoCopa(
+                      medalha: entry.$2,
+                      timeReal: real[entry.$1]!,
+                      timePalpite: palpite[entry.$1],
+                      classificadosReais: classificadosReais,
+                    ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Badge de pontos do grupo
+class _BadgePontosGrupoCopa extends StatelessWidget {
+  const _BadgePontosGrupoCopa({required this.pontos});
+  final int pontos;
+
+  @override
+  Widget build(BuildContext context) {
+    final cor = pontos >= 500
+        ? Cores.azulTerciario
+        : pontos >= 200
+            ? const Color(0xFF3B6FD4)
+            : pontos > 0
+                ? const Color(0xFF7B9FE8)
+                : Cores.outlineVariant;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+          color: cor, borderRadius: BorderRadius.circular(8)),
+      child: Text('$pontos pts',
+          style: GoogleFonts.anybody(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: Colors.white)),
+    );
+  }
+}
+
+// Uma linha de resultado: medalha | time real | separador | palpite + indicador
+class _LinhaResultadoCopa extends StatelessWidget {
+  const _LinhaResultadoCopa({
+    required this.medalha,
+    required this.timeReal,
+    required this.timePalpite,
+    required this.classificadosReais,
+  });
+
+  final String medalha;
+  final String timeReal;
+  final String? timePalpite;
+  final Set<String> classificadosReais;
+
+  // Retorna (ícone, cor, pontos) para o indicador do palpite
+  (IconData, Color, int) get _indicador {
+    if (timePalpite == null) return (Icons.remove, Cores.outlineVariant, 0);
+    if (timePalpite == timeReal) return (Icons.check_rounded, Cores.verdePrincipal, 200);
+    if (classificadosReais.contains(timePalpite)) return (Icons.swap_horiz_rounded, const Color(0xFFB8860B), 100);
+    return (Icons.close_rounded, Cores.error, 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final (icone, cor, pts) = _indicador;
+    final semPalpite = timePalpite == null;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          // Medalha
+          SizedBox(
+            width: 26,
+            child: Text(medalha, style: const TextStyle(fontSize: 16)),
+          ),
+          // Time real
+          Expanded(
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: ClipOval(child: Bandeira(timeReal, tamanho: 22)),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    nomePtDe(timeReal),
+                    style: GoogleFonts.hankenGrotesk(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Cores.onSurface),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Separador
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text('→',
+                style: TextStyle(
+                    fontSize: 13, color: Cores.outlineVariant)),
+          ),
+          // Palpite do usuário
+          Expanded(
+            child: semPalpite
+                ? Text('Sem palpite',
+                    style: GoogleFonts.hankenGrotesk(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        color: Cores.outlineVariant))
+                : Row(
+                    children: [
+                      SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: ClipOval(
+                            child: Bandeira(timePalpite!, tamanho: 22)),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          nomePtDe(timePalpite!),
+                          style: GoogleFonts.hankenGrotesk(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Cores.onSurface),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+          // Indicador + pontos
+          const SizedBox(width: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: cor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: cor.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icone, size: 12, color: cor),
+                if (!semPalpite && pts > 0) ...[
+                  const SizedBox(width: 3),
+                  Text('+$pts',
+                      style: GoogleFonts.anybody(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: cor)),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
