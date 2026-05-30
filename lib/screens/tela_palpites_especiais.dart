@@ -2,9 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../models/jogo.dart';
 import '../models/usuario.dart';
-import '../services/jogo_service.dart';
 import '../services/usuario_service.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
@@ -55,25 +53,18 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
   Future<void> _inicializar() async {
     final results = await Future.wait([
       UsuarioService().buscarPorUid(_uid),
-      JogoService().buscarTodos(),
       FirebaseFirestore.instance.collection('config').doc('copa2026').get(),
     ]);
     if (!mounted) return;
     final usuario = results[0] as Usuario?;
-    final jogos = results[1] as List<Jogo>;
-    final configSnap = results[2] as DocumentSnapshot;
+    final configSnap = results[1] as DocumentSnapshot;
 
     final travados =
         (configSnap.data() as Map<String, dynamic>?)?['palpitesTravados']
             as bool? ??
         false;
 
-    bool bloqueado = travados;
-    if (!bloqueado && jogos.isNotEmpty) {
-      final ordenados = jogos.toList()
-        ..sort((a, b) => a.dataHora.compareTo(b.dataHora));
-      bloqueado = DateTime.now().isAfter(ordenados.first.dataHora);
-    }
+    final bool bloqueado = travados;
 
     setState(() {
       _campeaoSelecionado = usuario?.palpiteCampeao;
