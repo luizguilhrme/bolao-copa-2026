@@ -133,12 +133,12 @@ C:\bolao\
                                  dos dois modos E Fase de Grupos ativa); sub-abas Próximos / Encerrados;
                                  MODO COPA: form de palpite de classificação (12 grupos, FAB SALVAR);
                                  detecção automática de fim da Fase de Grupos (jogos 73+ com times reais);
-                                 bloqueio por palpitesTravados (flag admin) ou 5 min antes do 1º jogo
+                                 bloqueio do Modo Copa exclusivamente por palpitesTravados=true
       tela_palpites_especiais.dart ← tela azul com 6 palpites especiais do usuário:
                                  campeão, artilheiro, melhor goleiro, melhor jogador,
                                  equipe mais goleadora, equipe menos vazada;
                                  bottom sheet com busca para seleção de times;
-                                 bloqueado por palpitesTravados (flag admin) ou início do primeiro jogo
+                                 bloqueio exclusivamente por palpitesTravados=true
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos;
                                  dialog de palpites com filtro A–L + MATA-MATA, palpites especiais
                                  completos (6 campos) e suporte a Modo Copa com pontuação por posição;

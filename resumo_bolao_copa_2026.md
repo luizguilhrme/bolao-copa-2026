@@ -51,7 +51,7 @@ C:\bolao\
       tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
       tela_palpites.dart      ← abas MODO CLÁSSICO/MODO COPA (condicionais) + sub-abas Próximos/Encerrados;
                                  MODO COPA: form de palpite de classificação dos 12 grupos;
-                                 bloqueio por palpitesTravados (flag admin) ou 5 min antes do 1º jogo
+                                 bloqueio do Modo Copa exclusivamente por palpitesTravados=true
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos;
                                  dialog de palpites com filtro A–L + MATA-MATA, palpites especiais
                                  completos (6 campos) e suporte a Modo Copa com pontuação por posição
@@ -306,7 +306,7 @@ fcmToken        : String?   — token FCM do dispositivo; salvo pelo Notificacoe
 notifLembretes     : Boolean?  — padrão true quando ausente
 notifRanking       : Boolean?  — padrão true quando ausente
 palpiteCampeao     : String?   — nome em inglês do time (ex: "Brazil"); salvo via UsuarioService.salvarPalpiteEspecial
-palpiteArtilheiro  : String?   — nome livre do jogador; bloqueado após início do primeiro jogo
+palpiteArtilheiro  : String?   — nome livre do jogador; bloqueado quando palpitesTravados=true
 ```
 
 ### `jogos`
@@ -461,7 +461,7 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 - Card CAMPEÃO & ARTILHEIRO (azul) abre `_DialogPalpiteEspecial`:
   - Campo de texto livre para artilheiro
   - Lista rolável com todos os 48 times (ordenados por nome em PT) com bandeiras para seleção do campeão
-  - Bloqueio automático após início do primeiro jogo (verifica `dataHora` do jogo mais antigo)
+  - Bloqueio quando `palpitesTravados=true` em `config/copa2026`
   - Pré-preenche com palpites já salvos no Firestore
 - Callback `onNavegar` recebido do `MenuPrincipal`
 - Cards exibem bandeiras reais (`Bandeira`) e nome completo em português (`nomePtDe`)
@@ -477,7 +477,7 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 ### `tela_palpites.dart` — implementada
 - **Abas superiores MODO CLÁSSICO / MODO COPA** (verde, só visíveis quando usuário tem grupos dos dois modos E Fase de Grupos ativa); sub-abas **Próximos** / **Encerrados** dentro de cada modo
 - **MODO CLÁSSICO:** palpite de placar nos jogos da Fase de Grupos (id 1–72)
-- **MODO COPA:** formulário de palpite de classificação dos 12 grupos A–L com dropdowns 1º/2º/3º; FAB quadrado "SALVAR" no canto inferior direito; bloqueado após início do 1º jogo
+- **MODO COPA:** formulário de palpite de classificação dos 12 grupos A–L com dropdowns 1º/2º/3º; FAB quadrado "SALVAR" no canto inferior direito; bloqueado quando `palpitesTravados=true`
 - **Detecção automática de fim da Fase de Grupos:** quando jogos 73+ têm times reais (sem placeholder), abas de modo somem e todos os jogos restantes aparecem em único Próximos/Encerrados
 - `Future.wait` carrega jogos + palpites + perfil + grupos em paralelo; palpites Copa em bloco separado com try-catch próprio para não bloquear o resto em caso de erro de permissão
 - `buscarGruposDoUsuarioOnce()` usa `.get()` direto (evita bug de emissão vazia do cache do Firestore)
@@ -511,9 +511,7 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 - **Entrar com código**: dialog com campo de 6 chars → `GrupoService.entrarComCodigo`
 - **Sair do grupo**: dialog de confirmação; grupo deletado automaticamente se ficar sem membros
 
-### `tela_admin.dart` — implementada (acesso exclusivo via drawer)
-- Filtra jogos elegíveis: 105 min após o início (IDs 1 e 2 sempre desbloqueados para teste)
-- Card com pré-preenchimento se já tiver placar (modo correção); exibe bandeiras reais e nomes em português
+### `tela_admin.dart` — **REMOVIDA** (substituída pelas 4 telas admin especializadas)
 - Ao salvar: atualiza `placar1`/`placar2` no Firestore → Cloud Function `calcularPontuacao` dispara automaticamente
 - Botão de popular jogos abre dialog pedindo **Teste** (`jogos_teste.json`) ou **Produção** (`jogos.json`)
 - Botão de recalcular chama a Cloud Function `recalcularTudo` (admin only)
