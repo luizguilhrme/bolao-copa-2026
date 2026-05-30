@@ -55,3 +55,8 @@ lib/firebase_options.dart
 android/key.properties
 android/app/upload-keystore.jks
 *.jks
+
+# Arquivos locais não versionados
+*.apk
+AGENTS.md
+.firebase/
