@@ -489,6 +489,91 @@ exports.calcularPalpitesEspeciais = onCall(
   }
 );
 
+// ─── recalcularCopa ───────────────────────────────────────────────────────────
+// Calcula pontuação da fase de grupos do Modo Copa para todos os usuários.
+// Lê classificacao_real do config/copa2026 e palpites_copa de cada usuário.
+// Aplica FieldValue.increment() em pontuacao — deve ser rodado APÓS recalcularTudo.
+// Usa flag copaGruposCalculado para evitar dupla execução.
+
+exports.recalcularCopa = onCall(
+  { region: 'southamerica-east1' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Não autenticado.');
+
+    const db = getFirestore();
+    const userDoc = await db.collection('usuarios').doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data().isAdmin !== true) {
+      throw new HttpsError('permission-denied', 'Acesso restrito ao admin.');
+    }
+
+    const configDoc = await db.collection('config').doc('copa2026').get();
+    if (!configDoc.exists) throw new HttpsError('not-found', 'Configuração não encontrada.');
+
+    const config = configDoc.data();
+    if (config.copaGruposCalculado) {
+      throw new HttpsError(
+        'already-exists',
+        'Pontuação Copa já foi calculada. Rode "Recalcular Reg. Clássica" primeiro para resetar, depois rode Copa novamente.'
+      );
+    }
+
+    const classificacaoReal = config.classificacao_real;
+    if (!classificacaoReal || Object.keys(classificacaoReal).length === 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Classificação real não encontrada. Salve a classificação na tela Admin Copa primeiro.'
+      );
+    }
+
+    // Espelha calcularPontosCopaGrupo() de biblioteca.dart
+    function calcularPontosCopaGrupo(palpite, real) {
+      const classificadosReais = new Set(
+        ['primeiro', 'segundo', 'terceiro'].map(p => real[p]).filter(Boolean)
+      );
+      let pontos = 0, exatos = 0, validos = 0;
+      for (const pos of ['primeiro', 'segundo', 'terceiro']) {
+        const p = palpite[pos];
+        const r = real[pos];
+        if (!p || !r) continue;
+        validos++;
+        if (p === r) { pontos += 200; exatos++; }
+        else if (classificadosReais.has(p)) pontos += 100;
+      }
+      if (validos >= 2 && exatos === validos) pontos += 100;
+      return pontos;
+    }
+
+    const palpitesCopaSnap = await db.collection('palpites_copa').get();
+
+    const batch = db.batch();
+    let atualizados = 0;
+
+    for (const doc of palpitesCopaSnap.docs) {
+      const data = doc.data();
+      const uid = data.uid;
+      const grupos = data.grupos || {};
+
+      let totalPontos = 0;
+      for (const [letra, real] of Object.entries(classificacaoReal)) {
+        const palpite = grupos[letra] || {};
+        totalPontos += calcularPontosCopaGrupo(palpite, real);
+      }
+
+      if (totalPontos > 0) {
+        batch.update(db.collection('usuarios').doc(uid), {
+          pontuacaoCopa: totalPontos,
+        });
+        atualizados++;
+      }
+    }
+
+    batch.update(configDoc.ref, { copaGruposCalculado: true });
+    await batch.commit();
+
+    return { atualizados };
+  }
+);
+
 // ─── limparUsuariosOrfaos ─────────────────────────────────────────────────────
 // Remove documentos de `usuarios` e `palpites` cujas contas Firebase Auth
 // foram deletadas.
@@ -623,11 +708,12 @@ exports.limparDadosTeste = onCall(
       maisVazadaReal:              FieldValue.delete(),
       melhorJogadorFinalReal:      FieldValue.delete(),
       palpitesEspeciaisCalculados: FieldValue.delete(),
+      copaGruposCalculado:         FieldValue.delete(),
     }, { merge: true });
 
     const usuariosSnap = await db.collection('usuarios').get();
     const opsUsuarios = usuariosSnap.docs.map(doc => b =>
-      b.update(doc.ref, { pontuacao: 0 })
+      b.update(doc.ref, { pontuacao: 0, pontuacaoCopa: 0 })
     );
     await commitEmLotes(opsUsuarios);
 
@@ -635,6 +721,33 @@ exports.limparDadosTeste = onCall(
       jogosResetados: opsJogos.length,
       usuariosZerados: opsUsuarios.length,
     };
+  }
+);
+
+// ─── popularPlacaresTeste [TEMPORÁRIO] ────────────────────────────────────────
+// Insere placar 1×0 em todos os 72 jogos da Fase de Grupos.
+// Usado apenas para testes — remover após validação.
+
+exports.popularPlacaresTeste = onCall(
+  { region: 'southamerica-east1' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Não autenticado.');
+    const db = getFirestore();
+    const userDoc = await db.collection('usuarios').doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data().isAdmin !== true) {
+      throw new HttpsError('permission-denied', 'Acesso restrito ao admin.');
+    }
+
+    const snap = await db.collection('jogos').where('id', '<=', 72).get();
+    const docs = snap.docs;
+    for (let i = 0; i < docs.length; i += 400) {
+      const batch = db.batch();
+      docs.slice(i, i + 400).forEach(doc =>
+        batch.update(doc.ref, { placar1: 1, placar2: 0 })
+      );
+      await batch.commit();
+    }
+    return { atualizados: docs.length };
   }
 );
 

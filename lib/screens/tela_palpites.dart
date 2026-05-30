@@ -221,8 +221,11 @@ class _TelaPalpitesState extends State<TelaPalpites> {
 
   bool get _temModoCopa => _meusGrupos.any((g) => g.regra == 'copa');
 
-  /// True se o usuário tem ambos os modos E a Fase de Grupos ainda está ativa.
-  bool get _mostrarAbas => _temModoClassico && _temModoCopa && !_faseGruposEncerrada;
+  /// True se o usuário tem ambos os modos E a Fase de Grupos ainda está ativa
+  /// OU a classificação real já foi divulgada (para exibir resultados Copa).
+  bool get _mostrarAbas =>
+      _temModoClassico && _temModoCopa &&
+      (!_faseGruposEncerrada || _classificacaoReal.isNotEmpty);
 
   /// Palpites Copa bloqueados 5 min antes do primeiro jogo.
   bool get _copaBloqueada {
@@ -278,8 +281,9 @@ class _TelaPalpitesState extends State<TelaPalpites> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // Determina se o conteúdo atual é Copa (bet form) ou Clássico (jogos)
-    final bool exibirCopa = !_faseGruposEncerrada &&
+    // Determina se o conteúdo atual é Copa (bet form/results) ou Clássico (jogos)
+    final bool exibirCopa =
+        (!_faseGruposEncerrada || _classificacaoReal.isNotEmpty) &&
         ((_mostrarAbas && !_modoClassico) ||
          (_temModoCopa && !_temModoClassico));
 
