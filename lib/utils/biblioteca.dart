@@ -182,6 +182,7 @@ String nomePtDe(String team) {
     // Grupo E
     'Germany': 'Alemanha',
     'Curaçao': 'Curaçao',
+    'CuraÃ§ao': 'Curaçao',
     'Ivory Coast': 'Costa do Marfim',
     'Ecuador': 'Equador',
     // Grupo F
@@ -241,7 +242,7 @@ String isoDe(String team) {
     'New Zealand': 'NZ', 'Panama': 'PA', 'Paraguay': 'PY', 'South Africa': 'ZA',
     'Iraq': 'IQ', 'Jordan': 'JO', 'Serbia': 'RS', 'Czech Republic': 'CZ',
     'Cape Verde': 'CV', 'Uzbekistan': 'UZ', 'Haiti': 'HT',
-    'Bosnia & Herzegovina': 'BA', 'Curaçao': 'CW',
+    'Bosnia & Herzegovina': 'BA', 'Curaçao': 'CW', 'CuraÃ§ao': 'CW',
     // UK nações com subdivison ISO 3166-2
     'England': 'GB-ENG', 'Wales': 'GB-WLS', 'Scotland': 'GB-SCT',
     // Outros países que aparecem nos dados
