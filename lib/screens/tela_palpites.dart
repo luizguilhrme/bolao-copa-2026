@@ -2055,10 +2055,10 @@ class _CardGrupoResultado extends StatelessWidget {
                   ('segundo', '🥈'),
                   ('terceiro', '🥉'),
                 ])
-                  if (real[entry.$1] != null)
+                  if (real[entry.$1] != null || palpite[entry.$1] != null)
                     _LinhaResultadoCopa(
                       medalha: entry.$2,
-                      timeReal: real[entry.$1]!,
+                      timeReal: real[entry.$1],
                       timePalpite: palpite[entry.$1],
                       classificadosReais: classificadosReais,
                     ),
@@ -2108,14 +2108,14 @@ class _LinhaResultadoCopa extends StatelessWidget {
   });
 
   final String medalha;
-  final String timeReal;
+  final String? timeReal;
   final String? timePalpite;
   final Set<String> classificadosReais;
 
   // Retorna (ícone, cor, pontos) para o indicador do palpite
   (IconData, Color, int) get _indicador {
     if (timePalpite == null) return (Icons.remove, Cores.outlineVariant, 0);
-    if (timePalpite == timeReal) return (Icons.check_rounded, Cores.verdePrincipal, 200);
+    if (timeReal != null && timePalpite == timeReal) return (Icons.check_rounded, Cores.verdePrincipal, 200);
     if (classificadosReais.contains(timePalpite)) return (Icons.swap_horiz_rounded, const Color(0xFFB8860B), 100);
     return (Icons.close_rounded, Cores.error, 0);
   }
@@ -2136,26 +2136,30 @@ class _LinhaResultadoCopa extends StatelessWidget {
           ),
           // Time real
           Expanded(
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: ClipOval(child: Bandeira(timeReal, tamanho: 22)),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    nomePtDe(timeReal),
+            child: timeReal == null
+                ? Text('—',
                     style: GoogleFonts.hankenGrotesk(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Cores.onSurface),
-                    overflow: TextOverflow.ellipsis,
+                        fontSize: 13, color: Cores.outlineVariant))
+                : Row(
+                    children: [
+                      SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: ClipOval(child: Bandeira(timeReal!, tamanho: 22)),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          nomePtDe(timeReal!),
+                          style: GoogleFonts.hankenGrotesk(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Cores.onSurface),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
           // Separador
           Padding(

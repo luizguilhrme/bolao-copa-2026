@@ -19,7 +19,7 @@ flutter test test/foo_test.dart  # run a single test file
 flutter build apk        # build Android APK
 ```
 
-To populate Firestore with the 104 games, open the drawer → ADMIN → Outras Definições → Popular Jogos. A dialog will ask whether to use production (`jogos.json`) or test data (`jogos_teste.json`). The test dataset has the same dates as production but with `placar1=1` and `placar2=0` pre-filled for all 72 group stage games.
+To populate Firestore with the 104 games, open the drawer → ADMIN → Outras Definições → Popular Jogos. A dialog will ask whether to use production (`jogos.json`) or test data (`jogos_teste.json`). The test dataset has IDs 1–5 with `placar1=1`/`placar2=0` (all Grupo A, dates 2026-05-30/31), IDs 6–72 without scores (original jogos.json dates), and IDs 73–104 identical to jogos.json. `popularJogosNoFirestore` deletes all existing `jogos` documents before inserting, ensuring no orphaned games remain.
 
 ## Architecture
 
@@ -36,29 +36,32 @@ To populate Firestore with the 104 games, open the drawer → ADMIN → Outras D
 
 **Admin access:** Gated by `isAdmin: true` in the user's Firestore document. Checked once at session start in `MenuPrincipal._verificarAdmin()`. The drawer shows 4 admin items: Placares, Classificação Copa, Palpites Especiais, Outras Definições. There is a dedicated test admin account (`teste@teste.com`) with `isAdmin: true` in Firestore, used for Google Play Console review.
 
-**Scoring (implemented in `tela_palpites.dart` and Cloud Function `calcularPontuacao`/`recalcularTudo`):**
+**Scoring — four separate Firestore fields on each `usuarios` document:**
 
-Modo Clássico — base points (Fase de Grupos), multiplied by phase:
-- 100 pts — exact score
-- 70 pts — correct winner + correct goal difference
-- 60 pts — correct winner + exact goals of one team
-- 50 pts — correct winner only OR correct draw (wrong score)
-- 0 pts — wrong result
-- −10 pts — forgot to palpite (only applies to games after the user's `criadoEm`)
+| Field | What accumulates | Written by |
+|---|---|---|
+| `pontuacaoClassica` | Group stage (Clássico) points + −10 penalties | `calcularPontuacao` trigger (games 1–72) / `recalcularTudo` |
+| `pontuacaoCopa` | Copa group classification points | `recalcularCopa` (SET, not increment) |
+| `pontuacaoEliminatorias` | Elimination game points (games 73–104) + −10 penalties — shared by both modes | `calcularPontuacao` trigger (games 73–104) / `recalcularTudo` |
+| `pontuacaoEspeciais` | Special bet points — shared by both modes | `calcularPalpitesEspeciais` |
 
-Phase multipliers (applied to base points):
-- Fase de Grupos: ×1.0 | 16 avos: ×1.2 | Oitavas: ×1.4 | Quartas: ×1.6
-- Semifinal + 3º lugar: ×1.8 | Final: ×2.0
+**Ranking totals:**
+- Clássico = `pontuacaoClassicaTotal` getter = `pontuacaoClassica + pontuacaoEliminatorias + pontuacaoEspeciais`
+- Copa = `pontuacaoCopaTotal` getter = `pontuacaoCopa + pontuacaoEliminatorias + pontuacaoEspeciais`
 
-Modo Copa — points per team prediction in group classification:
-- Exact position (1st, 2nd or 3rd): +200 per team
-- Qualified but wrong position: +100 per team
-- Team did not qualify: 0
-- Bonus for all positions exact in a group: +100
+Modo Clássico — base points per game, multiplied by phase:
+- 100 pts — exact score | 70 — correct winner + correct goal difference
+- 60 — correct winner + exact goals of one team | 50 — correct winner only OR correct draw
+- 0 — wrong result | −10 — no palpite (only after user's `criadoEm`)
 
-Special bets (one-time, calculated by admin after tournament):
-- Campeão: +500 | Artilheiro: +300 | Melhor Jogador: +300
-- Melhor Goleiro: +300 | Equipe Mais Goleadora: +200 | Equipe Menos Vazada: +200
+Phase multipliers: Fase de Grupos ×1.0 | 16 avos ×1.2 | Oitavas ×1.4 | Quartas ×1.6 | Semifinal/3º ×1.8 | Final ×2.0
+
+Modo Copa — points per team in group classification:
+- Exact position: +200 | Qualified, wrong position: +100 | Did not qualify: 0
+- Bonus for all palpited positions exact (≥2 valid): +100
+- "Qualified but wrong position" applies even when no real result exists for that specific slot (e.g., when a group's 3rd-place slot is null but the team qualified as 1st or 2nd).
+
+Special bets: Campeão +500 | Artilheiro +300 | Melhor Jogador +300 | Melhor Goleiro +300 | Mais Goleadora +200 | Menos Vazada +200
 
 **Palpite cutoff:** palpites are locked 5 minutes before game start. Games where `team1` or `team2` is still a placeholder (`ehPlaceholder()` in `biblioteca.dart`) are hidden from the palpites screen entirely until both teams are resolved.
 
@@ -396,8 +399,10 @@ ID do documento = UID do Firebase Auth.
 uid                  : String
 email                : String
 nome                 : String    — parte antes do @ no cadastro
-pontuacao            : Number    — Modo Clássico + Palpites Especiais; começa em 0
-pontuacaoCopa        : Number    — Modo Copa fase de grupos; gravado por recalcularCopa
+pontuacaoClassica      : Number    — fase de grupos Clássico + penalidades; começa em 0
+pontuacaoCopa          : Number    — fase de grupos Copa (SET por recalcularCopa); começa em 0
+pontuacaoEliminatorias : Number    — mata-mata; compartilhado pelos dois modos; começa em 0
+pontuacaoEspeciais     : Number    — palpites especiais; compartilhado pelos dois modos; começa em 0
 criadoEm             : Timestamp
 avatar               : String?   — id do jogador selecionado no setup de perfil
 isAdmin              : Boolean   — campo opcional; adicionado manualmente no Console
@@ -775,14 +780,14 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 
 | Função | Tipo | O que faz |
 |---|---|---|
-| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Calcula pontuação para cada palpite; aplica −1 para ausências; envia FCM de ranking; propaga vencedor/perdedor para o próximo jogo da chave (eliminatórias) |
+| `calcularPontuacao` | Firestore trigger (`jogos/{jogoId}`) | Jogos 1–72 → incrementa `pontuacaoClassica`; jogos 73–104 → incrementa `pontuacaoEliminatorias`; aplica −10 para ausências; envia FCM de ranking; propaga vencedor/perdedor para o próximo jogo |
 | `lembretesPalpite` | Schedule (`*/30 * * * *`) | Notifica usuários sem palpite em jogos que começam em ~30 min |
-| `recalcularTudo` | HTTPS Callable (admin only) | Recalcula pontuação de todos os usuários do zero |
+| `recalcularTudo` | HTTPS Callable (admin only) | Recalcula `pontuacaoClassica` (jogos 1–72) e `pontuacaoEliminatorias` (jogos 73–104) do zero. Não toca em `pontuacaoEspeciais` nem `pontuacaoCopa`. |
 | `membroEntrou` | Firestore trigger (`grupos/{grupoId}`) | Detecta novo membro e envia FCM para o dono do grupo |
-| `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Aplica pontos dos 6 palpites especiais; marca `palpitesEspeciaisCalculados: true` |
+| `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Aplica pontos dos 6 especiais em `pontuacaoEspeciais`; marca `palpitesEspeciaisCalculados: true`. Botão CALCULAR sempre salva resultados antes de chamar a função. |
 | `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos |
-| `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times de eliminatórias (volta placeholders), classificação, resultados especiais, `pontuacao`, `pontuacaoCopa` e flags. Palpites preservados. |
-| `recalcularCopa` | HTTPS Callable (admin only) | Calcula pontos da fase de grupos do Modo Copa para todos os usuários; grava em `pontuacaoCopa` (separado de `pontuacao`); marca `copaGruposCalculado: true`. Executar APÓS `recalcularTudo`. |
+| `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times de eliminatórias, classificação, resultados especiais, `pontuacaoClassica`, `pontuacaoCopa`, `pontuacaoEliminatorias`, `pontuacaoEspeciais` e flags. Palpites preservados. |
+| `recalcularCopa` | HTTPS Callable (admin only) | Calcula pontos da fase de grupos Copa (SET em `pontuacaoCopa`); marca `copaGruposCalculado: true`. Executar após inserir todos os placares da fase de grupos. |
 
 **Deep linking via notificação:** `data: { tela: 'palpites' }`, `data: { tela: 'ranking' }`, `data: { tela: 'grupos' }`.
 

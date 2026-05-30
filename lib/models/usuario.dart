@@ -4,9 +4,17 @@ class Usuario {
   final String uid;          // mesmo UID do Firebase Auth — é a "chave primária"
   final String email;
   final String nome;         // nome de exibição no ranking
-  final int pontuacao;       // pontuação Modo Clássico + Palpites Especiais
-  final int pontuacaoCopa;   // pontuação Modo Copa (fase de grupos)
-  final DateTime criadoEm;   // data de cadastro
+  final int pontuacaoClassica;         // fase de grupos Clássico
+  final int pontuacaoCopa;             // fase de grupos Copa
+  final int pontuacaoEliminatorias;    // mata-mata — compartilhado pelos dois modos
+  final int pontuacaoEspeciais;        // palpites especiais — compartilhado pelos dois modos
+  final DateTime criadoEm;
+
+  int get pontuacaoClassicaTotal =>
+      pontuacaoClassica + pontuacaoEliminatorias + pontuacaoEspeciais;
+
+  int get pontuacaoCopaTotal =>
+      pontuacaoCopa + pontuacaoEliminatorias + pontuacaoEspeciais;
 
   final String? avatar;
   final String? palpiteCampeao;
@@ -20,8 +28,10 @@ class Usuario {
     required this.uid,
     required this.email,
     required this.nome,
-    this.pontuacao = 0,
+    this.pontuacaoClassica = 0,
     this.pontuacaoCopa = 0,
+    this.pontuacaoEliminatorias = 0,
+    this.pontuacaoEspeciais = 0,
     required this.criadoEm,
     this.avatar,
     this.palpiteCampeao,
@@ -39,8 +49,10 @@ class Usuario {
       uid: map['uid'] as String,
       email: map['email'] as String,
       nome: map['nome'] as String,
-      pontuacao: (map['pontuacao'] as num?)?.toInt() ?? 0,
+      pontuacaoClassica: (map['pontuacaoClassica'] as num?)?.toInt() ?? 0,
       pontuacaoCopa: (map['pontuacaoCopa'] as num?)?.toInt() ?? 0,
+      pontuacaoEliminatorias: (map['pontuacaoEliminatorias'] as num?)?.toInt() ?? 0,
+      pontuacaoEspeciais: (map['pontuacaoEspeciais'] as num?)?.toInt() ?? 0,
       criadoEm: (map['criadoEm'] as Timestamp).toDate(),
       avatar: map['avatar'] as String?,
       palpiteCampeao: map['palpiteCampeao'] as String?,
@@ -58,7 +70,7 @@ class Usuario {
       'uid': uid,
       'email': email,
       'nome': nome,
-      'pontuacao': pontuacao,
+      'pontuacaoClassica': pontuacaoClassica,
       'criadoEm': FieldValue.serverTimestamp(),
       if (avatar != null) 'avatar': avatar,
     };
@@ -69,7 +81,7 @@ class Usuario {
   // Você vai usar isso para atualizar a pontuação sem recriar o objeto inteiro.
   Usuario copyWith({
     String? nome,
-    int? pontuacao,
+    int? pontuacaoClassica,
     String? avatar,
     String? palpiteCampeao,
     String? palpiteArtilheiro,
@@ -78,7 +90,7 @@ class Usuario {
       uid: uid,
       email: email,
       nome: nome ?? this.nome,
-      pontuacao: pontuacao ?? this.pontuacao,
+      pontuacaoClassica: pontuacaoClassica ?? this.pontuacaoClassica,
       criadoEm: criadoEm,
       avatar: avatar ?? this.avatar,
       palpiteCampeao: palpiteCampeao ?? this.palpiteCampeao,

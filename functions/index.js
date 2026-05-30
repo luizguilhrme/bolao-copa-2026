@@ -69,12 +69,17 @@ exports.calcularPontuacao = onDocumentUpdated(
       .get();
 
     // Lê ranking atual (antes do batch) para calcular mudanças de posição
-    const usuariosSnap = await db.collection('usuarios').orderBy('pontuacao', 'desc').get();
+    const usuariosSnap = await db.collection('usuarios').get();
     const rankingAntes = {};
     const pontuacaoAtual = {};
-    usuariosSnap.docs.forEach((doc, idx) => {
+    const usuariosOrdenados = [...usuariosSnap.docs].sort((a, b) => {
+      const d = (u) => (u.pontuacaoClassica || 0) + (u.pontuacaoEliminatorias || 0) + (u.pontuacaoEspeciais || 0);
+      return d(b.data()) - d(a.data());
+    });
+    usuariosOrdenados.forEach((doc, idx) => {
+      const d = doc.data();
       rankingAntes[doc.id] = idx + 1;
-      pontuacaoAtual[doc.id] = doc.data().pontuacao || 0;
+      pontuacaoAtual[doc.id] = (d.pontuacaoClassica || 0) + (d.pontuacaoEliminatorias || 0) + (d.pontuacaoEspeciais || 0);
     });
 
     // Calcula deltas: subtrai pontuação anterior e adiciona a nova
@@ -174,10 +179,12 @@ exports.calcularPontuacao = onDocumentUpdated(
 
     if (Object.keys(deltasPorUid).length === 0) return null;
 
+    const isElim = jogoId > 72;
     const batch = db.batch();
     for (const [uid, delta] of Object.entries(deltasPorUid)) {
+      const campo = isElim ? 'pontuacaoEliminatorias' : 'pontuacaoClassica';
       batch.update(db.collection('usuarios').doc(uid), {
-        pontuacao: FieldValue.increment(delta),
+        [campo]: FieldValue.increment(delta),
       });
     }
     await batch.commit();
@@ -322,7 +329,8 @@ exports.recalcularTudo = onCall(
       if (d.placar1 != null && d.placar2 != null) jogosPorId[d.id] = d;
     });
 
-    const pontuacaoPorUid = {};
+    const classicaPorUid = {};
+    const elimPorUid = {};
     const palpitesSnap = await db.collection('palpites').get();
 
     // Indexa palpites por jogo para detectar ausências
@@ -332,7 +340,8 @@ exports.recalcularTudo = onCall(
       const jogo = jogosPorId[p.jogoId];
       if (!jogo) return;
       const pts = calcularPontosComFase(p.palpite1, p.palpite2, jogo.placar1, jogo.placar2, jogo.round || 'Fase de Grupos');
-      pontuacaoPorUid[p.uid] = (pontuacaoPorUid[p.uid] || 0) + pts;
+      if (jogo.id > 72) elimPorUid[p.uid] = (elimPorUid[p.uid] || 0) + pts;
+      else classicaPorUid[p.uid] = (classicaPorUid[p.uid] || 0) + pts;
       if (!palpitesPorJogo[p.jogoId]) palpitesPorJogo[p.jogoId] = new Set();
       palpitesPorJogo[p.jogoId].add(p.uid);
     });
@@ -347,13 +356,17 @@ exports.recalcularTudo = onCall(
         if (palpitesPorJogo[jogoId]?.has(doc.id)) continue;
         const gameDataHora = jogo.dataHora?.toDate?.();
         if (!gameDataHora || criadoEm >= gameDataHora) continue;
-        pontuacaoPorUid[doc.id] = (pontuacaoPorUid[doc.id] || 0) - 10;
+        if (jogo.id > 72) elimPorUid[doc.id] = (elimPorUid[doc.id] || 0) - 10;
+        else classicaPorUid[doc.id] = (classicaPorUid[doc.id] || 0) - 10;
       }
     });
 
     const batch = db.batch();
     usuariosSnap.forEach((doc) => {
-      batch.update(doc.ref, { pontuacao: pontuacaoPorUid[doc.id] || 0 });
+      batch.update(doc.ref, {
+        pontuacaoClassica: classicaPorUid[doc.id] || 0,
+        pontuacaoEliminatorias: elimPorUid[doc.id] || 0,
+      });
     });
     await batch.commit();
 
@@ -477,7 +490,9 @@ exports.calcularPalpitesEspeciais = onCall(
       if (melhorGoleiroReal      && textoIgual(d.palpiteGoleiro,       melhorGoleiroReal))      bonus += 300;
 
       if (bonus > 0) {
-        batch.update(doc.ref, { pontuacao: FieldValue.increment(bonus) });
+        batch.update(doc.ref, {
+          pontuacaoEspeciais: FieldValue.increment(bonus),
+        });
         atualizados++;
       }
     });
@@ -533,11 +548,17 @@ exports.recalcularCopa = onCall(
       let pontos = 0, exatos = 0, validos = 0;
       for (const pos of ['primeiro', 'segundo', 'terceiro']) {
         const p = palpite[pos];
+        if (!p) continue; // não palpitou esta posição
         const r = real[pos];
-        if (!p || !r) continue;
-        validos++;
-        if (p === r) { pontos += 200; exatos++; }
-        else if (classificadosReais.has(p)) pontos += 100;
+        if (r) {
+          // há resultado real para esta posição: conta para o bônus
+          validos++;
+          if (p === r) { pontos += 200; exatos++; }
+          else if (classificadosReais.has(p)) pontos += 100;
+        } else if (classificadosReais.has(p)) {
+          // sem resultado nessa posição mas o time classificou em outra
+          pontos += 100;
+        }
       }
       if (validos >= 2 && exatos === validos) pontos += 100;
       return pontos;
@@ -714,7 +735,7 @@ exports.limparDadosTeste = onCall(
 
     const usuariosSnap = await db.collection('usuarios').get();
     const opsUsuarios = usuariosSnap.docs.map(doc => b =>
-      b.update(doc.ref, { pontuacao: 0, pontuacaoCopa: 0 })
+      b.update(doc.ref, { pontuacaoClassica: 0, pontuacaoCopa: 0, pontuacaoEliminatorias: 0, pontuacaoEspeciais: 0 })
     );
     await commitEmLotes(opsUsuarios);
 

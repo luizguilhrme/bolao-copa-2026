@@ -247,7 +247,7 @@ class _PerfilConteudoState extends State<_PerfilConteudo> {
                     style: GoogleFonts.hankenGrotesk(fontSize: 13, color: Colors.white70),
                   ),
                   Text(
-                    '${usuario.pontuacao} pts',
+                    '${usuario.pontuacaoClassicaTotal} pts',
                     style: GoogleFonts.anybody(
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
