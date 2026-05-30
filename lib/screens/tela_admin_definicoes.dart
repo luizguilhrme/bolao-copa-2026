@@ -18,8 +18,50 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
   bool _recalculando = false;
   // ignore: prefer_final_fields
   bool _recalculandoCopa = false;
+  bool _popularandoPlacares = false;
   bool _limpando = false;
   bool _limpandoTeste = false;
+
+  // TEMPORÁRIO — remover após validação
+  Future<void> _popularPlacaresTeste() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Cores.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('[TESTE] Popular Placares 1×0?',
+            style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+        content: Text(
+          'Insere placar 1×0 em todos os 72 jogos da Fase de Grupos.',
+          style: GoogleFonts.hankenGrotesk(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('CANCELAR',
+                style: GoogleFonts.anybody(color: Cores.onSurfaceVariant)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Cores.error),
+            child: Text('POPULAR',
+                style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+    setState(() => _popularandoPlacares = true);
+    try {
+      final fn = FirebaseFunctions.instanceFor(region: 'southamerica-east1');
+      final result = await fn.httpsCallable('popularPlacaresTeste').call();
+      if (mounted) mostrarMensagem(context, '${result.data['atualizados']} jogos atualizados.');
+    } catch (e) {
+      if (mounted) mostrarMensagem(context, 'Erro: $e');
+    } finally {
+      if (mounted) setState(() => _popularandoPlacares = false);
+    }
+  }
 
   Future<void> _popularJogos() async {
     final ambiente = await showDialog<String>(
@@ -102,22 +144,49 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
         title: Text('Recalcular — Regra Copa?',
             style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
         content: Text(
-          'Em breve esta funcionalidade estará disponível.',
+          'Calcula os pontos da fase de grupos do Modo Copa para todos os usuários e adiciona à pontuação atual.\n\n'
+          'Execute APÓS "Recalcular Reg. Clássica". Só pode ser executado uma vez por torneio.',
           style: GoogleFonts.hankenGrotesk(fontSize: 14, height: 1.5),
         ),
         actions: [
-          FilledButton(
+          TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('CANCELAR',
+                style: GoogleFonts.anybody(color: Cores.onSurfaceVariant)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
             style: FilledButton.styleFrom(
-                backgroundColor: Cores.verdePrincipal),
-            child: Text('OK',
+                backgroundColor: Cores.azulTerciario),
+            child: Text('CALCULAR',
                 style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
     );
-    if (confirmar == false && mounted) {
-      // placeholder — funcionalidade em breve
+    if (confirmar != true || !mounted) return;
+
+    setState(() => _recalculandoCopa = true);
+    try {
+      final fn = FirebaseFunctions.instanceFor(region: 'southamerica-east1');
+      final result = await fn.httpsCallable('recalcularCopa').call();
+      final atualizados = result.data['atualizados'];
+      if (mounted) {
+        mostrarMensagem(
+            context, 'Pontuação Copa calculada ($atualizados usuários atualizados).');
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      final msg = e.code == 'already-exists'
+          ? e.message ?? 'Já calculado.'
+          : e.code == 'failed-precondition'
+              ? e.message ?? 'Pré-condição não atendida.'
+              : 'Erro: ${e.message}';
+      mostrarMensagem(context, msg);
+    } catch (e) {
+      if (mounted) mostrarMensagem(context, 'Erro ao calcular: $e');
+    } finally {
+      if (mounted) setState(() => _recalculandoCopa = false);
     }
   }
 
@@ -251,6 +320,16 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // TEMPORÁRIO — remover após validação
+          _CardOpcao(
+            icone: Icons.sports_soccer_rounded,
+            corIcone: Cores.error,
+            titulo: '[TESTE] Popular Placares 1×0',
+            descricao: 'Insere placar 1×0 em todos os 72 jogos da Fase de Grupos.',
+            carregando: _popularandoPlacares,
+            onTap: _popularPlacaresTeste,
+          ),
+          const SizedBox(height: 12),
           _CardOpcao(
             icone: Icons.cloud_upload_outlined,
             corIcone: Cores.azulTerciario,

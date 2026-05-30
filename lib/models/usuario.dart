@@ -4,7 +4,8 @@ class Usuario {
   final String uid;          // mesmo UID do Firebase Auth — é a "chave primária"
   final String email;
   final String nome;         // nome de exibição no ranking
-  final int pontuacao;       // pontuação total acumulada no bolão
+  final int pontuacao;       // pontuação Modo Clássico + Palpites Especiais
+  final int pontuacaoCopa;   // pontuação Modo Copa (fase de grupos)
   final DateTime criadoEm;   // data de cadastro
 
   final String? avatar;
@@ -20,6 +21,7 @@ class Usuario {
     required this.email,
     required this.nome,
     this.pontuacao = 0,
+    this.pontuacaoCopa = 0,
     required this.criadoEm,
     this.avatar,
     this.palpiteCampeao,
@@ -38,6 +40,7 @@ class Usuario {
       email: map['email'] as String,
       nome: map['nome'] as String,
       pontuacao: (map['pontuacao'] as num?)?.toInt() ?? 0,
+      pontuacaoCopa: (map['pontuacaoCopa'] as num?)?.toInt() ?? 0,
       criadoEm: (map['criadoEm'] as Timestamp).toDate(),
       avatar: map['avatar'] as String?,
       palpiteCampeao: map['palpiteCampeao'] as String?,

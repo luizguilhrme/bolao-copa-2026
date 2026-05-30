@@ -26,11 +26,22 @@ class _TelaRankingState extends State<TelaRanking> {
   // null = sem seleção explícita (usa o primeiro grupo disponível)
   Grupo? _grupoSelecionado;
 
-  final Stream<List<Usuario>> _streamRanking = FirebaseFirestore.instance
+  final Stream<List<Usuario>> _streamClassico = FirebaseFirestore.instance
       .collection('usuarios')
       .orderBy('pontuacao', descending: true)
       .snapshots()
       .map((snap) => snap.docs.map((d) => Usuario.fromMap(d.data())).toList());
+
+  // Copa: busca todos os usuários e ordena em memória por pontuacaoCopa.
+  // Não usa orderBy no Firestore porque documentos sem o campo seriam excluídos.
+  final Stream<List<Usuario>> _streamCopa = FirebaseFirestore.instance
+      .collection('usuarios')
+      .snapshots()
+      .map((snap) {
+        final lista = snap.docs.map((d) => Usuario.fromMap(d.data())).toList();
+        lista.sort((a, b) => b.pontuacaoCopa.compareTo(a.pontuacaoCopa));
+        return lista;
+      });
 
   @override
   Widget build(BuildContext context) {
@@ -86,8 +97,10 @@ class _TelaRankingState extends State<TelaRanking> {
             ? _grupoSelecionado!
             : grupos.first;
 
+        final bool modoCopa = grupoEfetivo.regra == 'copa';
+
         return StreamBuilder<List<Usuario>>(
-          stream: _streamRanking,
+          stream: modoCopa ? _streamCopa : _streamClassico,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               return Center(
@@ -197,6 +210,7 @@ class _TelaRankingState extends State<TelaRanking> {
                         segundo: usuarios[1],
                         terceiro: usuarios[2],
                         uidAtual: _uidAtual,
+                        modoCopa: modoCopa,
                       ),
                     ),
                   ),
@@ -217,6 +231,7 @@ class _TelaRankingState extends State<TelaRanking> {
                             posicao: indiceReal + 1,
                             usuario: usuario,
                             euSou: usuario.uid == _uidAtual,
+                            modoCopa: modoCopa,
                           ),
                         );
                       },
@@ -318,12 +333,14 @@ class _Podio extends StatelessWidget {
     required this.segundo,
     required this.terceiro,
     required this.uidAtual,
+    required this.modoCopa,
   });
 
   final Usuario primeiro;
   final Usuario segundo;
   final Usuario terceiro;
   final String uidAtual;
+  final bool modoCopa;
 
   @override
   Widget build(BuildContext context) {
@@ -339,6 +356,7 @@ class _Podio extends StatelessWidget {
             corBorda: Cores.prata,
             corBase: Cores.surfaceContainerHigh,
             euSou: segundo.uid == uidAtual,
+            modoCopa: modoCopa,
           ),
         ),
         const SizedBox(width: 8),
@@ -351,6 +369,7 @@ class _Podio extends StatelessWidget {
             corBorda: Cores.secondaryContainer,
             corBase: Cores.secondaryContainer,
             euSou: primeiro.uid == uidAtual,
+            modoCopa: modoCopa,
           ),
         ),
         const SizedBox(width: 8),
@@ -363,6 +382,7 @@ class _Podio extends StatelessWidget {
             corBorda: Cores.bronze,
             corBase: Cores.surfaceContainer,
             euSou: terceiro.uid == uidAtual,
+            modoCopa: modoCopa,
           ),
         ),
       ],
@@ -378,6 +398,7 @@ class _ColunaPodio extends StatelessWidget {
     required this.corBorda,
     required this.corBase,
     required this.euSou,
+    required this.modoCopa,
   });
 
   final Usuario usuario;
@@ -386,6 +407,7 @@ class _ColunaPodio extends StatelessWidget {
   final Color corBorda;
   final Color corBase;
   final bool euSou;
+  final bool modoCopa;
 
   double get _tamanhoAvatar => posicao == 1 ? 72.0 : 56.0;
   double get _fontePontos => posicao == 1 ? 22.0 : 17.0;
@@ -502,7 +524,7 @@ class _ColunaPodio extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                '${usuario.pontuacao}',
+                '${modoCopa ? usuario.pontuacaoCopa : usuario.pontuacao}',
                 style: GoogleFonts.anybody(
                   fontSize: _fontePontos,
                   fontWeight: FontWeight.w800,
@@ -557,11 +579,13 @@ class _ItemRanking extends StatelessWidget {
     required this.posicao,
     required this.usuario,
     required this.euSou,
+    required this.modoCopa,
   });
 
   final int posicao;
   final Usuario usuario;
   final bool euSou;
+  final bool modoCopa;
 
   @override
   Widget build(BuildContext context) {
@@ -641,7 +665,7 @@ class _ItemRanking extends StatelessWidget {
 
           // Pontuação
           Text(
-            '${usuario.pontuacao} pts',
+            '${modoCopa ? usuario.pontuacaoCopa : usuario.pontuacao} pts',
             style: GoogleFonts.anybody(
               fontSize: euSou ? 18 : 16,
               fontWeight: FontWeight.w700,
@@ -718,9 +742,13 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.82,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.max,
+          children: [
           // Cabeçalho verde
           Container(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
@@ -842,36 +870,38 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
           ),
 
           // Lista de palpites
-          FutureBuilder<List<_ItemPalpiteUsuario>>(
-            future: _future,
-            builder: (ctx, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(color: Cores.verdePrincipal),
-                );
-              }
-              final itens = snap.data ?? [];
-              if (itens.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'Nenhum palpite registrado.',
-                    style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
-                  ),
-                );
-              }
-              return ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 420),
-                child: ListView.separated(
-                  shrinkWrap: true,
+          Expanded(
+            child: FutureBuilder<List<_ItemPalpiteUsuario>>(
+              future: _future,
+              builder: (ctx, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: CircularProgressIndicator(color: Cores.verdePrincipal),
+                    ),
+                  );
+                }
+                final itens = snap.data ?? [];
+                if (itens.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'Nenhum palpite registrado.',
+                        style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
+                      ),
+                    ),
+                  );
+                }
+                return ListView.separated(
                   itemCount: itens.length,
                   separatorBuilder: (_, __) =>
                       const Divider(height: 1, color: Cores.outlineVariant),
                   itemBuilder: (_, i) => _buildLinha(itens[i]),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
 
           // Botão fechar
@@ -892,6 +922,7 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
           ),
         ],
       ),
+      ), // ConstrainedBox
     );
   }
 
