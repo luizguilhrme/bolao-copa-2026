@@ -449,7 +449,16 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 - Erros do Firebase Auth traduzidos para português
 - Cadastro: cria conta no Auth + perfil no Firestore via `UsuarioService`
 - Navegação por Enter: Enter no e-mail move o foco para a senha; Enter na senha submete o formulário
-- Botão "Continuar com Google" com logo desenhado via `CustomPainter` (sem asset externo)
+- Botão "Fazer login com o Google":
+  - **Web/PWA:** botão oficial GIS via `renderButton()` de `google_sign_in_web/web_only.dart`
+    (type: standard, theme: outline, size: large, text: signinWith, shape: rectangular).
+    Renderizado num `LayoutBuilder` → `ConstrainedBox(minHeight: 40)` → `Stack`, passando a
+    largura disponível como `minimumWidth`. O plugin é inicializado em `initState` via
+    `AuthService().inicializar()` (chama `signInSilently`) — sem isso a Future `initialized`
+    dentro de `renderButton()` nunca completa e o botão não aparece.
+  - **Android/Mobile:** `OutlinedButton` estilizado replicando as specs do GIS (borda `#747775`,
+    `borderRadius: 4`, logo via `CustomPainter`, texto "Fazer login com o Google") → chama
+    `AuthService().entrarComGoogle()` (fluxo nativo).
 - Account linking: se o e-mail Google já existe com senha, exibe `_DialogVincularConta` que faz login com senha e chama `linkWithCredential`
 
 ### `tela_setup_perfil.dart` — implementada
@@ -595,6 +604,9 @@ O código usava `.doc(jogo.id.toString())` assumindo que o ID do documento Fires
 
 ### Flash de MenuPrincipal durante cadastro
 `authStateChanges` disparava ao criar a conta Firebase, exibindo `MenuPrincipal` brevemente antes do setup. Corrigido fazendo o roteamento levar em conta a existência do perfil Firestore, não só o auth.
+
+### Botão GIS do Google sumindo em produção (web release)
+O botão oficial "Fazer login com o Google" aparecia em debug (`flutter run -d chrome`) mas **não** no build release publicado (`flutter build web` → Hosting). No console de produção: `TypeError: ... type 'X' is not a subtype of type 'Y'`. Causa: o **registrant de plugin web ficou desatualizado**, deixando `GoogleSignInPlatform.instance` como a instância default em vez de `GoogleSignInPlugin` — então o cast dentro de `renderButton()` estourava e o botão não renderizava (em debug o registrant é regenerado por outro caminho, mascarando o problema). **Corrigido com `flutter clean` + `flutter pub get` + rebuild**, que regenera o registrant. Lição: ao mexer em plugins que dependem de registro de plataforma na web, sempre `flutter clean` antes de validar o release. Também migrado para a API oficial `renderButton` de `google_sign_in_web/web_only.dart` e adicionada a inicialização do plugin em `initState`.
 
 ---
 
