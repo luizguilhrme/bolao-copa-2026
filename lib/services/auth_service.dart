@@ -5,10 +5,13 @@ import 'package:google_sign_in/google_sign_in.dart';
 /// Necessário para que onCurrentUserChanged (disparado pelo botão GIS na web)
 /// e entrarComGoogle (mobile) usem o mesmo canal de eventos.
 final _googleSignIn = GoogleSignIn(
-  // Client ID obrigatório para a web (GIS). No Android é ignorado.
-  // Authorized JavaScript origins deste client devem incluir todos os domínios
-  // a partir dos quais o app é servido (web.app, firebaseapp.com, localhost).
+  // clientId: usado na web (GIS). Authorized JS origins devem incluir
+  // todos os domínios do app (web.app, firebaseapp.com, localhost).
   clientId: '847953336398-4vsrvm2ldqf2k7daaigssdjq0iacg478.apps.googleusercontent.com',
+  // serverClientId: necessário no Android para que googleUser.authentication
+  // devolva um idToken válido para trocar com o Firebase Auth.
+  // Sem isso, idToken é null no Android e signInWithCredential falha.
+  serverClientId: '847953336398-4vsrvm2ldqf2k7daaigssdjq0iacg478.apps.googleusercontent.com',
 );
 
 /// Lançada quando o e-mail do Google já tem uma conta com senha.
