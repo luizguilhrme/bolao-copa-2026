@@ -755,7 +755,7 @@ Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regene
 ## Google Play — status de publicação
 
 - **Internal Testing** — ✓ v1.0.0+2 publicada; testadores adicionados por e-mail e podem instalar via Play Store
-- **Closed Testing (Alpha)** — ✓ v1.0.0+5 (build 5) publicada; redesign visual dos cards da tela home
+- **Closed Testing (Alpha)** — ✓ v1.0.0+9 publicada; rebranding para "Bolão - Crava aí!"
 - **Política de privacidade** — ✓ publicada em `https://bolaodasoci2026.web.app/privacy`
 - **Exclusão de conta** — ✓ publicada em `https://bolaodasoci2026.web.app/delete`
 - **Segurança dos dados** — ✓ questionário completo enviado no Play Console
