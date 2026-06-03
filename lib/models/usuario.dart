@@ -53,7 +53,9 @@ class Usuario {
       pontuacaoCopa: (map['pontuacaoCopa'] as num?)?.toInt() ?? 0,
       pontuacaoEliminatorias: (map['pontuacaoEliminatorias'] as num?)?.toInt() ?? 0,
       pontuacaoEspeciais: (map['pontuacaoEspeciais'] as num?)?.toInt() ?? 0,
-      criadoEm: (map['criadoEm'] as Timestamp).toDate(),
+      criadoEm: map['criadoEm'] != null
+          ? (map['criadoEm'] as Timestamp).toDate()
+          : DateTime.now(),
       avatar: map['avatar'] as String?,
       palpiteCampeao: map['palpiteCampeao'] as String?,
       palpiteArtilheiro: map['palpiteArtilheiro'] as String?,
@@ -64,13 +66,15 @@ class Usuario {
     );
   }
 
-  // toMap é o caminho inverso — prepara o objeto para ser salvo no Firestore
+  // toMap é o caminho inverso — prepara o objeto para ser salvo no Firestore.
+  // Campos de pontuação são gerenciados exclusivamente pelas Cloud Functions
+  // via FieldValue.increment() — não incluí-los aqui evita conflitos com
+  // regras do Firestore que protegem esses campos.
   Map<String, dynamic> toMap() {
     return {
       'uid': uid,
       'email': email,
       'nome': nome,
-      'pontuacaoClassica': pontuacaoClassica,
       'criadoEm': FieldValue.serverTimestamp(),
       if (avatar != null) 'avatar': avatar,
     };

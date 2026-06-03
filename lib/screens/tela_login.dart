@@ -122,11 +122,9 @@ class _TelaLoginState extends State<TelaLogin> {
     } on FirebaseAuthException catch (e) {
       if (mounted) setState(() => _erro = _traduzirErro(e.code));
     } catch (_) {
-      // PlatformException (ex: popup bloqueado, origem não autorizada no
-      // Google Cloud Console) — não mostra erro para não confundir com
-      // o caso em que o usuário apenas fechou o seletor.
-      // Se o botão não abrir nada, verifique as Authorized JavaScript
-      // origins do OAuth client no Google Cloud Console.
+      // Quando o usuário cancela o seletor, signIn() retorna null (sem exceção).
+      // Qualquer exceção aqui é erro real (PlatformException de SHA-1, token, etc).
+      if (mounted) setState(() => _erro = 'Erro no login com Google. Tente novamente.');
     } finally {
       if (mounted) setState(() => _carregandoGoogle = false);
     }
