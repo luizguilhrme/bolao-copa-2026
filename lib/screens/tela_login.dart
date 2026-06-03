@@ -1,8 +1,12 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
 import '../utils/cores.dart';
+import '../utils/signin_web.dart';
 
 class TelaLogin extends StatefulWidget {
   const TelaLogin({super.key});
@@ -20,13 +24,55 @@ class _TelaLoginState extends State<TelaLogin> {
   bool _carregandoGoogle = false;
   bool _senhaVisivel = false;
   String? _erro;
+  StreamSubscription<void>? _googleAuthSub;
+
+  @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) {
+      registrarBotaoGoogle();
+      _googleAuthSub = AuthService().onGoogleUserChanged.listen((_) {
+        _onBotaoGisCompleto();
+      });
+      // Dispara initWithParams() no plugin web. Sem isso, a Future `initialized`
+      // dentro de renderButton() nunca completa e o botão GIS não aparece.
+      AuthService().inicializar();
+    }
+  }
 
   @override
   void dispose() {
+    _googleAuthSub?.cancel();
     _emailController.dispose();
     _senhaController.dispose();
     _senhaFocus.dispose();
     super.dispose();
+  }
+
+  /// Chamado quando o botão GIS conclui a autenticação na web.
+  Future<void> _onBotaoGisCompleto() async {
+    if (!mounted) return;
+    setState(() { _carregandoGoogle = true; _erro = null; });
+    try {
+      await AuthService().processarUltimaContaGoogle();
+      // authStateChanges dispara → main.dart roteia automaticamente
+    } on ContaJaExisteException catch (e) {
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _DialogVincularConta(
+          email: e.email,
+          credencialGoogle: e.credencial,
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (mounted) setState(() => _erro = _traduzirErro(e.code));
+    } catch (_) {
+      if (mounted) setState(() => _erro = 'Erro no login com Google. Tente novamente.');
+    } finally {
+      if (mounted) setState(() => _carregandoGoogle = false);
+    }
   }
 
   Future<void> _entrar() async {
@@ -62,9 +108,8 @@ class _TelaLoginState extends State<TelaLogin> {
     setState(() { _carregandoGoogle = true; _erro = null; });
     try {
       await AuthService().entrarComGoogle();
-      // authStateChanges dispara → main.dart roteia automaticamente
+      // null = usuário fechou o seletor; authStateChanges dispara se logou
     } on ContaJaExisteException catch (e) {
-      // E-mail já existe com senha → mostra dialog de linking
       if (!mounted) return;
       await showDialog(
         context: context,
@@ -75,9 +120,13 @@ class _TelaLoginState extends State<TelaLogin> {
         ),
       );
     } on FirebaseAuthException catch (e) {
-      setState(() => _erro = _traduzirErro(e.code));
+      if (mounted) setState(() => _erro = _traduzirErro(e.code));
     } catch (_) {
-      // Usuário cancelou a janela do Google — não exibe erro
+      // PlatformException (ex: popup bloqueado, origem não autorizada no
+      // Google Cloud Console) — não mostra erro para não confundir com
+      // o caso em que o usuário apenas fechou o seletor.
+      // Se o botão não abrir nada, verifique as Authorized JavaScript
+      // origins do OAuth client no Google Cloud Console.
     } finally {
       if (mounted) setState(() => _carregandoGoogle = false);
     }
@@ -187,41 +236,76 @@ class _TelaLoginState extends State<TelaLogin> {
     );
   }
 
-  // Botão "Continuar com Google" — design oficial do Google:
-  // fundo branco, borda cinza, logo "G" colorido, texto escuro
+  // Botão "Continuar com Google":
+  // • Web: botão oficial GIS (renderButton) — usa FedCM, sem popup.
+  // • Mobile: botão Flutter customizado → chama entrarComGoogle() nativo.
   Widget _buildBotaoGoogle() {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton(
-        onPressed: (_carregando || _carregandoGoogle) ? null : _entrarComGoogle,
-        style: OutlinedButton.styleFrom(
-          backgroundColor: Colors.white,
-          side: const BorderSide(color: Color(0xFFDADCE0), width: 1.5),
-          padding: const EdgeInsets.symmetric(vertical: 13),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: _carregandoGoogle
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(strokeWidth: 2.5),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _LogoGoogle(tamanho: 20),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Continuar com Google',
-                    style: GoogleFonts.hankenGrotesk(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF3C4043),
+    if (kIsWeb) {
+      // FlexHtmlElementView (usado pelo renderButton) auto-dimensiona via
+      // ResizeObserver. Passamos a largura disponível como minimumWidth para
+      // que o botão GIS preencha o card. O ConstrainedBox reserva altura
+      // mínima enquanto o GIS ainda não renderizou.
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final double largura = constraints.maxWidth.clamp(200.0, 400.0);
+          return ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 40),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                buildBotaoGoogleWeb(largura: largura),
+                if (_carregandoGoogle)
+                  Container(
+                    height: 44,
+                    color: Colors.white.withValues(alpha: 0.85),
+                    child: const Center(
+                      child: SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      ),
                     ),
                   ),
-                ],
-              ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+
+    // Android/Mobile: botão estilizado conforme especificações do botão GIS
+    // (outline theme, rectangular shape, large size — mesmo visual do web).
+    return OutlinedButton(
+      onPressed: (_carregando || _carregandoGoogle) ? null : _entrarComGoogle,
+      style: OutlinedButton.styleFrom(
+        backgroundColor: Colors.white,
+        side: const BorderSide(color: Color(0xFF747775)),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        minimumSize: const Size(double.infinity, 40),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       ),
+      child: _carregandoGoogle
+          ? const SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _LogoGoogle(tamanho: 18),
+                const SizedBox(width: 10),
+                Text(
+                  'Fazer login com o Google',
+                  style: GoogleFonts.hankenGrotesk(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF1F1F1F),
+                    letterSpacing: 0.25,
+                  ),
+                ),
+              ],
+            ),
     );
   }
 

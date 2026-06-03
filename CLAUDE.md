@@ -126,7 +126,9 @@ C:\bolao\
       tela_home.dart          ← jogos de hoje (Firestore) + bento grid de navegação;
                                  card "PALPITES ESPECIAIS" navega para TelaPalpitesEspeciais
       tela_login.dart         ← login e cadastro com design do Stitch; ícone de olho na senha;
-                                 botão "Continuar com Google" com account linking automático
+                                 botão "Fazer login com o Google" (GIS oficial na web via
+                                 renderButton; OutlinedButton estilizado no Android) com
+                                 account linking automático
       tela_setup_perfil.dart  ← ordem: Nome → Grupos (criar/entrar opcional) → Avatar;
                                  dialogs de criar/entrar grupo inline;
                                  nome pré-preenchido com displayName do Google quando disponível
@@ -558,7 +560,12 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 - Erros do Firebase Auth traduzidos para português
 - Ícone de olho no campo de senha para mostrar/ocultar (`_senhaVisivel` bool + `suffixIcon`)
 - Navegação por Enter: Enter no e-mail move o foco para a senha; Enter na senha submete o formulário
-- Botão "Continuar com Google" com logo desenhado via `CustomPainter` (sem asset externo)
+- Botão "Fazer login com o Google":
+  - **Web/PWA:** botão oficial GIS via `renderButton()` de `google_sign_in_web/web_only.dart`
+    (standard/outline/large/signinWith/rectangular), num `LayoutBuilder` → `ConstrainedBox(minHeight: 40)`
+    passando `minimumWidth`. Plugin inicializado em `initState` via `AuthService().inicializar()`.
+  - **Android:** `OutlinedButton` estilizado replicando o GIS (logo via `CustomPainter`).
+  - ⚠️ Se o botão sumir no release web, rodar `flutter clean` antes do rebuild (registrant de plugin desatualizado).
 - Account linking: se o e-mail Google já existe com senha, exibe `_DialogVincularConta` que faz login com senha e chama `linkWithCredential`
 
 ### `tela_setup_perfil.dart` — implementada
