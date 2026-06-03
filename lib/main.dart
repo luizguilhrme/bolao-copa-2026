@@ -30,7 +30,7 @@ class MeuApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Bolão Copa 2026',
+      title: 'Bolão - Crava aí!',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Cores.verdePrincipal),

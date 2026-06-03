@@ -199,7 +199,7 @@ class _TelaLoginState extends State<TelaLogin> {
         Icon(Icons.sports_soccer, color: Cores.verdePrincipal, size: 48),
         const SizedBox(height: 8),
         Text(
-          'COPA 2026',
+          'CRAVA AÍ!',
           style: GoogleFonts.anybody(
             fontSize: 48,
             fontWeight: FontWeight.w800,
