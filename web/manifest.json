@@ -1,11 +1,11 @@
 {
-    "name": "Bolão Copa 2026",
-    "short_name": "Bolão 26",
+    "name": "Bolão - Crava aí!",
+    "short_name": "Crava aí!",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#006D32",
     "theme_color": "#006D32",
-    "description": "Bolão da Copa do Mundo 2026 — registre seus palpites e dispute o ranking.",
+    "description": "Registre seus palpites, crave seus resultados e dispute o ranking da Copa.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

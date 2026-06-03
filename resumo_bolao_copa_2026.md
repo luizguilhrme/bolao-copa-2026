@@ -1,4 +1,4 @@
-﻿# Resumo do projeto — Bolão Copa 2026
+﻿# Resumo do projeto — Bolão - Crava aí!
 
 ---
 
@@ -98,7 +98,7 @@ C:\bolao\
       avatares.dart           ← lista kJogadores + widgets WidgetAvatar e CardAvatar
   web/
     index.html              ← meta tags PWA iOS (apple-mobile-web-app-capable etc)
-    manifest.json           ← PWA manifest (nome "Bolão Copa 2026", tema #006D32)
+    manifest.json           ← PWA manifest (nome "Bolão - Crava aí!", tema #006D32)
     favicon.png             ← ícone personalizado
     icons/                  ← Icon-192.png, Icon-512.png, Icon-maskable-192.png,
                                Icon-maskable-512.png, apple-touch-icon.png
@@ -227,7 +227,8 @@ StreamBuilder<User?>(
 - PATH do Windows atualizado para incluir `C:\Users\Luiz Guilherme\AppData\Local\Pub\Cache\bin`
 
 ### Projeto Firebase
-- Nome: `bolaodasoci2026`
+- Nome de exibição: `bolaocravaai` | Nome público: `Bolão - Crava aí!`
+- ID do projeto (permanente): `bolaodasoci2026`
 - Região do Firestore: `southamerica-east1` (São Paulo)
 - App Android registrado com package name: `com.luizdeveloper.bolao.bolao`
 - App Web registrado (Firebase Console → Project settings → Apps)

@@ -6,7 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
+**Nome do app:** Bolão - Crava aí! (Play Store: "Bolão - Crava aí! | Sem Anúncios")
+
 Flutter app for a World Cup 2026 prediction pool (bolão). Users register predictions for match scores; an admin enters real results, and the app calculates and ranks players by points. Backend is Firebase (Auth + Firestore).
+
+> **Nota de branding:** O **nome de exibição** do projeto Firebase foi atualizado para `bolaocravaai` e o nome público para `Bolão - Crava aí!`. O **ID do projeto** (`bolaodasoci2026`) e a URL de hosting (`bolaodasoci2026.web.app`) são permanentes e não podem ser alterados.
 
 ## Common commands
 
@@ -328,7 +332,8 @@ StreamBuilder<User?>(
 - PATH do Windows atualizado para incluir `C:\Users\Luiz Guilherme\AppData\Local\Pub\Cache\bin`
 
 ### Projeto Firebase
-- Nome: `bolaodasoci2026`
+- Nome de exibição: `bolaocravaai` | Nome público: `Bolão - Crava aí!`
+- ID do projeto (permanente): `bolaodasoci2026`
 - Região do Firestore: `southamerica-east1` (São Paulo)
 - App Android registrado com package name: `com.luizdeveloper.bolao.bolao`
 - App Web registrado (Firebase Console → Project settings → Apps)
