@@ -30,18 +30,24 @@ service cloud.firestore {
     match /usuarios/{uid} {
       allow read: if request.auth != null;
 
+      // Impede criar documento com isAdmin=true ou pontuação inflada.
+      // Sem hasOnly: permite qualquer campo de perfil, mas bloqueia os críticos explicitamente.
       allow create: if request.auth != null
         && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(
-             ['uid', 'email', 'nome', 'pontuacao', 'criadoEm', 'avatar'])
         && request.resource.data.get('isAdmin', false) == false
-        && request.resource.data.get('pontuacao', 0) == 0;
+        && request.resource.data.get('pontuacaoClassica', 0) == 0
+        && request.resource.data.get('pontuacaoCopa', 0) == 0
+        && request.resource.data.get('pontuacaoEliminatorias', 0) == 0
+        && request.resource.data.get('pontuacaoEspeciais', 0) == 0;
 
+      // Apenas campos de perfil e palpites; pontuação, isAdmin, uid, email e
+      // criadoEm são imutáveis pelo cliente (só o Admin SDK os toca).
       allow update: if request.auth != null
         && request.auth.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['nome', 'avatar', 'fcmToken', 'notifLembretes', 'notifRanking',
-                       'palpiteCampeao', 'palpiteArtilheiro']);
+                       'palpiteCampeao', 'palpiteArtilheiro', 'palpiteGoleiro',
+                       'palpiteMelhorJogador', 'palpiteMaisGoleadora', 'palpiteMenosVazada']);
 
       allow delete: if request.auth != null && request.auth.uid == uid;
     }

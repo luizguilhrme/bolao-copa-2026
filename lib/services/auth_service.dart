@@ -1,16 +1,19 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 
 /// Instância única de GoogleSignIn compartilhada pelo app.
 /// Necessário para que onCurrentUserChanged (disparado pelo botão GIS na web)
 /// e entrarComGoogle (mobile) usem o mesmo canal de eventos.
 final _googleSignIn = GoogleSignIn(
-  // clientId: usado na web (GIS). Authorized JS origins devem incluir
-  // todos os domínios do app (web.app, firebaseapp.com, localhost).
-  clientId: '847953336398-4vsrvm2ldqf2k7daaigssdjq0iacg478.apps.googleusercontent.com',
+  // clientId: APENAS na web. No Android, o client vem do google-services.json;
+  // passar clientId no Android faz o seletor retornar null após selecionar conta.
+  clientId: kIsWeb
+      ? '847953336398-4vsrvm2ldqf2k7daaigssdjq0iacg478.apps.googleusercontent.com'
+      : null,
   // serverClientId: necessário no Android para que googleUser.authentication
   // devolva um idToken válido para trocar com o Firebase Auth.
-  // Sem isso, idToken é null no Android e signInWithCredential falha.
+  // Deve ser o Web OAuth client ID (não o Android client ID).
   serverClientId: '847953336398-4vsrvm2ldqf2k7daaigssdjq0iacg478.apps.googleusercontent.com',
 );
 
