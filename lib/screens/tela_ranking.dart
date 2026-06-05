@@ -1,4 +1,5 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,8 +9,6 @@ import '../models/palpite.dart';
 import '../models/usuario.dart';
 import '../services/grupo_service.dart';
 import '../services/jogo_service.dart';
-import '../services/palpite_copa_service.dart';
-import '../services/palpite_service.dart';
 import '../utils/avatares.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
@@ -826,17 +825,44 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
 
   Future<_DadosDialog> _carregar() async {
     final uid = widget.usuario.uid;
+
+    // buscarPalpitesUsuario verifica que o solicitante compartilha um grupo
+    // com o alvo antes de retornar os dados — sem leitura direta do Firestore.
+    final callable = FirebaseFunctions.instanceFor(region: 'southamerica-east1')
+        .httpsCallable('buscarPalpitesUsuario');
+
     final results = await Future.wait([
-      PalpiteService().buscarTodosPorUsuario(uid),
+      callable.call({'targetUid': uid}),
       JogoService().buscarTodos(),
-      PalpiteCopaService().buscarPorUid(uid),
       FirebaseFirestore.instance.collection('config').doc('copa2026').get(),
     ]);
-    final palpites = results[0] as List<Palpite>;
+
+    final funcResult = results[0] as HttpsCallableResult<dynamic>;
+    final funcData = Map<String, dynamic>.from(funcResult.data as Map);
+
+    final palpites = (funcData['palpites'] as List).map((raw) {
+      final m = Map<String, dynamic>.from(raw as Map);
+      return Palpite(
+        uid: uid,
+        jogoId: (m['jogoId'] as num).toInt(),
+        palpite1: (m['palpite1'] as num).toInt(),
+        palpite2: (m['palpite2'] as num).toInt(),
+      );
+    }).toList();
+
+    final rawCopa = funcData['palpitesCopa'] as Map? ?? {};
+    final palpitesCopa = <String, Map<String, String?>>{};
+    rawCopa.forEach((grupoKey, posicoes) {
+      final m = Map<String, dynamic>.from(posicoes as Map);
+      palpitesCopa[grupoKey as String] = {
+        'primeiro': m['primeiro'] as String?,
+        'segundo': m['segundo'] as String?,
+        'terceiro': m['terceiro'] as String?,
+      };
+    });
+
     final jogos = results[1] as List<Jogo>;
-    final palpitesCopa =
-        results[2] as Map<String, Map<String, String?>>;
-    final configSnap = results[3] as DocumentSnapshot;
+    final configSnap = results[2] as DocumentSnapshot;
 
     Map<String, dynamic> classificacaoReal = {};
     bool palpitesTravados = false;

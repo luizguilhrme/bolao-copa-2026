@@ -67,13 +67,15 @@ service cloud.firestore {
     //   Além de ser o dono e o jogo não ter começado, uid e jogoId não podem
     //   ser trocados (garante que o documento não é "reatribuído").
     //
-    // Leitura aberta para autenticados: necessário para os dialogs de palpites
-    //   na TelaTabela e TelaRanking. Restringir leitura a jogos encerrados
-    //   exigiria salvar dataHoraJogo em cada palpite — complexidade não
-    //   justificada para um bolão entre amigos.
+    // Leitura restrita ao próprio dono: os dialogs de palpites na TelaTabela
+    //   e TelaRanking foram migrados para Cloud Functions (buscarPalpitesJogo e
+    //   buscarPalpitesUsuario) que rodam com Admin SDK e ignoram essas regras.
+    //   Isso impede que qualquer usuário autenticado leia palpites alheios
+    //   diretamente via REST API ou SDK externo.
     //
     match /palpites/{palpiteId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null
+        && request.auth.uid == resource.data.uid;
 
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.uid
@@ -95,9 +97,11 @@ service cloud.firestore {
     }
 
     // ── palpites_copa ─────────────────────────────────────────────────────────
-    // Um documento por usuário (ID = UID). Apenas o próprio usuário pode ler/escrever.
+    // Um documento por usuário (ID = UID). Leitura e escrita restritas ao
+    // próprio usuário. Leitura por terceiros é feita exclusivamente pela
+    // Cloud Function buscarPalpitesUsuario (Admin SDK, ignora estas regras).
     match /palpites_copa/{uid} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if request.auth != null && request.auth.uid == uid;
     }
 

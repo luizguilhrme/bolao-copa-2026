@@ -1,11 +1,10 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/jogo.dart';
 import '../models/palpite.dart';
 import '../models/usuario.dart';
 import '../services/jogo_service.dart';
-import '../services/palpite_service.dart';
 import '../utils/avatares.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
@@ -708,34 +707,33 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
   }
 
   Future<List<_ItemPalpiteJogo>> _carregar() async {
-    final palpites = await PalpiteService().buscarTodosPorJogo(widget.jogo.id);
-    if (palpites.isEmpty) return [];
+    // A Cloud Function verifica autenticação, filtra pelos membros dos grupos
+    // do solicitante e retorna os dados prontos — sem leitura direta do Firestore.
+    final callable = FirebaseFunctions.instanceFor(region: 'southamerica-east1')
+        .httpsCallable('buscarPalpitesJogo');
+    final result = await callable.call({'jogoId': widget.jogo.id});
+    final data = Map<String, dynamic>.from(result.data as Map);
+    final rawItens = (data['itens'] as List).cast<Map>();
 
-    final uids = palpites.map((p) => p.uid).toSet().toList();
-    final snap = await FirebaseFirestore.instance
-        .collection('usuarios')
-        .where(FieldPath.documentId, whereIn: uids)
-        .get();
-
-    final usuariosMap = {
-      for (final doc in snap.docs) doc.id: Usuario.fromMap(doc.data()),
-    };
-
-    return palpites
-        .where((p) => usuariosMap.containsKey(p.uid))
-        .map((p) {
-          final u = usuariosMap[p.uid]!;
-          return _ItemPalpiteJogo(
-            usuario: u,
-            palpite: p,
-            pontos: calcularPontos(
-              p.palpite1, p.palpite2,
-              widget.jogo.placar1!, widget.jogo.placar2!,
-            ),
-          );
-        })
-        .toList()
-      ..sort((a, b) => b.pontos.compareTo(a.pontos));
+    return rawItens.map((raw) {
+      final m = Map<String, dynamic>.from(raw);
+      return _ItemPalpiteJogo(
+        usuario: Usuario(
+          uid: m['uid'] as String,
+          email: '',
+          nome: m['nome'] as String,
+          criadoEm: DateTime.now(),
+          avatar: m['avatar'] as String?,
+        ),
+        palpite: Palpite(
+          uid: m['uid'] as String,
+          jogoId: widget.jogo.id,
+          palpite1: (m['palpite1'] as num).toInt(),
+          palpite2: (m['palpite2'] as num).toInt(),
+        ),
+        pontos: (m['pontos'] as num).toInt(),
+      );
+    }).toList();
   }
 
   @override

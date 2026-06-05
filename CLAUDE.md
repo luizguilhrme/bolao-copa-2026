@@ -117,7 +117,8 @@ C:\bolao\
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
                                  calcularPontuacao, lembretesPalpite, recalcularTudo,
                                  membroEntrou, calcularPalpitesEspeciais,
-                                 limparUsuariosOrfaos, limparDadosTeste, recalcularCopa
+                                 limparUsuariosOrfaos, limparDadosTeste, recalcularCopa,
+                                 buscarPalpitesJogo, buscarPalpitesUsuario
   lib/
     main.dart                 ← Firebase init + FCM background handler + StreamBuilder de auth
     firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
@@ -161,13 +162,17 @@ C:\bolao\
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos;
                                  dialog de palpites com filtro A–L + MATA-MATA, palpites especiais
                                  completos (6 campos) e suporte a Modo Copa com pontuação por posição;
-                                 palpites Copa e Especiais ocultos até palpitesTravados=true
+                                 palpites Copa e Especiais ocultos até palpitesTravados=true;
+                                 palpites carregados via Cloud Function buscarPalpitesUsuario
+                                 (só retorna dados de usuários em grupo comum)
       tela_grupos.dart        ← lista grupos do usuário; criar grupo (código único) com seleção
                                  de modo CLÁSSICO/COPA; entrar com código; sair;
                                  card exibe chip de modo; dialog de detalhes com membros e avatares;
                                  ícone de lápis (só dono) edita o nome do grupo
       tela_tabela.dart        ← lista os 104 jogos com seções e tabs "Próximos"/"Encerrados";
-                                 RefreshIndicator (pull-to-refresh)
+                                 RefreshIndicator (pull-to-refresh); tocar em jogo encerrado
+                                 abre dialog via Cloud Function buscarPalpitesJogo
+                                 (exibe palpites da união dos membros de todos os grupos do usuário)
       tela_admin_placares.dart ← inserção de placares com abas Próximos/Encerrados;
                                  sem regra de 105 min; campos vazios no CORRIGIR limpam o placar
                                  (dialog de confirmação) e devolvem o jogo para Próximos;
@@ -394,8 +399,14 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
     match /palpites/{palpiteId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+      allow update: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow delete: if false;
+    }
+    match /palpites_copa/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && request.auth.uid == uid;
     }
     match /grupos/{grupoId} {
       allow read: if request.auth != null;
@@ -616,7 +627,7 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 - Chips horizontais roláveis: **Todos** + **A** a **L**; eliminatórias só em "Todos"
 - `CustomScrollView` com slivers agrupados por seção
 - **RefreshIndicator** (pull-to-refresh) — rebusca todos os jogos via `JogoService().buscarTodos()`
-- Tocar em jogo encerrado abre dialog com todos os palpites registrados
+- Tocar em jogo encerrado abre dialog de palpites via Cloud Function `buscarPalpitesJogo`: valida jogo encerrado, coleta membros de todos os grupos do solicitante (união), retorna palpites filtrados com nome/avatar/pontos; ordenados por pontuação
 
 ### `tela_palpites.dart` — implementada
 - Abas superiores **MODO CLÁSSICO** / **MODO COPA** em verde (só visíveis quando usuário tem grupos dos dois modos E Fase de Grupos ativa)
@@ -633,7 +644,7 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 ### `tela_ranking.dart` — implementada
 - Ranking filtrado por grupo (sem ranking global)
 - Pódio top 3 + lista 4º em diante
-- Dialog com histórico de palpites do usuário (só MODO CLÁSSICO por enquanto)
+- Dialog com histórico de palpites do usuário via Cloud Function `buscarPalpitesUsuario`: verifica grupo em comum entre solicitante e alvo, retorna palpites clássicos + Copa; suporte a filtro A–L + MATA-MATA, palpites especiais completos (6 campos) e Modo Copa com pontuação por posição; palpites Copa e Especiais ocultos até palpitesTravados=true
 - Usa `calcularPontosComFase` com multiplicador de fase correto
 
 ### `tela_grupos.dart` — implementada
@@ -818,6 +829,8 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 | `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos |
 | `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times de eliminatórias, classificação, resultados especiais, `pontuacaoClassica`, `pontuacaoCopa`, `pontuacaoEliminatorias`, `pontuacaoEspeciais` e flags. Palpites preservados. |
 | `recalcularCopa` | HTTPS Callable (admin only) | Calcula pontos da fase de grupos Copa (SET em `pontuacaoCopa`); marca `copaGruposCalculado: true`. Executar após inserir todos os placares da fase de grupos. |
+| `buscarPalpitesJogo` | HTTPS Callable | Retorna palpites de um jogo encerrado filtrados pelos membros dos grupos do solicitante (união de todos os grupos). Usado pelo dialog da `tela_tabela`. |
+| `buscarPalpitesUsuario` | HTTPS Callable | Retorna palpites clássicos + Copa de um usuário, validando que o solicitante compartilha pelo menos um grupo com o alvo. Usado pelo dialog do `tela_ranking`. |
 
 **Deep linking via notificação:** `data: { tela: 'palpites' }`, `data: { tela: 'ranking' }`, `data: { tela: 'grupos' }`.
 
@@ -850,11 +863,11 @@ Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regene
 
 **`jogos`** — `read`: autenticado; `write`: autenticado (admin na prática)
 
-**`palpites`** — `read/write`: autenticado (cutoff verificado no frontend)
+**`palpites`** — `read`: só o próprio dono (`request.auth.uid == resource.data.uid`); leitura de palpites alheios feita exclusivamente via Cloud Functions (`buscarPalpitesJogo`, `buscarPalpitesUsuario`) que rodam com Admin SDK; `create`/`update`: dono + jogo não iniciado (cutoff no backend); `delete`: bloqueado
 
 **`config`** — `read`: autenticado; `write`: só admin
 
-**`palpites_copa`** — `read`: autenticado; `write`: só o próprio usuário (`uid == auth.uid`)
+**`palpites_copa`** — `read`: só o próprio usuário; leitura por terceiros via Cloud Function `buscarPalpitesUsuario`; `write`: só o próprio usuário (`uid == auth.uid`)
 
 **`grupos`** — `read/create`: autenticado; `update`: membro; `delete`: dono
 
