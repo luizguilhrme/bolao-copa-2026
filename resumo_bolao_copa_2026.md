@@ -42,7 +42,8 @@ C:\bolao\
     firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
     models/
       jogo.dart               ← model com fromJson, fromMap, toMap e getter dataHora
-      usuario.dart            ← model com fromMap, toMap e copyWith
+      usuario.dart            ← model com fromMap, toMap e copyWith; copyWith cobre todos
+                                 os 6 campos de palpites especiais
       palpite.dart            ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
       grupo.dart              ← model com fromMap, toMap; criadoEm é DateTime? (nullable);
                                  campo regra: 'classico' | 'copa' (default 'classico')
@@ -58,7 +59,9 @@ C:\bolao\
       tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
       tela_palpites.dart      ← abas MODO CLÁSSICO/MODO COPA (condicionais) + sub-abas Próximos/Encerrados;
                                  MODO COPA: form de palpite de classificação dos 12 grupos;
-                                 bloqueio do Modo Copa exclusivamente por palpitesTravados=true
+                                 bloqueio do Modo Copa exclusivamente por palpitesTravados=true;
+                                 card de resultado exibe "Avançou: [time]" quando jogo.vencedor != null;
+                                 banner verde no topo quando palpitesTravados=true
       tela_palpites_especiais.dart ← 6 palpites especiais; Campeão/MaisGoleadora/MenosVazada:
                                  seletor de time; Artilheiro/MelhorGoleiro/MelhorJogador:
                                  seletor de jogador com busca por nome + filtro por seleção
@@ -68,7 +71,8 @@ C:\bolao\
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos;
                                  dialog de palpites via CF buscarPalpitesUsuario (valida grupo em comum);
                                  filtro A–L + MATA-MATA, palpites especiais completos (6 campos)
-                                 e suporte a Modo Copa; palpites Copa e Especiais ocultos até palpitesTravados=true
+                                 e suporte a Modo Copa; palpites Copa e Especiais ocultos até palpitesTravados=true;
+                                 desempate 3 (campeão) e 4 (artilheiro) usam comparação case-insensitive
       tela_grupos.dart        ← lista grupos do usuário; criar grupo com seleção de modo CLÁSSICO/COPA;
                                  card exibe chip de modo; entrar com código; sair;
                                  tocar no card abre dialog de detalhes com membros e avatares;
@@ -82,10 +86,10 @@ C:\bolao\
       tela_admin_copa.dart    ← classificação por grupo (1º/2º obrigatórios, 3º para 8 grupos);
                                  seção "Terceiros — 16 Avos" para alocar os 8 terceiros nos slots;
                                  ao salvar, atualiza automaticamente team1/team2 dos jogos 73–88
-      tela_admin_especiais.dart ← resultados reais dos palpites especiais; campeão/mais goleadora/
-                                 menos vazada: seletor de time; artilheiro/melhor goleiro/melhor
-                                 jogador: seletor de jogador (mesmo UX de tela_palpites_especiais,
-                                 cores verdes); botão CALCULAR
+      tela_admin_especiais.dart ← resultados reais na mesma ordem da tela do usuário: Campeão,
+                                 Artilheiro, Melhor Goleiro, Melhor Jogador, Mais Goleadora,
+                                 Menos Vazada; seletores de time e jogador idênticos à tela do
+                                 usuário (cores verdes); botão SALVAR + botão CALCULAR
       tela_admin_definicoes.dart ← popular jogos, recalcular regras, limpar dados de teste, limpar órfãos;
                                  botão Travar/Destravar Palpites (grava palpitesTravados em config/copa2026)
       tela_ajuda.dart         ← FAQ estático

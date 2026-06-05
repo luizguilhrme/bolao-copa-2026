@@ -97,6 +97,10 @@ class Usuario {
     String? avatar,
     String? palpiteCampeao,
     String? palpiteArtilheiro,
+    String? palpiteGoleiro,
+    String? palpiteMelhorJogador,
+    String? palpiteMaisGoleadora,
+    String? palpiteMenosVazada,
   }) {
     return Usuario(
       uid: uid,
@@ -109,6 +113,10 @@ class Usuario {
       avatar: avatar ?? this.avatar,
       palpiteCampeao: palpiteCampeao ?? this.palpiteCampeao,
       palpiteArtilheiro: palpiteArtilheiro ?? this.palpiteArtilheiro,
+      palpiteGoleiro: palpiteGoleiro ?? this.palpiteGoleiro,
+      palpiteMelhorJogador: palpiteMelhorJogador ?? this.palpiteMelhorJogador,
+      palpiteMaisGoleadora: palpiteMaisGoleadora ?? this.palpiteMaisGoleadora,
+      palpiteMenosVazada: palpiteMenosVazada ?? this.palpiteMenosVazada,
     );
   }
 }

@@ -292,6 +292,32 @@ class _TelaPalpitesState extends State<TelaPalpites> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Banner informativo quando palpites Copa e Especiais estão travados
+        if (_palpitesTravados)
+          Container(
+            width: double.infinity,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: Cores.verdePrincipal.withValues(alpha: 0.10),
+            child: Row(
+              children: [
+                const Icon(Icons.lock_rounded,
+                    size: 16, color: Cores.verdePrincipal),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Palpites Especiais e Modo Copa estão travados e visíveis para todos.',
+                    style: GoogleFonts.hankenGrotesk(
+                      fontSize: 13,
+                      color: Cores.verdePrincipal,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
         // Seletor de MODO (só quando ambos os modos presentes e fase de grupos ativa)
         if (_mostrarAbas)
           _SeletorModo(
@@ -960,6 +986,26 @@ class _CardResultado extends StatelessWidget {
                       const Spacer(),
                     ],
                   ),
+                  // Indicador de quem avançou nos pênaltis/prorrogação
+                  if (jogo.vencedor != null) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.emoji_events_rounded,
+                            size: 13, color: Cores.onSurfaceVariant),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Avançou: ${nomePtDe(jogo.vencedor!)}',
+                          style: GoogleFonts.hankenGrotesk(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Cores.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ],
             ),
