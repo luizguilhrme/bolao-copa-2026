@@ -106,6 +106,11 @@ C:\bolao\
       jogos_teste.json        ← 104 jogos idênticos ao jogos.json (mesmas datas);
                                  únicos campos diferentes: placar1=1 e placar2=0
                                  nos 72 jogos da Fase de Grupos
+      jogadores.json          ← elencos das 48 seleções da Copa 2026; estrutura:
+                                 {selecoes:[{nome,nomePt,grupo,iso,jogadores:[{nome,
+                                 posicao(GOL/DEF/MEI/ATA),clube}]}]}; usado em
+                                 tela_palpites_especiais para seletores de jogador;
+                                 "-" no campo clube = informação não disponível
     avatares/                 ← imagens dos jogadores para seleção de avatar
   functions/
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
@@ -143,10 +148,14 @@ C:\bolao\
                                  MODO COPA: form de palpite de classificação (12 grupos, FAB SALVAR);
                                  detecção automática de fim da Fase de Grupos (jogos 73+ com times reais);
                                  bloqueio do Modo Copa exclusivamente por palpitesTravados=true
-      tela_palpites_especiais.dart ← tela azul com 6 palpites especiais do usuário:
-                                 campeão, artilheiro, melhor goleiro, melhor jogador,
-                                 equipe mais goleadora, equipe menos vazada;
-                                 bottom sheet com busca para seleção de times;
+      tela_palpites_especiais.dart ← tela azul com 6 palpites especiais do usuário;
+                                 Campeão/MaisGoleadora/MenosVazada: seletor de time;
+                                 Artilheiro/MelhorGoleiro/MelhorJogador: seletor de
+                                 jogador via _BottomSheetJogadores (busca por nome +
+                                 chips Ver todos/seleção ativa + botão tune_rounded →
+                                 _DialogSelecaoEquipe com busca + ordenação Padrão/A-Z/Z-A
+                                 sem acentos); MelhorGoleiro pré-filtra posição GOL;
+                                 jogadores carregados de jogadores.json em _inicializar();
                                  bloqueio exclusivamente por palpitesTravados=true
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos;
                                  dialog de palpites com filtro A–L + MATA-MATA, palpites especiais
@@ -591,8 +600,11 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 ### `tela_palpites_especiais.dart` — implementada
 - Tela completa com AppBar azul (`Cores.azulTerciario`)
 - Banner de bloqueio quando a Copa já começou
-- 6 palpites: Campeão (seletor de time), Artilheiro (texto), Melhor Goleiro (texto), Melhor Jogador (texto), Equipe Mais Goleadora (seletor), Equipe Menos Vazada (seletor)
-- Seletores de time abrem `_BottomSheetTimes` com `DraggableScrollableSheet` + campo de busca
+- 6 palpites: Campeão (seletor de time), Artilheiro (seletor de jogador), Melhor Goleiro (seletor de jogador — pré-filtrado para `posicao == 'GOL'`), Melhor Jogador (seletor de jogador), Equipe Mais Goleadora (seletor de time), Equipe Menos Vazada (seletor de time)
+- Seletores de time: `_BottomSheetTimes` com `DraggableScrollableSheet` + busca
+- Seletores de jogador: `_BottomSheetJogadores` com campo de busca por nome + linha de chips `[Ver todos]` / chip da seleção ativa / botão `Icons.tune_rounded`; botão abre `_DialogSelecaoEquipe` com busca por nome + chips de ordenação Padrão / A-Z ↑ / A-Z ↓ (comparação sem acento via `_norm`)
+- Jogadores carregados de `assets/dados/jogadores.json` via `rootBundle.loadString()` em `_inicializar()`, em paralelo com Firestore; cada item da lista exibe bandeira da seleção + nome do jogador + seleção · clube
+- Artilheiro obrigatório; Melhor Goleiro e Melhor Jogador opcionais
 - Botão "SALVAR PALPITES" azul fixo no rodapé
 - Salva via `UsuarioService.salvarPalpitesEspeciais()`
 
