@@ -651,7 +651,7 @@ class _DialogEsqueceuSenhaState extends State<_DialogEsqueceuSenha> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Se este e-mail estiver cadastrado, você receberá as instruções para redefinir sua senha em breve.',
+          'Se este e-mail estiver cadastrado, você receberá as instruções em breve. Verifique também sua pasta de spam ou lixo eletrônico.',
           style: GoogleFonts.hankenGrotesk(
               fontSize: 14, color: Cores.onSurfaceVariant, height: 1.5),
           textAlign: TextAlign.center,
