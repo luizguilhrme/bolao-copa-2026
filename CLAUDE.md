@@ -410,6 +410,8 @@ pontuacaoClassica      : Number    — fase de grupos Clássico + penalidades; c
 pontuacaoCopa          : Number    — fase de grupos Copa (SET por recalcularCopa); começa em 0
 pontuacaoEliminatorias : Number    — mata-mata; compartilhado pelos dois modos; começa em 0
 pontuacaoEspeciais     : Number    — palpites especiais; compartilhado pelos dois modos; começa em 0
+placaresExatos       : Number    — desempate 1: quantidade de placares exatos acertados; começa em 0
+palpitesPerdidos     : Number    — desempate 2: jogos não palpitados (cada um gera −10 pts); começa em 0
 criadoEm             : Timestamp
 avatar               : String?   — id do jogador selecionado no setup de perfil
 isAdmin              : Boolean   — campo opcional; adicionado manualmente no Console
@@ -816,7 +818,7 @@ O repositório é **público** no GitHub. Os arquivos `google-services.json` e `
 - **Browser key:** restrita por HTTP referrer `bolaodasoci2026.web.app/*` e `bolaodasoci2026.firebaseapp.com/*`
 - **Keystore e senhas** (`key.properties`, `upload-keystore.jks`) nunca foram commitados; protegidos pelo `.gitignore`
 
-> **Atenção Google Play App Signing:** o Google re-assina o APK com a chave dele antes de distribuir. O SHA-1 do APK instalado via Play Store é diferente do upload keystore. Os três SHA-1 acima devem estar cadastrados na Android key para o Google Sign-In funcionar em todos os ambientes.
+> **Atenção Google Play App Signing:** o Google re-assina o APK com a chave dele antes de distribuir. O SHA-1 do APK instalado via Play Store é diferente do upload keystore. Os três SHA-1 acima devem estar cadastrados **no Firebase Console** (Configurações do projeto → Android app → Impressões digitais do certificado SHA) — o Firebase cria automaticamente o OAuth client no Google Cloud. Sem o SHA-1 do Play App Signing no Firebase, o Google Sign-In falha em builds da Play Store mesmo funcionando no emulador. Após adicionar um novo SHA-1, baixar o `google-services.json` atualizado do Firebase e substituir em `android/app/`.
 
 Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regenerar `firebase_options.dart` e baixar `google-services.json` do Firebase Console.
 
@@ -835,6 +837,8 @@ Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regene
 **`palpites`** — `read/write`: autenticado (cutoff verificado no frontend)
 
 **`config`** — `read`: autenticado; `write`: só admin
+
+**`palpites_copa`** — `read`: autenticado; `write`: só o próprio usuário (`uid == auth.uid`)
 
 **`grupos`** — `read/create`: autenticado; `update`: membro; `delete`: dono
 
