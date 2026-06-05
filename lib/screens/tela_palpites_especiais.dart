@@ -206,7 +206,7 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
     return Scaffold(
       backgroundColor: Cores.background,
       appBar: AppBar(
-        backgroundColor: Cores.azulTerciario,
+        backgroundColor: const Color(0xFFB8860B),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
@@ -226,7 +226,7 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
       ),
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(color: Cores.azulTerciario))
+              child: CircularProgressIndicator(color: Color(0xFFB8860B)))
           : Column(
               children: [
                 if (_bloqueado)
@@ -426,7 +426,8 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
                 fontSize: 14, fontWeight: FontWeight.w700),
           ),
           style: FilledButton.styleFrom(
-            backgroundColor: Cores.azulTerciario,
+            backgroundColor: const Color(0xFFB8860B),
+            foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12)),
           ),
