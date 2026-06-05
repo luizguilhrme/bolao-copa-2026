@@ -59,6 +59,7 @@ class _TelaRankingState extends State<TelaRanking> {
   }
 
   List<Usuario> _ordenar(List<Usuario> lista, bool modoCopa) {
+    final campNorm = _campeaoReal?.toLowerCase().trim();
     final artNorm = _artilheiroReal?.toLowerCase().trim();
     lista.sort((a, b) {
       final ptA =
@@ -74,17 +75,19 @@ class _TelaRankingState extends State<TelaRanking> {
       if (a.palpitesPerdidos != b.palpitesPerdidos) {
         return a.palpitesPerdidos.compareTo(b.palpitesPerdidos);
       }
-      // 3. Acertou o campeão
+      // 3. Acertou o campeão (case-insensitive, sem espaços extras)
       final aCamp =
-          (_campeaoReal != null && a.palpiteCampeao == _campeaoReal)
+          (campNorm != null &&
+              a.palpiteCampeao?.toLowerCase().trim() == campNorm)
               ? 1
               : 0;
       final bCamp =
-          (_campeaoReal != null && b.palpiteCampeao == _campeaoReal)
+          (campNorm != null &&
+              b.palpiteCampeao?.toLowerCase().trim() == campNorm)
               ? 1
               : 0;
       if (bCamp != aCamp) return bCamp.compareTo(aCamp);
-      // 4. Acertou o artilheiro
+      // 4. Acertou o artilheiro (case-insensitive, sem espaços extras)
       final aArt = (artNorm != null &&
               a.palpiteArtilheiro?.toLowerCase().trim() == artNorm)
           ? 1

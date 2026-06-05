@@ -362,6 +362,24 @@ class _TelaAdminEspeciaisState extends State<TelaAdminEspeciais> {
 
                 const SizedBox(height: 16),
 
+                // ── MELHOR JOGADOR ────────────────────────────────────────────
+                _Secao(titulo: 'MELHOR JOGADOR', children: [
+                  _SeletorJogador(
+                    label: 'Melhor jogador do torneio',
+                    jogadorNome: _melhorJogadorFinalReal,
+                    jogadores: _jogadores,
+                    bloqueado: _palpitesCalculados,
+                    onTap: () => _abrirSeletorJogador(
+                      titulo: 'Melhor Jogador',
+                      selecionadoAtual: _melhorJogadorFinalReal,
+                      onSelecionado: (n) =>
+                          setState(() => _melhorJogadorFinalReal = n),
+                    ),
+                  ),
+                ]),
+
+                const SizedBox(height: 16),
+
                 // ── EQUIPE MAIS GOLEADORA ─────────────────────────────────────
                 _Secao(titulo: 'EQUIPE MAIS GOLEADORA', children: [
                   _SeletorTime(
@@ -388,24 +406,6 @@ class _TelaAdminEspeciaisState extends State<TelaAdminEspeciais> {
                       titulo: 'Equipe menos vazada',
                       selecionadoAtual: _maisVazadaReal,
                       onSelecionado: (t) => setState(() => _maisVazadaReal = t),
-                    ),
-                  ),
-                ]),
-
-                const SizedBox(height: 16),
-
-                // ── MELHOR JOGADOR ────────────────────────────────────────────
-                _Secao(titulo: 'MELHOR JOGADOR', children: [
-                  _SeletorJogador(
-                    label: 'Melhor jogador do torneio',
-                    jogadorNome: _melhorJogadorFinalReal,
-                    jogadores: _jogadores,
-                    bloqueado: _palpitesCalculados,
-                    onTap: () => _abrirSeletorJogador(
-                      titulo: 'Melhor Jogador',
-                      selecionadoAtual: _melhorJogadorFinalReal,
-                      onSelecionado: (n) =>
-                          setState(() => _melhorJogadorFinalReal = n),
                     ),
                   ),
                 ]),

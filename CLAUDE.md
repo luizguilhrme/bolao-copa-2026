@@ -124,7 +124,9 @@ C:\bolao\
     firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
     models/
       jogo.dart               ← model com fromJson, fromMap, toMap e getter dataHora; campo vencedor (String?, nullable)
-      usuario.dart            ← model com fromMap, toMap e copyWith; inclui campos de palpites especiais
+      usuario.dart            ← model com fromMap, toMap e copyWith; inclui campos de palpites especiais;
+                                 copyWith cobre todos os 6 palpites especiais (campeão, artilheiro,
+                                 goleiro, melhorJogador, maisGoleadora, menosVazada)
       palpite.dart            ← model com fromMap, toMap; criadoEm é DateTime? (nullable)
       grupo.dart              ← model com fromMap, toMap; criadoEm é DateTime? (nullable);
                                  campo regra: 'classico' | 'copa' (default 'classico')
@@ -640,12 +642,15 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 - Penalidade −10 pts por ausência de palpite; card vermelho
 - Navegação por Enter entre campos
 - `buscarGruposDoUsuarioOnce()` (query direta ao servidor) evita bug de emissão vazia do cache do Firestore
+- Card de resultado exibe "Avançou: [time em PT]" quando `jogo.vencedor != null` (eliminatórias decididas nos pênaltis/prorrogação)
+- Banner verde no topo quando `palpitesTravados == true` informando que Palpites Especiais e Modo Copa estão visíveis para todos
 
 ### `tela_ranking.dart` — implementada
 - Ranking filtrado por grupo (sem ranking global)
 - Pódio top 3 + lista 4º em diante
 - Dialog com histórico de palpites do usuário via Cloud Function `buscarPalpitesUsuario`: verifica grupo em comum entre solicitante e alvo, retorna palpites clássicos + Copa; suporte a filtro A–L + MATA-MATA, palpites especiais completos (6 campos) e Modo Copa com pontuação por posição; palpites Copa e Especiais ocultos até palpitesTravados=true
 - Usa `calcularPontosComFase` com multiplicador de fase correto
+- Desempate 3 (campeão) e desempate 4 (artilheiro) ambos usam comparação case-insensitive + trim()
 
 ### `tela_grupos.dart` — implementada
 - `StreamBuilder` reativo em grupos do usuário
@@ -667,7 +672,7 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 - Salva em `config/copa2026.classificacao_real`
 
 ### `tela_admin_especiais.dart` — implementada
-- Resultados reais: Campeão (seletor de time), Artilheiro (seletor de jogador), Melhor Goleiro (seletor de jogador — pré-filtrado para `posicao == 'GOL'`), Equipe Mais Goleadora (seletor de time), Equipe Menos Vazada (seletor de time), Melhor Jogador (seletor de jogador)
+- Resultados reais na mesma ordem da tela do usuário: Campeão (seletor de time), Artilheiro (seletor de jogador), Melhor Goleiro (seletor — só GOL), Melhor Jogador (seletor de jogador), Equipe Mais Goleadora (seletor de time), Equipe Menos Vazada (seletor de time)
 - Seletores de jogador usam `_BottomSheetJogadores` (busca por nome + filtro por seleção com `_DialogSelecaoEquipe` + chips de ordenação) e carregam `jogadores.json` em paralelo com o Firestore no `initState`
 - Botão SALVAR grava em `config/copa2026`
 - Botão CALCULAR chama `calcularPalpitesEspeciais` (irreversível; desabilitado após execução)
@@ -675,7 +680,7 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 ### `tela_admin_definicoes.dart` — implementada
 - Popular Jogos: dialog Teste/Produção → `JogoService.popularJogosNoFirestore`
 - Recalcular Reg. Clássica: chama Cloud Function `recalcularTudo`
-- Recalcular Reg. Copa: placeholder (a implementar)
+- Recalcular Reg. Copa: chama Cloud Function `recalcularCopa`; executar após inserir todos os placares da fase de grupos
 - Limpar Órfãos: chama Cloud Function `limparUsuariosOrfaos`
 
 ### `tela_perfil.dart` — implementada

@@ -60,3 +60,7 @@ android/app/upload-keystore.jks
 *.apk
 AGENTS.md
 .firebase/
+
+# Manual do usuário (documento local, não sobe ao GitHub)
+manual_usuario.docx
+gerar_manual.js

@@ -393,7 +393,7 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
             corIcone: const Color(0xFFFCD400),
             titulo: 'Recalcular — Regra Copa',
             descricao:
-                'Em breve: recalcula pontuação com base na classificação real da fase de grupos.',
+                'Calcula os pontos da fase de grupos do Modo Copa para todos os usuários. Executar após inserir todos os placares da fase de grupos.',
             carregando: _recalculandoCopa,
             onTap: _recalcularCopa,
           ),
