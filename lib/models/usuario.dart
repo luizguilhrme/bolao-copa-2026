@@ -8,6 +8,8 @@ class Usuario {
   final int pontuacaoCopa;             // fase de grupos Copa
   final int pontuacaoEliminatorias;    // mata-mata — compartilhado pelos dois modos
   final int pontuacaoEspeciais;        // palpites especiais — compartilhado pelos dois modos
+  final int placaresExatos;            // desempate 1: placares exatos acertados
+  final int palpitesPerdidos;          // desempate 2: jogos não palpitados (cada um gera −10)
   final DateTime criadoEm;
 
   int get pontuacaoClassicaTotal =>
@@ -32,6 +34,8 @@ class Usuario {
     this.pontuacaoCopa = 0,
     this.pontuacaoEliminatorias = 0,
     this.pontuacaoEspeciais = 0,
+    this.placaresExatos = 0,
+    this.palpitesPerdidos = 0,
     required this.criadoEm,
     this.avatar,
     this.palpiteCampeao,
@@ -53,6 +57,8 @@ class Usuario {
       pontuacaoCopa: (map['pontuacaoCopa'] as num?)?.toInt() ?? 0,
       pontuacaoEliminatorias: (map['pontuacaoEliminatorias'] as num?)?.toInt() ?? 0,
       pontuacaoEspeciais: (map['pontuacaoEspeciais'] as num?)?.toInt() ?? 0,
+      placaresExatos: (map['placaresExatos'] as num?)?.toInt() ?? 0,
+      palpitesPerdidos: (map['palpitesPerdidos'] as num?)?.toInt() ?? 0,
       criadoEm: map['criadoEm'] != null
           ? (map['criadoEm'] as Timestamp).toDate()
           : DateTime.now(),
@@ -86,6 +92,8 @@ class Usuario {
   Usuario copyWith({
     String? nome,
     int? pontuacaoClassica,
+    int? placaresExatos,
+    int? palpitesPerdidos,
     String? avatar,
     String? palpiteCampeao,
     String? palpiteArtilheiro,
@@ -95,6 +103,8 @@ class Usuario {
       email: email,
       nome: nome ?? this.nome,
       pontuacaoClassica: pontuacaoClassica ?? this.pontuacaoClassica,
+      placaresExatos: placaresExatos ?? this.placaresExatos,
+      palpitesPerdidos: palpitesPerdidos ?? this.palpitesPerdidos,
       criadoEm: criadoEm,
       avatar: avatar ?? this.avatar,
       palpiteCampeao: palpiteCampeao ?? this.palpiteCampeao,

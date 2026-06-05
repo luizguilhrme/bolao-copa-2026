@@ -84,6 +84,7 @@ exports.calcularPontuacao = onDocumentUpdated(
 
     // Calcula deltas: subtrai pontuação anterior e adiciona a nova
     const deltasPorUid = {};
+    const exatosDeltaPorUid = {};
     palpitesSnap.forEach((doc) => {
       const p = doc.data();
       let delta = 0;
@@ -92,11 +93,22 @@ exports.calcularPontuacao = onDocumentUpdated(
       }
       delta += calcularPontosComFase(p.palpite1, p.palpite2, depois.placar1, depois.placar2, round);
       if (delta !== 0) deltasPorUid[p.uid] = (deltasPorUid[p.uid] || 0) + delta;
+
+      // Rastreia mudança no contador de placares exatos
+      const eraExato = antes.placar1 != null && antes.placar2 != null &&
+          p.palpite1 === antes.placar1 && p.palpite2 === antes.placar2;
+      const eExato = p.palpite1 === depois.placar1 && p.palpite2 === depois.placar2;
+      if (!eraExato && eExato) {
+        exatosDeltaPorUid[p.uid] = (exatosDeltaPorUid[p.uid] || 0) + 1;
+      } else if (eraExato && !eExato) {
+        exatosDeltaPorUid[p.uid] = (exatosDeltaPorUid[p.uid] || 0) - 1;
+      }
     });
 
     // Regra −10: na primeira inserção de placar, penaliza usuários sem palpite
     // que criaram conta antes do início do jogo.
     const primeiraVez = antes.placar1 == null || antes.placar2 == null;
+    const perdidosDeltaPorUid = {};
     if (primeiraVez) {
       const comPalpite = new Set(palpitesSnap.docs.map((d) => d.data().uid));
       const gameDataHora = depois.dataHora?.toDate?.();
@@ -106,6 +118,7 @@ exports.calcularPontuacao = onDocumentUpdated(
           const criadoEm = doc.data().criadoEm?.toDate?.();
           if (!criadoEm || criadoEm >= gameDataHora) return;
           deltasPorUid[doc.id] = (deltasPorUid[doc.id] || 0) - 10;
+          perdidosDeltaPorUid[doc.id] = (perdidosDeltaPorUid[doc.id] || 0) + 1;
         });
       }
     }
@@ -177,15 +190,30 @@ exports.calcularPontuacao = onDocumentUpdated(
       }
     }
 
-    if (Object.keys(deltasPorUid).length === 0) return null;
+    const temUpdates = Object.keys(deltasPorUid).length > 0
+        || Object.keys(exatosDeltaPorUid).length > 0
+        || Object.keys(perdidosDeltaPorUid).length > 0;
+    if (!temUpdates) return null;
 
+    // Consolida todas as atualizações por UID num único batch.update por documento
     const isElim = jogoId > 72;
-    const batch = db.batch();
+    const updatesPorUid = {};
     for (const [uid, delta] of Object.entries(deltasPorUid)) {
+      if (!updatesPorUid[uid]) updatesPorUid[uid] = {};
       const campo = isElim ? 'pontuacaoEliminatorias' : 'pontuacaoClassica';
-      batch.update(db.collection('usuarios').doc(uid), {
-        [campo]: FieldValue.increment(delta),
-      });
+      updatesPorUid[uid][campo] = FieldValue.increment(delta);
+    }
+    for (const [uid, delta] of Object.entries(exatosDeltaPorUid)) {
+      if (!updatesPorUid[uid]) updatesPorUid[uid] = {};
+      updatesPorUid[uid].placaresExatos = FieldValue.increment(delta);
+    }
+    for (const [uid, delta] of Object.entries(perdidosDeltaPorUid)) {
+      if (!updatesPorUid[uid]) updatesPorUid[uid] = {};
+      updatesPorUid[uid].palpitesPerdidos = FieldValue.increment(delta);
+    }
+    const batch = db.batch();
+    for (const [uid, updates] of Object.entries(updatesPorUid)) {
+      batch.update(db.collection('usuarios').doc(uid), updates);
     }
     await batch.commit();
 
@@ -331,6 +359,7 @@ exports.recalcularTudo = onCall(
 
     const classicaPorUid = {};
     const elimPorUid = {};
+    const exatosPorUid = {};
     const palpitesSnap = await db.collection('palpites').get();
 
     // Indexa palpites por jogo para detectar ausências
@@ -344,11 +373,16 @@ exports.recalcularTudo = onCall(
       else classicaPorUid[p.uid] = (classicaPorUid[p.uid] || 0) + pts;
       if (!palpitesPorJogo[p.jogoId]) palpitesPorJogo[p.jogoId] = new Set();
       palpitesPorJogo[p.jogoId].add(p.uid);
+      // Conta placares exatos
+      if (p.palpite1 === jogo.placar1 && p.palpite2 === jogo.placar2) {
+        exatosPorUid[p.uid] = (exatosPorUid[p.uid] || 0) + 1;
+      }
     });
 
     const usuariosSnap = await db.collection('usuarios').get();
 
     // Regra −10: penaliza ausência de palpite em jogos após o cadastro
+    const perdidosPorUid = {};
     usuariosSnap.forEach((doc) => {
       const criadoEm = doc.data().criadoEm?.toDate?.();
       if (!criadoEm) return;
@@ -358,6 +392,7 @@ exports.recalcularTudo = onCall(
         if (!gameDataHora || criadoEm >= gameDataHora) continue;
         if (jogo.id > 72) elimPorUid[doc.id] = (elimPorUid[doc.id] || 0) - 10;
         else classicaPorUid[doc.id] = (classicaPorUid[doc.id] || 0) - 10;
+        perdidosPorUid[doc.id] = (perdidosPorUid[doc.id] || 0) + 1;
       }
     });
 
@@ -366,6 +401,8 @@ exports.recalcularTudo = onCall(
       batch.update(doc.ref, {
         pontuacaoClassica: classicaPorUid[doc.id] || 0,
         pontuacaoEliminatorias: elimPorUid[doc.id] || 0,
+        placaresExatos: exatosPorUid[doc.id] || 0,
+        palpitesPerdidos: perdidosPorUid[doc.id] || 0,
       });
     });
     await batch.commit();
@@ -735,7 +772,11 @@ exports.limparDadosTeste = onCall(
 
     const usuariosSnap = await db.collection('usuarios').get();
     const opsUsuarios = usuariosSnap.docs.map(doc => b =>
-      b.update(doc.ref, { pontuacaoClassica: 0, pontuacaoCopa: 0, pontuacaoEliminatorias: 0, pontuacaoEspeciais: 0 })
+      b.update(doc.ref, {
+        pontuacaoClassica: 0, pontuacaoCopa: 0,
+        pontuacaoEliminatorias: 0, pontuacaoEspeciais: 0,
+        placaresExatos: 0, palpitesPerdidos: 0,
+      })
     );
     await commitEmLotes(opsUsuarios);
 

@@ -1577,7 +1577,16 @@ class _AbaCopaProximosState extends State<_AbaCopaProximos> {
     };
   }
 
+  int get _terceirosCount => _local.values
+      .where((m) => m['terceiro'] != null && m['terceiro']!.isNotEmpty)
+      .length;
+
   Future<void> _salvar() async {
+    if (_terceirosCount > 8) {
+      mostrarMensagem(context,
+          'Máximo de 8 grupos com 3º colocado. Remova ${_terceirosCount - 8} antes de salvar.');
+      return;
+    }
     setState(() => _salvando = true);
     try {
       await widget.onSalvar(_local);
@@ -1627,10 +1636,41 @@ class _AbaCopaProximosState extends State<_AbaCopaProximos> {
                   fontSize: 15, color: Cores.onSurfaceVariant),
             ),
             const SizedBox(height: 4),
-            Text(
-              '1º e 2º classificam. 3º apenas nos 8 grupos que avançam.',
-              style: GoogleFonts.hankenGrotesk(
-                  fontSize: 13, color: Cores.onSurfaceVariant),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    '1º e 2º classificam. 3º apenas nos 8 grupos que avançam.',
+                    style: GoogleFonts.hankenGrotesk(
+                        fontSize: 13, color: Cores.onSurfaceVariant),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _terceirosCount >= 8
+                        ? Cores.verdePrincipal
+                        : Cores.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: _terceirosCount >= 8
+                          ? Cores.verdePrincipal
+                          : Cores.outlineVariant,
+                    ),
+                  ),
+                  child: Text(
+                    '3°: $_terceirosCount/8',
+                    style: GoogleFonts.hankenGrotesk(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: _terceirosCount >= 8
+                            ? Colors.white
+                            : Cores.onSurfaceVariant),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 20),
             ...widget.timesPorGrupo.entries.map((entry) =>
@@ -1638,7 +1678,22 @@ class _AbaCopaProximosState extends State<_AbaCopaProximos> {
                   grupo: entry.key,
                   times: entry.value,
                   palpite: _local[entry.key] ?? {},
+                  terceiroBloqueado: _local[entry.key]?['terceiro'] == null &&
+                      _terceirosCount >= 8,
                   onChanged: (pos, time) {
+                    if (pos == 'terceiro' &&
+                        time != null &&
+                        _local[entry.key]?['terceiro'] == null &&
+                        _terceirosCount >= 8) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'Somente 8 grupos podem ter 3º colocado selecionado'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                      return;
+                    }
                     setState(() {
                       _local[entry.key] ??= {};
                       _local[entry.key]![pos] = time;
@@ -1674,12 +1729,14 @@ class _CardGrupoClassificacao extends StatelessWidget {
     required this.times,
     required this.palpite,
     required this.onChanged,
+    this.terceiroBloqueado = false,
   });
 
   final String grupo;
   final List<String> times;
   final Map<String, String?> palpite;
   final void Function(String posicao, String? time) onChanged;
+  final bool terceiroBloqueado;
 
   @override
   Widget build(BuildContext context) {
@@ -1739,6 +1796,7 @@ class _CardGrupoClassificacao extends StatelessWidget {
                   excluir: {palpite['primeiro'], palpite['segundo']},
                   onChanged: (v) => onChanged('terceiro', v),
                   opcional: true,
+                  bloqueado: terceiroBloqueado,
                 ),
               ],
             ),
@@ -1757,6 +1815,7 @@ class _DropdownClassificacao extends StatelessWidget {
     required this.excluir,
     required this.onChanged,
     this.opcional = false,
+    this.bloqueado = false,
   });
 
   final String label;
@@ -1765,6 +1824,7 @@ class _DropdownClassificacao extends StatelessWidget {
   final Set<String?> excluir;
   final void Function(String?) onChanged;
   final bool opcional;
+  final bool bloqueado;
 
   @override
   Widget build(BuildContext context) {
@@ -1786,7 +1846,8 @@ class _DropdownClassificacao extends StatelessWidget {
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
             borderSide: const BorderSide(color: Cores.azulTerciario, width: 2)),
       ),
-      hint: Text(opcional ? 'Não palpitar' : 'Selecionar time',
+      hint: Text(
+          bloqueado ? 'Limite de 8 atingido' : (opcional ? 'Não palpitar' : 'Selecionar time'),
           style: GoogleFonts.hankenGrotesk(fontSize: 14, color: Cores.outlineVariant)),
       isExpanded: true,
       items: [
@@ -1812,7 +1873,7 @@ class _DropdownClassificacao extends StatelessWidget {
           ),
         )),
       ],
-      onChanged: onChanged,
+      onChanged: bloqueado ? null : onChanged,
     );
   }
 }

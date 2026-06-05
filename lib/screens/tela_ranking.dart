@@ -27,25 +27,77 @@ class _TelaRankingState extends State<TelaRanking> {
   // null = sem seleção explícita (usa o primeiro grupo disponível)
   Grupo? _grupoSelecionado;
 
-  final Stream<List<Usuario>> _streamClassico = FirebaseFirestore.instance
-      .collection('usuarios')
-      .snapshots()
-      .map((snap) {
-        final lista = snap.docs.map((d) => Usuario.fromMap(d.data())).toList();
-        lista.sort((a, b) => b.pontuacaoClassicaTotal.compareTo(a.pontuacaoClassicaTotal));
-        return lista;
-      });
+  // Resultados reais para os critérios de desempate 3 e 4
+  String? _campeaoReal;
+  String? _artilheiroReal;
 
-  // Copa: busca todos os usuários e ordena em memória por pontuacaoCopa.
   // Não usa orderBy no Firestore porque documentos sem o campo seriam excluídos.
-  final Stream<List<Usuario>> _streamCopa = FirebaseFirestore.instance
+  // A ordenação completa (com desempates) é feita no build após filtrar por grupo.
+  final Stream<List<Usuario>> _streamUsuarios = FirebaseFirestore.instance
       .collection('usuarios')
       .snapshots()
-      .map((snap) {
-        final lista = snap.docs.map((d) => Usuario.fromMap(d.data())).toList();
-        lista.sort((a, b) => b.pontuacaoCopaTotal.compareTo(a.pontuacaoCopaTotal));
-        return lista;
-      });
+      .map((snap) =>
+          snap.docs.map((d) => Usuario.fromMap(d.data())).toList());
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarConfig();
+  }
+
+  Future<void> _carregarConfig() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('config')
+        .doc('copa2026')
+        .get();
+    if (!mounted) return;
+    final data = doc.data();
+    if (data == null) return;
+    setState(() {
+      _campeaoReal = data['campeaoReal'] as String?;
+      _artilheiroReal = data['artilheiroReal'] as String?;
+    });
+  }
+
+  List<Usuario> _ordenar(List<Usuario> lista, bool modoCopa) {
+    final artNorm = _artilheiroReal?.toLowerCase().trim();
+    lista.sort((a, b) {
+      final ptA =
+          modoCopa ? a.pontuacaoCopaTotal : a.pontuacaoClassicaTotal;
+      final ptB =
+          modoCopa ? b.pontuacaoCopaTotal : b.pontuacaoClassicaTotal;
+      if (ptB != ptA) return ptB.compareTo(ptA);
+      // 1. Mais placares exatos
+      if (b.placaresExatos != a.placaresExatos) {
+        return b.placaresExatos.compareTo(a.placaresExatos);
+      }
+      // 2. Menos palpites perdidos
+      if (a.palpitesPerdidos != b.palpitesPerdidos) {
+        return a.palpitesPerdidos.compareTo(b.palpitesPerdidos);
+      }
+      // 3. Acertou o campeão
+      final aCamp =
+          (_campeaoReal != null && a.palpiteCampeao == _campeaoReal)
+              ? 1
+              : 0;
+      final bCamp =
+          (_campeaoReal != null && b.palpiteCampeao == _campeaoReal)
+              ? 1
+              : 0;
+      if (bCamp != aCamp) return bCamp.compareTo(aCamp);
+      // 4. Acertou o artilheiro
+      final aArt = (artNorm != null &&
+              a.palpiteArtilheiro?.toLowerCase().trim() == artNorm)
+          ? 1
+          : 0;
+      final bArt = (artNorm != null &&
+              b.palpiteArtilheiro?.toLowerCase().trim() == artNorm)
+          ? 1
+          : 0;
+      return bArt.compareTo(aArt);
+    });
+    return lista;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,7 +156,7 @@ class _TelaRankingState extends State<TelaRanking> {
         final bool modoCopa = grupoEfetivo.regra == 'copa';
 
         return StreamBuilder<List<Usuario>>(
-          stream: modoCopa ? _streamCopa : _streamClassico,
+          stream: _streamUsuarios,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               return Center(
@@ -115,9 +167,12 @@ class _TelaRankingState extends State<TelaRanking> {
             }
 
             final todosUsuarios = snapshot.data ?? [];
-            final usuarios = todosUsuarios
-                .where((u) => grupoEfetivo.membros.contains(u.uid))
-                .toList();
+            final usuarios = _ordenar(
+              todosUsuarios
+                  .where((u) => grupoEfetivo.membros.contains(u.uid))
+                  .toList(),
+              modoCopa,
+            );
 
             if (snapshot.connectionState == ConnectionState.waiting &&
                 usuarios.isEmpty) {
