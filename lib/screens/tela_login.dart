@@ -130,6 +130,15 @@ class _TelaLoginState extends State<TelaLogin> {
     }
   }
 
+  Future<void> _esqueceuSenha() async {
+    await showDialog(
+      context: context,
+      builder: (_) => _DialogEsqueceuSenha(
+        emailInicial: _emailController.text.trim(),
+      ),
+    );
+  }
+
   String _traduzirErro(String codigo) {
     switch (codigo) {
       case 'user-not-found':
@@ -348,7 +357,7 @@ class _TelaLoginState extends State<TelaLogin> {
             _buildLabel('Senha'),
             if (_modoLogin)
               TextButton(
-                onPressed: () {},
+                onPressed: _esqueceuSenha,
                 style: TextButton.styleFrom(
                   padding: EdgeInsets.zero,
                   minimumSize: Size.zero,
@@ -496,6 +505,158 @@ class _TelaLoginState extends State<TelaLogin> {
           borderSide: BorderSide(color: Cores.azulTerciario, width: 2),
         ),
       ),
+    );
+  }
+}
+
+// ─── Dialog de redefinição de senha ──────────────────────────────────────────
+
+class _DialogEsqueceuSenha extends StatefulWidget {
+  const _DialogEsqueceuSenha({required this.emailInicial});
+  final String emailInicial;
+
+  @override
+  State<_DialogEsqueceuSenha> createState() => _DialogEsqueceuSenhaState();
+}
+
+class _DialogEsqueceuSenhaState extends State<_DialogEsqueceuSenha> {
+  late final TextEditingController _emailController;
+  bool _enviando = false;
+  bool _enviado = false;
+  String? _erro;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.emailInicial);
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _enviar() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _erro = 'Digite seu e-mail.');
+      return;
+    }
+    setState(() { _enviando = true; _erro = null; });
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      setState(() { _enviado = true; _enviando = false; });
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _enviando = false;
+        _erro = e.code == 'invalid-email'
+            ? 'E-mail inválido.'
+            : 'Erro ao enviar. Tente novamente.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Cores.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        'Redefinir senha',
+        style: GoogleFonts.anybody(fontWeight: FontWeight.w700, fontSize: 18),
+      ),
+      content: _enviado ? _buildSucesso() : _buildFormulario(),
+      actions: _enviado
+          ? [
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: FilledButton.styleFrom(backgroundColor: Cores.verdePrincipal),
+                child: Text('OK',
+                    style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+              ),
+            ]
+          : [
+              TextButton(
+                onPressed: _enviando ? null : () => Navigator.of(context).pop(),
+                child: Text('CANCELAR',
+                    style: GoogleFonts.anybody(color: Cores.onSurfaceVariant)),
+              ),
+              FilledButton(
+                onPressed: _enviando ? null : _enviar,
+                style: FilledButton.styleFrom(backgroundColor: Cores.azulTerciario),
+                child: _enviando
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : Text('ENVIAR',
+                        style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+              ),
+            ],
+    );
+  }
+
+  Widget _buildFormulario() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Informe seu e-mail cadastrado e enviaremos um link para redefinir sua senha.',
+          style: GoogleFonts.hankenGrotesk(
+              fontSize: 14, height: 1.5, color: Cores.onSurfaceVariant),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _emailController,
+          keyboardType: TextInputType.emailAddress,
+          autofocus: widget.emailInicial.isEmpty,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _enviar(),
+          style: GoogleFonts.hankenGrotesk(fontSize: 15),
+          decoration: InputDecoration(
+            labelText: 'E-mail',
+            prefixIcon: const Icon(Icons.mail_outlined),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Cores.azulTerciario, width: 2),
+            ),
+          ),
+        ),
+        if (_erro != null) ...[
+          const SizedBox(height: 8),
+          Text(_erro!,
+              style: GoogleFonts.hankenGrotesk(fontSize: 13, color: Colors.red)),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSucesso() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.mark_email_read_rounded,
+            color: Cores.verdePrincipal, size: 52),
+        const SizedBox(height: 12),
+        Text(
+          'E-mail enviado!',
+          style: GoogleFonts.anybody(fontSize: 17, fontWeight: FontWeight.w700),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Se este e-mail estiver cadastrado, você receberá as instruções para redefinir sua senha em breve.',
+          style: GoogleFonts.hankenGrotesk(
+              fontSize: 14, color: Cores.onSurfaceVariant, height: 1.5),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 }
