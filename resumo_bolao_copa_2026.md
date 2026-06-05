@@ -25,6 +25,11 @@ C:\bolao\
                                  (datas originais do jogos.json); IDs 73–104 idênticos ao
                                  jogos.json. popularJogosNoFirestore apaga todos os docs
                                  existentes antes de inserir os novos.
+      jogadores.json          ← elencos das 48 seleções da Copa 2026; cada seleção tem
+                                 {nome, nomePt, grupo, iso, jogadores}; cada jogador tem
+                                 {nome, posicao (GOL/DEF/MEI/ATA), clube}; "-" no clube =
+                                 informação não disponível; usado pelos seletores de jogador
+                                 em tela_palpites_especiais
     avatares/                 ← imagens dos jogadores para seleção de avatar
   functions/
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
@@ -54,6 +59,12 @@ C:\bolao\
       tela_palpites.dart      ← abas MODO CLÁSSICO/MODO COPA (condicionais) + sub-abas Próximos/Encerrados;
                                  MODO COPA: form de palpite de classificação dos 12 grupos;
                                  bloqueio do Modo Copa exclusivamente por palpitesTravados=true
+      tela_palpites_especiais.dart ← 6 palpites especiais; Campeão/MaisGoleadora/MenosVazada:
+                                 seletor de time; Artilheiro/MelhorGoleiro/MelhorJogador:
+                                 seletor de jogador com busca por nome + filtro por seleção
+                                 (dialog com ordenação A-Z/Z-A sem acento); MelhorGoleiro
+                                 pré-filtra posição GOL; jogadores de jogadores.json;
+                                 bloqueio exclusivamente por palpitesTravados=true
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos;
                                  dialog de palpites com filtro A–L + MATA-MATA, palpites especiais
                                  completos (6 campos) e suporte a Modo Copa com pontuação por posição

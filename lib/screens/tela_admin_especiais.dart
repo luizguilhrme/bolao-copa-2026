@@ -519,7 +519,7 @@ class _CampoTexto extends StatelessWidget {
 
 // ─── Dialog seletor de time genérico ─────────────────────────────────────────
 
-class _DialogSeletorTime extends StatelessWidget {
+class _DialogSeletorTime extends StatefulWidget {
   const _DialogSeletorTime({
     required this.titulo,
     required this.times,
@@ -530,7 +530,36 @@ class _DialogSeletorTime extends StatelessWidget {
   final String? selecionado;
 
   @override
+  State<_DialogSeletorTime> createState() => _DialogSeletorTimeState();
+}
+
+class _DialogSeletorTimeState extends State<_DialogSeletorTime> {
+  final _ctrlBusca = TextEditingController();
+  String _busca = '';
+
+  String _semAcento(String s) => s
+      .toLowerCase()
+      .replaceAll(RegExp(r'[áàãâä]'), 'a')
+      .replaceAll(RegExp(r'[éèêë]'), 'e')
+      .replaceAll(RegExp(r'[íìîï]'), 'i')
+      .replaceAll(RegExp(r'[óòõôö]'), 'o')
+      .replaceAll(RegExp(r'[úùûü]'), 'u')
+      .replaceAll('ç', 'c')
+      .replaceAll('ñ', 'n');
+
+  @override
+  void dispose() {
+    _ctrlBusca.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final buscaNorm = _semAcento(_busca);
+    final filtrados = widget.times
+        .where((t) => _semAcento(nomePtDe(t)).contains(buscaNorm))
+        .toList();
+
     return Dialog(
       backgroundColor: Cores.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -539,40 +568,79 @@ class _DialogSeletorTime extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-            child: Text(titulo,
+            child: Text(widget.titulo,
                 style: GoogleFonts.anybody(
                     fontWeight: FontWeight.w700, fontSize: 18)),
           ),
-          SizedBox(
-            height: 400,
-            child: ListView.builder(
-              itemCount: times.length,
-              itemBuilder: (context, i) {
-                final time = times[i];
-                final sel = time == selecionado;
-                return ListTile(
-                  leading: Container(
-                    width: 36,
-                    height: 36,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Cores.outlineVariant)),
-                    child: Bandeira(time, tamanho: 36),
-                  ),
-                  title: Text(nomePtDe(time),
-                      style: GoogleFonts.anybody(
-                          fontWeight:
-                              sel ? FontWeight.w700 : FontWeight.w400,
-                          color: sel ? Cores.verdePrincipal : Cores.onSurface)),
-                  trailing: sel
-                      ? const Icon(Icons.check_circle_rounded,
-                          color: Cores.verdePrincipal)
-                      : null,
-                  onTap: () => Navigator.of(context).pop(time),
-                );
-              },
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: TextField(
+              controller: _ctrlBusca,
+              autofocus: false,
+              onChanged: (v) => setState(() => _busca = v),
+              decoration: InputDecoration(
+                hintText: 'Buscar...',
+                hintStyle:
+                    GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
+                prefixIcon: const Icon(Icons.search_rounded,
+                    color: Cores.onSurfaceVariant),
+                filled: true,
+                fillColor: Cores.surfaceContainer,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Cores.outlineVariant),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide:
+                      const BorderSide(color: Cores.verdePrincipal, width: 2),
+                ),
+              ),
             ),
+          ),
+          SizedBox(
+            height: 340,
+            child: filtrados.isEmpty
+                ? Center(
+                    child: Text(
+                      'Nenhum resultado.',
+                      style: GoogleFonts.hankenGrotesk(
+                          color: Cores.onSurfaceVariant),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: filtrados.length,
+                    itemBuilder: (context, i) {
+                      final time = filtrados[i];
+                      final sel = time == widget.selecionado;
+                      return ListTile(
+                        leading: Container(
+                          width: 36,
+                          height: 36,
+                          clipBehavior: Clip.antiAlias,
+                          decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Cores.outlineVariant)),
+                          child: Bandeira(time, tamanho: 36),
+                        ),
+                        title: Text(nomePtDe(time),
+                            style: GoogleFonts.anybody(
+                                fontWeight:
+                                    sel ? FontWeight.w700 : FontWeight.w400,
+                                color: sel
+                                    ? Cores.verdePrincipal
+                                    : Cores.onSurface)),
+                        trailing: sel
+                            ? const Icon(Icons.check_circle_rounded,
+                                color: Cores.verdePrincipal)
+                            : null,
+                        onTap: () => Navigator.of(context).pop(time),
+                      );
+                    },
+                  ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
