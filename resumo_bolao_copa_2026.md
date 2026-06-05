@@ -35,8 +35,8 @@ C:\bolao\
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
                                  calcularPontuacao, lembretesPalpite, recalcularTudo,
                                  membroEntrou, calcularPalpitesEspeciais,
-                                 limparUsuariosOrfaos, limparDadosTeste,
-                                 recalcularCopa
+                                 limparUsuariosOrfaos, limparDadosTeste, recalcularCopa,
+                                 buscarPalpitesJogo, buscarPalpitesUsuario
   lib/
     main.dart                 ← Firebase init + FCM background handler + StreamBuilder de auth
     firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
@@ -66,13 +66,16 @@ C:\bolao\
                                  pré-filtra posição GOL; jogadores de jogadores.json;
                                  bloqueio exclusivamente por palpitesTravados=true
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos;
-                                 dialog de palpites com filtro A–L + MATA-MATA, palpites especiais
-                                 completos (6 campos) e suporte a Modo Copa com pontuação por posição
+                                 dialog de palpites via CF buscarPalpitesUsuario (valida grupo em comum);
+                                 filtro A–L + MATA-MATA, palpites especiais completos (6 campos)
+                                 e suporte a Modo Copa; palpites Copa e Especiais ocultos até palpitesTravados=true
       tela_grupos.dart        ← lista grupos do usuário; criar grupo com seleção de modo CLÁSSICO/COPA;
                                  card exibe chip de modo; entrar com código; sair;
                                  tocar no card abre dialog de detalhes com membros e avatares;
                                  ícone de lápis (só dono) edita o nome do grupo
-      tela_tabela.dart        ← lista os 104 jogos com tabs "Próximos"/"Encerrados"
+      tela_tabela.dart        ← lista os 104 jogos com tabs "Próximos"/"Encerrados";
+                                 tocar em jogo encerrado abre dialog via CF buscarPalpitesJogo
+                                 (palpites da união dos membros de todos os grupos do usuário)
       tela_admin_placares.dart ← inserção de placares com abas Próximos/Encerrados;
                                  em eliminatórias com empate abre dialog "Quem avançou?" para salvar
                                  o campo vencedor (pênaltis/prorrogação)
@@ -291,8 +294,14 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
     match /palpites/{palpiteId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+      allow update: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow delete: if false;
+    }
+    match /palpites_copa/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && request.auth.uid == uid;
     }
     match /grupos/{grupoId} {
       allow read: if request.auth != null;
@@ -708,6 +717,8 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 | `recalcularCopa` | HTTPS Callable (admin only) | Calcula pontos Copa fase de grupos (SET em `pontuacaoCopa`); marca `copaGruposCalculado: true` |
 | `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos |
 | `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times eliminatórias, classificação, `pontuacaoClassica`, `pontuacaoCopa`, `pontuacaoEliminatorias`, `pontuacaoEspeciais`, `placaresExatos`, `palpitesPerdidos` e flags; palpites preservados |
+| `buscarPalpitesJogo` | HTTPS Callable | Retorna palpites de um jogo encerrado filtrados pelos membros dos grupos do solicitante (união). Usado pelo dialog da `tela_tabela`. |
+| `buscarPalpitesUsuario` | HTTPS Callable | Retorna palpites clássicos + Copa de um usuário, validando grupo em comum com o solicitante. Usado pelo dialog do `tela_ranking`. |
 
 **FCM token management:** token salvo em `usuarios/{uid}.fcmToken`. Tokens inválidos são removidos automaticamente (`messaging/registration-token-not-registered`).
 
@@ -730,7 +741,7 @@ Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deplo
 - `write`: só admin (verificado via `get()` no documento do usuário)
 
 **`palpites`**
-- `read`: qualquer autenticado (necessário para dialogs de TelaTabela e TelaRanking)
+- `read`: só o próprio dono (`request.auth.uid == resource.data.uid`); leitura de palpites alheios feita exclusivamente via Cloud Functions (`buscarPalpitesJogo`, `buscarPalpitesUsuario`) que rodam com Admin SDK e aplicam filtro de grupo em comum
 - `create`: dono do palpite + `request.time < jogo.dataHora` (cutoff no backend, não só no frontend)
 - `update`: dono + `uid`/`jogoId` imutáveis + jogo não iniciado
 - `delete`: bloqueado
@@ -740,7 +751,7 @@ Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deplo
 - `write`: só admin — usado para gravar `campeaoReal`, `artilheiroReal` e `palpitesEspeciaisCalculados` em `config/copa2026`
 
 **`palpites_copa`**
-- `read`: qualquer autenticado
+- `read`: só o próprio usuário; leitura por terceiros via Cloud Function `buscarPalpitesUsuario` (Admin SDK)
 - `write`: só o próprio usuário (`request.auth.uid == uid` — ID do documento é o UID)
 
 **`grupos`**

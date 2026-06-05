@@ -787,6 +787,134 @@ exports.limparDadosTeste = onCall(
   }
 );
 
+// ─── buscarPalpitesJogo ───────────────────────────────────────────────────────
+// Retorna os palpites de um jogo já encerrado, filtrados pelos membros dos
+// grupos do solicitante. Substitui a leitura direta da coleção palpites na
+// TelaTabela, permitindo restringir a regra de leitura do Firestore ao
+// próprio dono do documento.
+
+exports.buscarPalpitesJogo = onCall(
+  { region: 'southamerica-east1' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Não autenticado.');
+
+    const { jogoId } = request.data;
+    if (jogoId == null) throw new HttpsError('invalid-argument', 'jogoId obrigatório.');
+
+    const db = getFirestore();
+    const callerUid = request.auth.uid;
+
+    // Valida que o jogo existe e está encerrado
+    const jogoDoc = await db.collection('jogos').doc(String(jogoId)).get();
+    if (!jogoDoc.exists) throw new HttpsError('not-found', 'Jogo não encontrado.');
+    const jogo = jogoDoc.data();
+    if (jogo.placar1 == null || jogo.placar2 == null) {
+      throw new HttpsError('failed-precondition', 'Jogo ainda não encerrado.');
+    }
+
+    // Coleta UIDs de todos os membros dos grupos do solicitante (inclui ele mesmo)
+    const gruposSnap = await db.collection('grupos')
+      .where('membros', 'array-contains', callerUid)
+      .get();
+
+    const membrosUids = new Set([callerUid]);
+    gruposSnap.forEach((doc) => {
+      (doc.data().membros || []).forEach((uid) => membrosUids.add(uid));
+    });
+
+    // Busca palpites do jogo e filtra pelos membros
+    const palpitesSnap = await db.collection('palpites')
+      .where('jogoId', '==', jogoId)
+      .get();
+
+    const palpitesFiltrados = palpitesSnap.docs
+      .map((d) => d.data())
+      .filter((p) => membrosUids.has(p.uid));
+
+    if (palpitesFiltrados.length === 0) return { itens: [] };
+
+    // Busca dados dos usuários em paralelo
+    const uids = [...new Set(palpitesFiltrados.map((p) => p.uid))];
+    const usuariosDocs = await Promise.all(
+      uids.map((uid) => db.collection('usuarios').doc(uid).get())
+    );
+    const usuariosMap = {};
+    usuariosDocs.forEach((doc) => {
+      if (doc.exists) usuariosMap[doc.id] = doc.data();
+    });
+
+    const itens = palpitesFiltrados
+      .filter((p) => usuariosMap[p.uid])
+      .map((p) => {
+        const u = usuariosMap[p.uid];
+        return {
+          uid: p.uid,
+          nome: u.nome,
+          avatar: u.avatar || null,
+          palpite1: p.palpite1,
+          palpite2: p.palpite2,
+          pontos: calcularPontosComFase(
+            p.palpite1, p.palpite2,
+            jogo.placar1, jogo.placar2,
+            jogo.round || 'Fase de Grupos'
+          ),
+        };
+      })
+      .sort((a, b) => b.pontos - a.pontos);
+
+    return { itens };
+  }
+);
+
+// ─── buscarPalpitesUsuario ────────────────────────────────────────────────────
+// Retorna palpites clássicos e Copa de um usuário, desde que o solicitante
+// compartilhe pelo menos um grupo com ele (ou seja o próprio usuário).
+// Substitui as leituras diretas de palpites/palpites_copa na TelaRanking.
+
+exports.buscarPalpitesUsuario = onCall(
+  { region: 'southamerica-east1' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Não autenticado.');
+
+    const { targetUid } = request.data;
+    if (!targetUid) throw new HttpsError('invalid-argument', 'targetUid obrigatório.');
+
+    const db = getFirestore();
+    const callerUid = request.auth.uid;
+
+    // O próprio usuário sempre pode ver seus palpites; para outros, exige grupo em comum
+    if (targetUid !== callerUid) {
+      const gruposSnap = await db.collection('grupos')
+        .where('membros', 'array-contains', callerUid)
+        .get();
+
+      const membrosUids = new Set();
+      gruposSnap.forEach((doc) => {
+        (doc.data().membros || []).forEach((uid) => membrosUids.add(uid));
+      });
+
+      if (!membrosUids.has(targetUid)) {
+        throw new HttpsError('permission-denied', 'Usuário não está em nenhum grupo em comum.');
+      }
+    }
+
+    // Busca palpites clássicos e Copa em paralelo
+    const [palpitesSnap, copaDoc] = await Promise.all([
+      db.collection('palpites').where('uid', '==', targetUid).get(),
+      db.collection('palpites_copa').doc(targetUid).get(),
+    ]);
+
+    const palpites = palpitesSnap.docs.map((doc) => {
+      const d = doc.data();
+      return { jogoId: d.jogoId, palpite1: d.palpite1, palpite2: d.palpite2 };
+    });
+
+    const palpitesCopa = copaDoc.exists ? (copaDoc.data().grupos || {}) : {};
+
+    return { palpites, palpitesCopa };
+  }
+);
+
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 
 // Envia notificação FCM e remove token inválido do Firestore se necessário.
