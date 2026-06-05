@@ -109,8 +109,9 @@ C:\bolao\
       jogadores.json          ← elencos das 48 seleções da Copa 2026; estrutura:
                                  {selecoes:[{nome,nomePt,grupo,iso,jogadores:[{nome,
                                  posicao(GOL/DEF/MEI/ATA),clube}]}]}; usado em
-                                 tela_palpites_especiais para seletores de jogador;
-                                 "-" no campo clube = informação não disponível
+                                 tela_palpites_especiais e tela_admin_especiais para
+                                 seletores de jogador; "-" no campo clube = informação
+                                 não disponível
     avatares/                 ← imagens dos jogadores para seleção de avatar
   functions/
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
@@ -178,8 +179,10 @@ C:\bolao\
                                  classificados nos slots "3°" dos confrontos; ao salvar, atualiza
                                  automaticamente team1/team2 dos jogos 73–88 no Firestore;
                                  salva em config/copa2026.classificacao_real e .terceiros_classificados
-      tela_admin_especiais.dart ← resultados reais: campeão, artilheiro, melhor goleiro,
-                                 equipe mais goleadora, equipe menos vazada, melhor jogador;
+      tela_admin_especiais.dart ← resultados reais: campeão (seletor de time), artilheiro
+                                 (seletor de jogador), melhor goleiro (seletor — só GOL),
+                                 equipe mais goleadora (seletor de time), equipe menos vazada
+                                 (seletor de time), melhor jogador (seletor de jogador);
                                  botão CALCULAR chama calcularPalpitesEspeciais (irreversível)
       tela_admin_definicoes.dart ← ações: popular jogos (Teste/Produção), recalcular Reg. Clássica,
                                  recalcular Reg. Copa, limpar dados de teste, limpar órfãos;
@@ -653,7 +656,8 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 - Salva em `config/copa2026.classificacao_real`
 
 ### `tela_admin_especiais.dart` — implementada
-- Resultados reais: Campeão (seletor com bandeiras), Artilheiro (texto), Melhor Goleiro (texto), Equipe Mais Goleadora (seletor), Equipe Menos Vazada (seletor), Melhor Jogador (texto)
+- Resultados reais: Campeão (seletor de time), Artilheiro (seletor de jogador), Melhor Goleiro (seletor de jogador — pré-filtrado para `posicao == 'GOL'`), Equipe Mais Goleadora (seletor de time), Equipe Menos Vazada (seletor de time), Melhor Jogador (seletor de jogador)
+- Seletores de jogador usam `_BottomSheetJogadores` (busca por nome + filtro por seleção com `_DialogSelecaoEquipe` + chips de ordenação) e carregam `jogadores.json` em paralelo com o Firestore no `initState`
 - Botão SALVAR grava em `config/copa2026`
 - Botão CALCULAR chama `calcularPalpitesEspeciais` (irreversível; desabilitado após execução)
 

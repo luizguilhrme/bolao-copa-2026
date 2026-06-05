@@ -29,7 +29,7 @@ C:\bolao\
                                  {nome, nomePt, grupo, iso, jogadores}; cada jogador tem
                                  {nome, posicao (GOL/DEF/MEI/ATA), clube}; "-" no clube =
                                  informação não disponível; usado pelos seletores de jogador
-                                 em tela_palpites_especiais
+                                 em tela_palpites_especiais e tela_admin_especiais
     avatares/                 ← imagens dos jogadores para seleção de avatar
   functions/
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
@@ -79,7 +79,10 @@ C:\bolao\
       tela_admin_copa.dart    ← classificação por grupo (1º/2º obrigatórios, 3º para 8 grupos);
                                  seção "Terceiros — 16 Avos" para alocar os 8 terceiros nos slots;
                                  ao salvar, atualiza automaticamente team1/team2 dos jogos 73–88
-      tela_admin_especiais.dart ← resultados reais dos palpites especiais + botão CALCULAR
+      tela_admin_especiais.dart ← resultados reais dos palpites especiais; campeão/mais goleadora/
+                                 menos vazada: seletor de time; artilheiro/melhor goleiro/melhor
+                                 jogador: seletor de jogador (mesmo UX de tela_palpites_especiais,
+                                 cores verdes); botão CALCULAR
       tela_admin_definicoes.dart ← popular jogos, recalcular regras, limpar dados de teste, limpar órfãos;
                                  botão Travar/Destravar Palpites (grava palpitesTravados em config/copa2026)
       tela_ajuda.dart         ← FAQ estático
