@@ -453,16 +453,15 @@ exports.membroEntrou = onDocumentUpdated(
 );
 
 // ─── calcularPalpitesEspeciais ────────────────────────────────────────────────
-// Calcula pontuação dos 6 palpites especiais. Lê config/copa2026 para obter
+// Calcula pontuação dos 5 palpites especiais. Lê config/copa2026 para obter
 // os resultados reais. Só pode ser executada uma vez (flag no config).
 //
 // Pontuações:
-//   Campeão           → +500
-//   Artilheiro        → +300
-//   Melhor Jogador    → +300
-//   Melhor Goleiro    → +300
-//   Mais Goleadora    → +200
-//   Menos Vazada      → +200
+//   Campeão do Mundo      → +500
+//   Chuteira de Ouro      → +300
+//   Bola de Ouro          → +300
+//   Luva de Ouro          → +300
+//   Melhor Jogador Jovem  → +200
 
 exports.calcularPalpitesEspeciais = onCall(
   { region: 'southamerica-east1' },
@@ -490,15 +489,14 @@ exports.calcularPalpitesEspeciais = onCall(
 
     const {
       campeaoReal,
-      artilheiroReal,
-      melhorJogadorFinalReal,
-      melhorGoleiroReal,
-      maisGoleadoraReal,
-      maisVazadaReal,
+      chuteiradeOuroReal,
+      boladeOuroReal,
+      luvadeOuroReal,
+      melhorJovemReal,
     } = config;
 
-    const temAlgumResultado = campeaoReal || artilheiroReal || melhorJogadorFinalReal
-      || melhorGoleiroReal || maisGoleadoraReal || maisVazadaReal;
+    const temAlgumResultado = campeaoReal || chuteiradeOuroReal || boladeOuroReal
+      || luvadeOuroReal || melhorJovemReal;
 
     if (!temAlgumResultado) {
       throw new HttpsError('failed-precondition', 'Defina ao menos um resultado real antes de calcular.');
@@ -516,15 +514,14 @@ exports.calcularPalpitesEspeciais = onCall(
       const d = doc.data();
       let bonus = 0;
 
-      // Times (comparação exata de nome em inglês)
-      if (campeaoReal        && d.palpiteCampeao      === campeaoReal)     bonus += 500;
-      if (maisGoleadoraReal  && d.palpiteMaisGoleadora === maisGoleadoraReal) bonus += 200;
-      if (maisVazadaReal     && d.palpiteMenosVazada   === maisVazadaReal)  bonus += 200;
+      // Campeão: comparação exata de nome em inglês
+      if (campeaoReal && d.palpiteCampeao === campeaoReal) bonus += 500;
 
-      // Pessoas (comparação flexível de texto livre)
-      if (artilheiroReal         && textoIgual(d.palpiteArtilheiro,    artilheiroReal))         bonus += 300;
-      if (melhorJogadorFinalReal && textoIgual(d.palpiteMelhorJogador, melhorJogadorFinalReal)) bonus += 300;
-      if (melhorGoleiroReal      && textoIgual(d.palpiteGoleiro,       melhorGoleiroReal))      bonus += 300;
+      // Premiações FIFA: comparação flexível de texto livre
+      if (chuteiradeOuroReal && textoIgual(d.palpiteChuteiradeOuro, chuteiradeOuroReal)) bonus += 300;
+      if (boladeOuroReal     && textoIgual(d.palpiteBoladeOuro,     boladeOuroReal))     bonus += 300;
+      if (luvadeOuroReal     && textoIgual(d.palpiteLuvadeOuro,     luvadeOuroReal))     bonus += 300;
+      if (melhorJovemReal    && textoIgual(d.palpiteMelhorJovem,    melhorJovemReal))    bonus += 200;
 
       if (bonus > 0) {
         batch.update(doc.ref, {
@@ -760,11 +757,10 @@ exports.limparDadosTeste = onCall(
       classificacao_real:          FieldValue.delete(),
       terceiros_classificados:     FieldValue.delete(),
       campeaoReal:                 FieldValue.delete(),
-      artilheiroReal:              FieldValue.delete(),
-      melhorGoleiroReal:           FieldValue.delete(),
-      maisGoleadoraReal:           FieldValue.delete(),
-      maisVazadaReal:              FieldValue.delete(),
-      melhorJogadorFinalReal:      FieldValue.delete(),
+      chuteiradeOuroReal:          FieldValue.delete(),
+      boladeOuroReal:              FieldValue.delete(),
+      luvadeOuroReal:              FieldValue.delete(),
+      melhorJovemReal:             FieldValue.delete(),
       palpitesEspeciaisCalculados: FieldValue.delete(),
       copaGruposCalculado:         FieldValue.delete(),
       palpitesTravados:            false,

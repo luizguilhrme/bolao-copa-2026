@@ -46,8 +46,8 @@ service cloud.firestore {
         && request.auth.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['nome', 'avatar', 'fcmToken', 'notifLembretes', 'notifRanking',
-                       'palpiteCampeao', 'palpiteArtilheiro', 'palpiteGoleiro',
-                       'palpiteMelhorJogador', 'palpiteMaisGoleadora', 'palpiteMenosVazada']);
+                       'palpiteCampeao', 'palpiteChuteiradeOuro', 'palpiteBoladeOuro',
+                       'palpiteLuvadeOuro', 'palpiteMelhorJovem']);
 
       allow delete: if request.auth != null && request.auth.uid == uid;
     }

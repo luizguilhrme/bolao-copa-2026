@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -30,11 +30,10 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
   String? _erro;
 
   String? _campeaoSelecionado;
-  String? _artilheiroSelecionado;
-  String? _goleiroSelecionado;
-  String? _melhorJogadorSelecionado;
-  String? _maisGoleadoraSelecionada;
-  String? _menosVazadaSelecionada;
+  String? _chuteiradeOuroSelecionado;
+  String? _boladeOuroSelecionado;
+  String? _luvadeOuroSelecionado;
+  String? _melhorJovemSelecionado;
 
   List<JogadorData> _jogadores = [];
   late final List<String> _timesSorted;
@@ -87,11 +86,10 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
 
     setState(() {
       _campeaoSelecionado = usuario?.palpiteCampeao;
-      _artilheiroSelecionado = usuario?.palpiteArtilheiro;
-      _goleiroSelecionado = usuario?.palpiteGoleiro;
-      _melhorJogadorSelecionado = usuario?.palpiteMelhorJogador;
-      _maisGoleadoraSelecionada = usuario?.palpiteMaisGoleadora;
-      _menosVazadaSelecionada = usuario?.palpiteMenosVazada;
+      _chuteiradeOuroSelecionado = usuario?.palpiteChuteiradeOuro;
+      _boladeOuroSelecionado = usuario?.palpiteBoladeOuro;
+      _luvadeOuroSelecionado = usuario?.palpiteLuvadeOuro;
+      _melhorJovemSelecionado = usuario?.palpiteMelhorJovem;
       _bloqueado = travados;
       _jogadores = jogadores;
       _loading = false;
@@ -100,11 +98,7 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
 
   Future<void> _salvar() async {
     if (_campeaoSelecionado == null) {
-      setState(() => _erro = 'Selecione o campeão.');
-      return;
-    }
-    if (_artilheiroSelecionado == null) {
-      setState(() => _erro = 'Selecione o artilheiro.');
+      setState(() => _erro = 'Selecione o Campeão do Mundo.');
       return;
     }
     setState(() {
@@ -115,11 +109,10 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
       await UsuarioService().salvarPalpitesEspeciais(
         uid: _uid,
         campeao: _campeaoSelecionado!,
-        artilheiro: _artilheiroSelecionado!,
-        goleiro: _goleiroSelecionado,
-        melhorJogador: _melhorJogadorSelecionado,
-        maisGoleadora: _maisGoleadoraSelecionada,
-        menosVazada: _menosVazadaSelecionada,
+        chuteiradeOuro: _chuteiradeOuroSelecionado,
+        boladeOuro: _boladeOuroSelecionado,
+        luvadeOuro: _luvadeOuroSelecionado,
+        melhorJovem: _melhorJovemSelecionado,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -177,11 +170,49 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
         jogadores: _jogadores,
         selecionadoAtual: selecionadoAtual,
         apenasGoleiros: apenasGoleiros,
-        cor: Cores.azulTerciario,
+        cor: const Color(0xFFB8860B),
         onSelecionado: (nome) {
           onSelecionado(nome);
           Navigator.of(context).pop();
         },
+      ),
+    );
+  }
+
+  void _mostrarDica(String titulo, String descricao) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: Cores.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          titulo,
+          style: GoogleFonts.anybody(
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+            color: Cores.onSurface,
+          ),
+        ),
+        content: Text(
+          descricao,
+          style: GoogleFonts.hankenGrotesk(
+            fontSize: 14,
+            color: Cores.onSurfaceVariant,
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'OK',
+              style: GoogleFonts.anybody(
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFB8860B),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -219,17 +250,17 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 10),
-                    color: Cores.azulTerciario.withValues(alpha: 0.12),
+                    color: const Color(0xFFB8860B).withValues(alpha: 0.12),
                     child: Row(
                       children: [
                         const Icon(Icons.lock_rounded,
-                            size: 16, color: Cores.azulTerciario),
+                            size: 16, color: Color(0xFFB8860B)),
                         const SizedBox(width: 8),
                         Text(
                           'Bloqueado — a Copa já começou.',
                           style: GoogleFonts.hankenGrotesk(
                             fontSize: 13,
-                            color: Cores.azulTerciario,
+                            color: const Color(0xFFB8860B),
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -252,106 +283,123 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
                         ),
 
                       // ── CAMPEÃO ────────────────────────────────────────────
-                      _buildSecaoLabel('CAMPEÃO'),
+                      _buildSecaoLabel('CAMPEÃO DO MUNDO'),
                       const SizedBox(height: 6),
                       _SeletorTime(
-                        label: 'Campeão da Copa',
+                        label: 'Campeão do Mundo',
                         time: _campeaoSelecionado,
                         bloqueado: _bloqueado,
                         onTap: () => _abrirSeletorTime(
-                          titulo: 'Campeão',
+                          titulo: 'Campeão do Mundo',
                           selecionadoAtual: _campeaoSelecionado,
                           onSelecionado: (t) =>
                               setState(() => _campeaoSelecionado = t),
                         ),
                       ),
 
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 24),
 
-                      // ── ARTILHEIRO ─────────────────────────────────────────
-                      _buildSecaoLabel('ARTILHEIRO'),
+                      // ── PREMIAÇÕES OFICIAIS FIFA ───────────────────────────
+                      _buildHeaderFifa(),
+
+                      const SizedBox(height: 16),
+
+                      // ── CHUTEIRA DE OURO ───────────────────────────────────
+                      _buildSecaoLabel(
+                        'CHUTEIRA DE OURO',
+                        dica: 'Troféu entregue ao artilheiro (maior goleador) da Copa do Mundo.',
+                        onDica: () => _mostrarDica(
+                          'Chuteira de Ouro',
+                          'Troféu entregue ao artilheiro (maior goleador) da Copa do Mundo.',
+                        ),
+                      ),
                       const SizedBox(height: 6),
                       _SeletorJogador(
                         label: 'Artilheiro da Copa',
-                        jogadorNome: _artilheiroSelecionado,
+                        jogadorNome: _chuteiradeOuroSelecionado,
                         jogadores: _jogadores,
                         bloqueado: _bloqueado,
                         onTap: () => _abrirSeletorJogador(
-                          titulo: 'Artilheiro',
-                          selecionadoAtual: _artilheiroSelecionado,
+                          titulo: 'Chuteira de Ouro',
+                          selecionadoAtual: _chuteiradeOuroSelecionado,
                           onSelecionado: (n) =>
-                              setState(() => _artilheiroSelecionado = n),
+                              setState(() => _chuteiradeOuroSelecionado = n),
                         ),
                       ),
 
                       const SizedBox(height: 20),
 
-                      // ── MELHOR GOLEIRO ─────────────────────────────────────
-                      _buildSecaoLabel('MELHOR GOLEIRO'),
-                      const SizedBox(height: 6),
-                      _SeletorJogador(
-                        label: 'Melhor goleiro',
-                        jogadorNome: _goleiroSelecionado,
-                        jogadores: _jogadores,
-                        bloqueado: _bloqueado,
-                        onTap: () => _abrirSeletorJogador(
-                          titulo: 'Melhor Goleiro',
-                          selecionadoAtual: _goleiroSelecionado,
-                          apenasGoleiros: true,
-                          onSelecionado: (n) =>
-                              setState(() => _goleiroSelecionado = n),
+                      // ── BOLA DE OURO ───────────────────────────────────────
+                      _buildSecaoLabel(
+                        'BOLA DE OURO',
+                        dica: 'Prêmio concedido ao melhor jogador do torneio, eleito pela FIFA.',
+                        onDica: () => _mostrarDica(
+                          'Bola de Ouro',
+                          'Prêmio concedido ao melhor jogador do torneio, eleito pela FIFA.',
                         ),
                       ),
-
-                      const SizedBox(height: 20),
-
-                      // ── MELHOR JOGADOR ─────────────────────────────────────
-                      _buildSecaoLabel('MELHOR JOGADOR'),
                       const SizedBox(height: 6),
                       _SeletorJogador(
                         label: 'Melhor jogador do torneio',
-                        jogadorNome: _melhorJogadorSelecionado,
+                        jogadorNome: _boladeOuroSelecionado,
                         jogadores: _jogadores,
                         bloqueado: _bloqueado,
                         onTap: () => _abrirSeletorJogador(
-                          titulo: 'Melhor Jogador',
-                          selecionadoAtual: _melhorJogadorSelecionado,
+                          titulo: 'Bola de Ouro',
+                          selecionadoAtual: _boladeOuroSelecionado,
                           onSelecionado: (n) =>
-                              setState(() => _melhorJogadorSelecionado = n),
+                              setState(() => _boladeOuroSelecionado = n),
                         ),
                       ),
 
                       const SizedBox(height: 20),
 
-                      // ── EQUIPE MAIS GOLEADORA ──────────────────────────────
-                      _buildSecaoLabel('EQUIPE MAIS GOLEADORA'),
+                      // ── LUVA DE OURO ───────────────────────────────────────
+                      _buildSecaoLabel(
+                        'LUVA DE OURO',
+                        dica: 'Prêmio ao melhor goleiro da Copa do Mundo, eleito pela FIFA.',
+                        onDica: () => _mostrarDica(
+                          'Luva de Ouro',
+                          'Prêmio ao melhor goleiro da Copa do Mundo, eleito pela FIFA.',
+                        ),
+                      ),
                       const SizedBox(height: 6),
-                      _SeletorTime(
-                        label: 'Equipe mais goleadora',
-                        time: _maisGoleadoraSelecionada,
+                      _SeletorJogador(
+                        label: 'Melhor goleiro',
+                        jogadorNome: _luvadeOuroSelecionado,
+                        jogadores: _jogadores,
                         bloqueado: _bloqueado,
-                        onTap: () => _abrirSeletorTime(
-                          titulo: 'Equipe mais goleadora',
-                          selecionadoAtual: _maisGoleadoraSelecionada,
-                          onSelecionado: (t) =>
-                              setState(() => _maisGoleadoraSelecionada = t),
+                        onTap: () => _abrirSeletorJogador(
+                          titulo: 'Luva de Ouro',
+                          selecionadoAtual: _luvadeOuroSelecionado,
+                          apenasGoleiros: true,
+                          onSelecionado: (n) =>
+                              setState(() => _luvadeOuroSelecionado = n),
                         ),
                       ),
 
                       const SizedBox(height: 20),
 
-                      // ── EQUIPE MENOS VAZADA ────────────────────────────────
-                      _buildSecaoLabel('EQUIPE MENOS VAZADA'),
+                      // ── MELHOR JOGADOR JOVEM ───────────────────────────────
+                      _buildSecaoLabel(
+                        'MELHOR JOGADOR JOVEM',
+                        dica: 'Prêmio ao melhor jogador jovem (sub-21) da Copa do Mundo, eleito pela FIFA.',
+                        onDica: () => _mostrarDica(
+                          'Melhor Jogador Jovem',
+                          'Prêmio ao melhor jogador jovem (sub-21) da Copa do Mundo, eleito pela FIFA.',
+                        ),
+                      ),
                       const SizedBox(height: 6),
-                      _SeletorTime(
-                        label: 'Equipe menos vazada',
-                        time: _menosVazadaSelecionada,
+                      _SeletorJogador(
+                        label: 'Melhor jogador jovem',
+                        jogadorNome: _melhorJovemSelecionado,
+                        jogadores: _jogadores,
                         bloqueado: _bloqueado,
-                        onTap: () => _abrirSeletorTime(
-                          titulo: 'Equipe menos vazada',
-                          selecionadoAtual: _menosVazadaSelecionada,
-                          onSelecionado: (t) =>
-                              setState(() => _menosVazadaSelecionada = t),
+                        onTap: () => _abrirSeletorJogador(
+                          titulo: 'Melhor Jogador Jovem',
+                          selecionadoAtual: _melhorJovemSelecionado,
+                          onSelecionado: (n) =>
+                              setState(() => _melhorJovemSelecionado = n),
                         ),
                       ),
 
@@ -376,14 +424,58 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
     );
   }
 
-  Widget _buildSecaoLabel(String texto) {
-    return Text(
-      texto,
-      style: GoogleFonts.anybody(
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.5,
-        color: Cores.onSurfaceVariant,
+  Widget _buildSecaoLabel(String texto, {String? dica, VoidCallback? onDica}) {
+    return Row(
+      children: [
+        Text(
+          texto,
+          style: GoogleFonts.anybody(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+            color: Cores.onSurfaceVariant,
+          ),
+        ),
+        if (onDica != null) ...[
+          const Spacer(),
+          GestureDetector(
+            onTap: onDica,
+            child: const Icon(
+              Icons.help_outline_rounded,
+              size: 16,
+              color: Cores.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildHeaderFifa() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFB8860B).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: const Color(0xFFB8860B).withValues(alpha: 0.25),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.emoji_events_rounded,
+              size: 15, color: Color(0xFFB8860B)),
+          const SizedBox(width: 8),
+          Text(
+            'PREMIAÇÕES OFICIAIS FIFA',
+            style: GoogleFonts.anybody(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+              color: const Color(0xFFB8860B),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -714,7 +806,7 @@ class _BottomSheetTimesState extends State<_BottomSheetTimes> {
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(
-                        color: Cores.azulTerciario, width: 2),
+                        color: Color(0xFFB8860B), width: 2),
                   ),
                 ),
               ),
@@ -746,16 +838,16 @@ class _BottomSheetTimesState extends State<_BottomSheetTimes> {
                             ? FontWeight.w700
                             : FontWeight.w400,
                         color: selecionado
-                            ? Cores.azulTerciario
+                            ? const Color(0xFFB8860B)
                             : Cores.onSurface,
                       ),
                     ),
                     trailing: selecionado
                         ? const Icon(Icons.check_circle,
-                            color: Cores.azulTerciario, size: 22)
+                            color: Color(0xFFB8860B), size: 22)
                         : null,
                     tileColor: selecionado
-                        ? Cores.azulTerciario.withValues(alpha: 0.08)
+                        ? const Color(0xFFB8860B).withValues(alpha: 0.08)
                         : null,
                     onTap: () => widget.onSelecionado(time),
                   );

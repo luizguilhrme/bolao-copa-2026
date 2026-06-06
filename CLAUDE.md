@@ -65,7 +65,7 @@ Modo Copa — points per team in group classification:
 - Bonus for all palpited positions exact (≥2 valid): +100
 - "Qualified but wrong position" applies even when no real result exists for that specific slot (e.g., when a group's 3rd-place slot is null but the team qualified as 1st or 2nd).
 
-Special bets: Campeão +500 | Artilheiro +300 | Melhor Jogador +300 | Melhor Goleiro +300 | Mais Goleadora +200 | Menos Vazada +200
+Special bets: Campeão do Mundo +500 | Chuteira de Ouro +300 | Bola de Ouro +300 | Luva de Ouro +300 | Melhor Jogador Jovem +200
 
 **Palpite cutoff:** palpites are locked 5 minutes before game start. Games where `team1` or `team2` is still a placeholder (`ehPlaceholder()` in `biblioteca.dart`) are hidden from the palpites screen entirely until both teams are resolved.
 
@@ -198,8 +198,7 @@ C:\bolao\
       jogo_service.dart       ← popularJogosNoFirestore({bool teste}), buscarTodos, buscarPorData
       usuario_service.dart    ← criarPerfil, buscarPorUid, observarUsuario,
                                  atualizarNome, atualizarAvatar,
-                                 salvarPalpiteEspecial (campeão + artilheiro),
-                                 salvarPalpitesEspeciais (todos os 6 campos)
+                                 salvarPalpitesEspeciais (todos os 5 palpites especiais)
       palpite_service.dart    ← salvar, buscarPorJogo, buscarTodosPorUsuario,
                                  buscarPorUsuario, buscarTodosPorJogo
       notificacoes_service.dart ← inicializar FCM, salvar token, buscar/atualizar prefs
@@ -444,12 +443,11 @@ isAdmin              : Boolean   — campo opcional; adicionado manualmente no C
 fcmToken             : String?   — token FCM do dispositivo; salvo pelo NotificacoesService
 notifLembretes       : Boolean?  — padrão true quando ausente
 notifRanking         : Boolean?  — padrão true quando ausente
-palpiteCampeao       : String?   — nome em inglês do time campeão (ex: "Brazil")
-palpiteArtilheiro    : String?   — nome livre do artilheiro
-palpiteGoleiro       : String?   — nome livre do melhor goleiro
-palpiteMelhorJogador : String?   — nome livre do melhor jogador do torneio
-palpiteMaisGoleadora : String?   — nome em inglês da equipe mais goleadora
-palpiteMenosVazada   : String?   — nome em inglês da equipe menos vazada
+palpiteCampeao          : String?   — nome em inglês do time campeão (ex: "Brazil")
+palpiteChuteiradeOuro   : String?   — nome livre do artilheiro (Chuteira de Ouro)
+palpiteBoladeOuro       : String?   — nome livre do melhor jogador (Bola de Ouro)
+palpiteLuvadeOuro       : String?   — nome livre do melhor goleiro (Luva de Ouro)
+palpiteMelhorJovem      : String?   — nome livre do melhor jogador jovem (sub-21)
 ```
 
 Todos os palpites especiais são bloqueados quando `palpitesTravados=true` em `config/copa2026`
@@ -517,11 +515,10 @@ ID do documento = `copa2026` (documento único).
 ```
 — Resultados reais (admin, via tela_admin_especiais) —
 campeaoReal                  : String?   — nome em inglês do campeão real
-artilheiroReal               : String?   — nome do artilheiro real
-melhorGoleiroReal            : String?   — nome do melhor goleiro real
-maisGoleadoraReal            : String?   — nome em inglês da equipe mais goleadora
-maisVazadaReal               : String?   — nome em inglês da equipe menos vazada
-melhorJogadorFinalReal       : String?   — nome do melhor jogador real
+chuteiradeOuroReal           : String?   — nome do artilheiro real (Chuteira de Ouro)
+boladeOuroReal               : String?   — nome do melhor jogador real (Bola de Ouro)
+luvadeOuroReal               : String?   — nome do melhor goleiro real (Luva de Ouro)
+melhorJovemReal              : String?   — nome do melhor jogador jovem real
 palpitesEspeciaisCalculados  : Boolean   — true após executar calcularPalpitesEspeciais
 
 — Classificação real dos grupos (admin, via tela_admin_copa) —
@@ -568,12 +565,11 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 - Bônus se acertou todas as posições do grupo: +100
 
 ### Palpites Especiais (calculados uma vez após o torneio)
-- Campeão do Torneio: +500
-- Artilheiro da Copa: +300
-- Melhor Jogador da Copa: +300
-- Melhor Goleiro: +300
-- Equipe Mais Goleadora: +200
-- Equipe Menos Vazada: +200
+- Campeão do Mundo: +500
+- Chuteira de Ouro (artilheiro): +300
+- Bola de Ouro (melhor jogador, eleito pela FIFA): +300
+- Luva de Ouro (melhor goleiro, eleito pela FIFA): +300
+- Melhor Jogador Jovem (sub-21, eleito pela FIFA): +200
 
 ### Cores dos badges (baseadas em pontosBase, sem multiplicador)
 - ≥100 pts → `Color(0xFF006D32)` verde escuro (placar exato)
@@ -617,12 +613,14 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 ### `tela_palpites_especiais.dart` — implementada
 - Tela completa com AppBar azul (`Cores.azulTerciario`)
 - Banner de bloqueio quando a Copa já começou
-- 6 palpites: Campeão (seletor de time), Artilheiro (seletor de jogador), Melhor Goleiro (seletor de jogador — pré-filtrado para `posicao == 'GOL'`), Melhor Jogador (seletor de jogador), Equipe Mais Goleadora (seletor de time), Equipe Menos Vazada (seletor de time)
-- Seletores de time: `_BottomSheetTimes` com `DraggableScrollableSheet` + busca
-- Seletores de jogador: `BottomSheetJogadores` (de `dialogos.dart`, `cor: Cores.azulTerciario`) com campo de busca por nome + `PopupMenuButton` pill-chip de filtro por seleção (exibe nome completo em PT no estado fechado)
-- Jogadores carregados de `assets/dados/jogadores.json` via `rootBundle.loadString()` em `_inicializar()`, em paralelo com Firestore; cada item da lista exibe bandeira da seleção + nome do jogador + seleção · clube
-- Artilheiro obrigatório; Melhor Goleiro e Melhor Jogador opcionais
-- Botão "SALVAR PALPITES" azul fixo no rodapé
+- AppBar dourada (`Color(0xFFB8860B)`)
+- 5 palpites com estrutura: **Campeão do Mundo** (seletor de time) + header **"PREMIAÇÕES OFICIAIS FIFA"** + **Chuteira de Ouro** (jogador), **Bola de Ouro** (jogador), **Luva de Ouro** (jogador — pré-filtrado `posicao == 'GOL'`), **Melhor Jogador Jovem** (jogador)
+- Cada prêmio FIFA tem ícone "?" na margem direita que abre um `AlertDialog` explicando o prêmio
+- Seletor de time: `_BottomSheetTimes` com `DraggableScrollableSheet` + busca
+- Seletores de jogador: `BottomSheetJogadores` (de `dialogos.dart`, `cor: Color(0xFFB8860B)`) com busca por nome + filtro por seleção
+- Jogadores carregados de `assets/dados/jogadores.json` via `rootBundle.loadString()` em `_inicializar()`, em paralelo com Firestore
+- Apenas campeão obrigatório; demais opcionais
+- Botão "SALVAR PALPITES" dourado fixo no rodapé
 - Salva via `UsuarioService.salvarPalpitesEspeciais()`
 
 ### `tela_tabela.dart` — implementada
@@ -673,9 +671,9 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 - Salva em `config/copa2026.classificacao_real`
 
 ### `tela_admin_especiais.dart` — implementada
-- Resultados reais na mesma ordem da tela do usuário: Campeão (seletor de time), Artilheiro (seletor de jogador), Melhor Goleiro (seletor — só GOL), Melhor Jogador (seletor de jogador), Equipe Mais Goleadora (seletor de time), Equipe Menos Vazada (seletor de time)
+- 5 seções: Campeão do Mundo (seletor de time), Chuteira de Ouro (jogador), Bola de Ouro (jogador), Luva de Ouro (jogador — só GOL), Melhor Jogador Jovem (jogador)
 - Seletores de jogador usam `BottomSheetJogadores` (de `dialogos.dart`, `cor: Cores.verdePrincipal`); `_DialogSeletorTime` para seleção de time (dialog interno)
-- Botão SALVAR grava em `config/copa2026`
+- Botão SALVAR grava em `config/copa2026` os campos: `campeaoReal`, `chuteiradeOuroReal`, `boladeOuroReal`, `luvadeOuroReal`, `melhorJovemReal`
 - Botão CALCULAR chama `calcularPalpitesEspeciais` (irreversível; desabilitado após execução)
 
 ### `tela_admin_definicoes.dart` — implementada
@@ -720,9 +718,8 @@ buscarPorUid(String uid)
 observarUsuario(String uid)               // Stream reativo
 atualizarNome(String uid, String nome)
 atualizarAvatar(String uid, String avatarId)
-salvarPalpiteEspecial({uid, campeao, artilheiro})         // legado — só 2 campos
-salvarPalpitesEspeciais({uid, campeao, artilheiro,        // todos os 6 palpites especiais
-  goleiro?, melhorJogador?, maisGoleadora?, menosVazada?})
+salvarPalpitesEspeciais({uid, campeao,                    // todos os 5 palpites especiais
+  chuteiradeOuro?, boladeOuro?, luvadeOuro?, melhorJovem?})
 ```
 
 ## PalpiteService — métodos

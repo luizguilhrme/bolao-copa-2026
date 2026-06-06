@@ -52,33 +52,20 @@ class UsuarioService {
     await _colecao.doc(uid).update({'avatar': avatarId});
   }
 
-  Future<void> salvarPalpiteEspecial({
-    required String uid,
-    required String campeao,
-    required String artilheiro,
-  }) async {
-    await _colecao.doc(uid).update({
-      'palpiteCampeao': campeao,
-      'palpiteArtilheiro': artilheiro,
-    });
-  }
-
   Future<void> salvarPalpitesEspeciais({
     required String uid,
     required String campeao,
-    required String artilheiro,
-    String? goleiro,
-    String? melhorJogador,
-    String? maisGoleadora,
-    String? menosVazada,
+    String? chuteiradeOuro,
+    String? boladeOuro,
+    String? luvadeOuro,
+    String? melhorJovem,
   }) async {
     await _colecao.doc(uid).update({
       'palpiteCampeao': campeao,
-      'palpiteArtilheiro': artilheiro,
-      if (goleiro != null) 'palpiteGoleiro': goleiro,
-      if (melhorJogador != null) 'palpiteMelhorJogador': melhorJogador,
-      if (maisGoleadora != null) 'palpiteMaisGoleadora': maisGoleadora,
-      if (menosVazada != null) 'palpiteMenosVazada': menosVazada,
+      if (chuteiradeOuro != null) 'palpiteChuteiradeOuro': chuteiradeOuro,
+      if (boladeOuro != null) 'palpiteBoladeOuro': boladeOuro,
+      if (luvadeOuro != null) 'palpiteLuvadeOuro': luvadeOuro,
+      if (melhorJovem != null) 'palpiteMelhorJovem': melhorJovem,
     });
   }
 }

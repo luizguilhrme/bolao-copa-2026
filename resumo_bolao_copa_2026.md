@@ -62,15 +62,16 @@ C:\bolao\
                                  bloqueio do Modo Copa exclusivamente por palpitesTravados=true;
                                  card de resultado exibe "Avançou: [time]" quando jogo.vencedor != null;
                                  banner verde no topo quando palpitesTravados=true
-      tela_palpites_especiais.dart ← 6 palpites especiais; Campeão/MaisGoleadora/MenosVazada:
-                                 seletor de time; Artilheiro/MelhorGoleiro/MelhorJogador:
+      tela_palpites_especiais.dart ← 5 palpites especiais com AppBar dourada; Campeão do Mundo:
+                                 seletor de time; header "PREMIAÇÕES OFICIAIS FIFA"; Chuteira
+                                 de Ouro/Bola de Ouro/Luva de Ouro/Melhor Jogador Jovem:
                                  seletor de jogador via BottomSheetJogadores (dialogos.dart,
-                                 cor: azulTerciario) com busca por nome + PopupMenuButton
-                                 de filtro por seleção (nome completo em PT); MelhorGoleiro
-                                 pré-filtra posição GOL; bloqueio por palpitesTravados=true
+                                 cor: Color(0xFFB8860B)); Luva de Ouro pré-filtra GOL; cada
+                                 prêmio FIFA tem botão "?" que abre AlertDialog explicativo;
+                                 bloqueio por palpitesTravados=true
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos;
                                  dialog de palpites via CF buscarPalpitesUsuario (valida grupo em comum);
-                                 filtro A–L + MATA-MATA, palpites especiais completos (6 campos)
+                                 filtro A–L + MATA-MATA, palpites especiais completos (5 campos)
                                  e suporte a Modo Copa; palpites Copa e Especiais ocultos até palpitesTravados=true;
                                  desempate 3 (campeão) e 4 (artilheiro) usam comparação case-insensitive
       tela_grupos.dart        ← lista grupos do usuário; criar grupo com seleção de modo CLÁSSICO/COPA;
@@ -345,8 +346,12 @@ isAdmin         : Boolean   — campo opcional; adicionado manualmente no Consol
 fcmToken        : String?   — token FCM do dispositivo; salvo pelo NotificacoesService
 notifLembretes     : Boolean?  — padrão true quando ausente
 notifRanking       : Boolean?  — padrão true quando ausente
-palpiteCampeao     : String?   — nome em inglês do time (ex: "Brazil"); salvo via UsuarioService.salvarPalpiteEspecial
-palpiteArtilheiro  : String?   — nome livre do jogador; bloqueado quando palpitesTravados=true
+palpiteCampeao         : String?   — nome em inglês do time (ex: "Brazil")
+palpiteChuteiradeOuro  : String?   — nome livre do artilheiro (Chuteira de Ouro)
+palpiteBoladeOuro      : String?   — nome livre do melhor jogador (Bola de Ouro)
+palpiteLuvadeOuro      : String?   — nome livre do melhor goleiro (Luva de Ouro)
+palpiteMelhorJovem     : String?   — nome livre do melhor jogador jovem (sub-21)
+— todos bloqueados quando palpitesTravados=true; salvos via UsuarioService.salvarPalpitesEspeciais
 ```
 
 ### `jogos`
@@ -402,11 +407,10 @@ ID do documento = `copa2026` (documento único).
 
 ```
 campeaoReal                  : String?   — nome em inglês do campeão real (ex: "Brazil")
-artilheiroReal               : String?   — nome do artilheiro real (comparação case-insensitive)
-melhorGoleiroReal            : String?
-maisGoleadoraReal            : String?
-maisVazadaReal               : String?
-melhorJogadorFinalReal       : String?
+chuteiradeOuroReal           : String?   — artilheiro real (comparação case-insensitive)
+boladeOuroReal               : String?   — melhor jogador real (Bola de Ouro FIFA)
+luvadeOuroReal               : String?   — melhor goleiro real (Luva de Ouro FIFA)
+melhorJovemReal              : String?   — melhor jogador jovem real (sub-21, FIFA)
 palpitesEspeciaisCalculados  : Boolean   — true após executar calcularPalpitesEspeciais; impede execução dupla
 classificacao_real           : Map       — { "A": { "primeiro": "Brazil", "segundo": "Mexico", "terceiro": "..." }, ... }
 terceiros_classificados      : Map       — alocação dos 8 terceiros nos slots dos 16 avos
@@ -451,12 +455,11 @@ Multiplicadores por fase:
 Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jogos anteriores ao cadastro não geram penalidade.
 
 ### Palpites Especiais (calculados uma vez após o torneio)
-- Campeão do Torneio: +500
-- Artilheiro da Copa: +300
-- Melhor Jogador da Copa: +300
-- Melhor Goleiro: +300
-- Equipe Mais Goleadora: +200
-- Equipe Menos Vazada: +200
+- Campeão do Mundo: +500
+- Chuteira de Ouro (artilheiro): +300
+- Bola de Ouro (melhor jogador, eleito pela FIFA): +300
+- Luva de Ouro (melhor goleiro, eleito pela FIFA): +300
+- Melhor Jogador Jovem (sub-21, eleito pela FIFA): +200
 
 Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador, goleiro) comparadas com flexibilidade (case-insensitive, trim).
 
@@ -746,7 +749,7 @@ Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deplo
 **`usuarios`**
 - `read`: qualquer autenticado (ranking, drawer, dialogs)
 - `create`: só o próprio usuário; payload restrito a `['uid', 'email', 'nome', 'pontuacao', 'criadoEm', 'avatar']`; `isAdmin` e `pontuacao` devem ser `false`/`0` — impede escalada de privilégio
-- `update`: só campos `['nome', 'avatar', 'fcmToken', 'notifLembretes', 'notifRanking', 'palpiteCampeao', 'palpiteArtilheiro']`; `pontuacao`, `isAdmin`, `criadoEm`, `email`, `uid` protegidos (alterados apenas pelo Admin SDK da Cloud Function)
+- `update`: só campos de perfil, FCM, preferências e palpites especiais (`palpiteCampeao`, `palpiteChuteiradeOuro`, `palpiteBoladeOuro`, `palpiteLuvadeOuro`, `palpiteMelhorJovem`); `pontuacao`, `isAdmin`, `criadoEm`, `email`, `uid` protegidos (alterados apenas pelo Admin SDK da Cloud Function)
 - `delete`: só o próprio usuário (exclusão de conta)
 
 **`jogos`**
@@ -761,7 +764,7 @@ Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deplo
 
 **`config`**
 - `read`: qualquer autenticado
-- `write`: só admin — usado para gravar `campeaoReal`, `artilheiroReal` e `palpitesEspeciaisCalculados` em `config/copa2026`
+- `write`: só admin — usado para gravar `campeaoReal`, `chuteiradeOuroReal`, `boladeOuroReal`, `luvadeOuroReal`, `melhorJovemReal` e `palpitesEspeciaisCalculados` em `config/copa2026`
 
 **`palpites_copa`**
 - `read`: só o próprio usuário; leitura por terceiros via Cloud Function `buscarPalpitesUsuario` (Admin SDK)
