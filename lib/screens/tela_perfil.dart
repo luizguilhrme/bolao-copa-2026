@@ -357,10 +357,10 @@ class _SeletorAvatarSheetState extends State<_SeletorAvatarSheet> {
                 final jogador = kJogadores[index];
                 return CardAvatar(
                   jogador: jogador,
-                  selecionado: _selecionado == jogador.id,
-                  onTap: () {
-                    setState(() => _selecionado = jogador.id);
-                    widget.onSelecionado(jogador.id);
+                  avatarSelecionadoId: _selecionado,
+                  onTap: (id) {
+                    setState(() => _selecionado = id);
+                    widget.onSelecionado(id);
                   },
                 );
               },
