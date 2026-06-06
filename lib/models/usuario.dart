@@ -20,11 +20,10 @@ class Usuario {
 
   final String? avatar;
   final String? palpiteCampeao;
-  final String? palpiteArtilheiro;
-  final String? palpiteGoleiro;
-  final String? palpiteMelhorJogador;
-  final String? palpiteMaisGoleadora;
-  final String? palpiteMenosVazada;
+  final String? palpiteChuteiradeOuro;
+  final String? palpiteBoladeOuro;
+  final String? palpiteLuvadeOuro;
+  final String? palpiteMelhorJovem;
 
   const Usuario({
     required this.uid,
@@ -39,11 +38,10 @@ class Usuario {
     required this.criadoEm,
     this.avatar,
     this.palpiteCampeao,
-    this.palpiteArtilheiro,
-    this.palpiteGoleiro,
-    this.palpiteMelhorJogador,
-    this.palpiteMaisGoleadora,
-    this.palpiteMenosVazada,
+    this.palpiteChuteiradeOuro,
+    this.palpiteBoladeOuro,
+    this.palpiteLuvadeOuro,
+    this.palpiteMelhorJovem,
   });
 
   // fromMap é equivalente ao fromJson do Gson —
@@ -64,11 +62,10 @@ class Usuario {
           : DateTime.now(),
       avatar: map['avatar'] as String?,
       palpiteCampeao: map['palpiteCampeao'] as String?,
-      palpiteArtilheiro: map['palpiteArtilheiro'] as String?,
-      palpiteGoleiro: map['palpiteGoleiro'] as String?,
-      palpiteMelhorJogador: map['palpiteMelhorJogador'] as String?,
-      palpiteMaisGoleadora: map['palpiteMaisGoleadora'] as String?,
-      palpiteMenosVazada: map['palpiteMenosVazada'] as String?,
+      palpiteChuteiradeOuro: map['palpiteChuteiradeOuro'] as String?,
+      palpiteBoladeOuro: map['palpiteBoladeOuro'] as String?,
+      palpiteLuvadeOuro: map['palpiteLuvadeOuro'] as String?,
+      palpiteMelhorJovem: map['palpiteMelhorJovem'] as String?,
     );
   }
 
@@ -96,11 +93,10 @@ class Usuario {
     int? palpitesPerdidos,
     String? avatar,
     String? palpiteCampeao,
-    String? palpiteArtilheiro,
-    String? palpiteGoleiro,
-    String? palpiteMelhorJogador,
-    String? palpiteMaisGoleadora,
-    String? palpiteMenosVazada,
+    String? palpiteChuteiradeOuro,
+    String? palpiteBoladeOuro,
+    String? palpiteLuvadeOuro,
+    String? palpiteMelhorJovem,
   }) {
     return Usuario(
       uid: uid,
@@ -112,11 +108,10 @@ class Usuario {
       criadoEm: criadoEm,
       avatar: avatar ?? this.avatar,
       palpiteCampeao: palpiteCampeao ?? this.palpiteCampeao,
-      palpiteArtilheiro: palpiteArtilheiro ?? this.palpiteArtilheiro,
-      palpiteGoleiro: palpiteGoleiro ?? this.palpiteGoleiro,
-      palpiteMelhorJogador: palpiteMelhorJogador ?? this.palpiteMelhorJogador,
-      palpiteMaisGoleadora: palpiteMaisGoleadora ?? this.palpiteMaisGoleadora,
-      palpiteMenosVazada: palpiteMenosVazada ?? this.palpiteMenosVazada,
+      palpiteChuteiradeOuro: palpiteChuteiradeOuro ?? this.palpiteChuteiradeOuro,
+      palpiteBoladeOuro: palpiteBoladeOuro ?? this.palpiteBoladeOuro,
+      palpiteLuvadeOuro: palpiteLuvadeOuro ?? this.palpiteLuvadeOuro,
+      palpiteMelhorJovem: palpiteMelhorJovem ?? this.palpiteMelhorJovem,
     );
   }
 }

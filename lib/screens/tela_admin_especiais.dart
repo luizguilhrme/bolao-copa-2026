@@ -22,11 +22,10 @@ class TelaAdminEspeciais extends StatefulWidget {
 class _TelaAdminEspeciaisState extends State<TelaAdminEspeciais> {
   // ── Estado dos campos ────────────────────────────────────────────────────────
   String? _campeaoReal;
-  String? _maisGoleadoraReal;
-  String? _maisVazadaReal;
-  String? _artilheiroReal;
-  String? _goleiroReal;
-  String? _melhorJogadorFinalReal;
+  String? _chuteiradeOuroReal;
+  String? _boladeOuroReal;
+  String? _luvadeOuroReal;
+  String? _melhorJovemReal;
 
   List<JogadorData> _jogadores = [];
 
@@ -76,12 +75,11 @@ class _TelaAdminEspeciaisState extends State<TelaAdminEspeciais> {
       if (doc.exists && mounted) {
         final d = doc.data()! as Map<String, dynamic>;
         setState(() {
-          _campeaoReal        = d['campeaoReal']            as String?;
-          _maisGoleadoraReal  = d['maisGoleadoraReal']      as String?;
-          _maisVazadaReal     = d['maisVazadaReal']         as String?;
-          _artilheiroReal     = d['artilheiroReal']         as String?;
-          _goleiroReal        = d['melhorGoleiroReal']      as String?;
-          _melhorJogadorFinalReal = d['melhorJogadorFinalReal'] as String?;
+          _campeaoReal        = d['campeaoReal']          as String?;
+          _chuteiradeOuroReal = d['chuteiradeOuroReal']   as String?;
+          _boladeOuroReal     = d['boladeOuroReal']        as String?;
+          _luvadeOuroReal     = d['luvadeOuroReal']        as String?;
+          _melhorJovemReal    = d['melhorJovemReal']       as String?;
           _palpitesCalculados = d['palpitesEspeciaisCalculados'] == true;
           _jogadores          = jogadores;
         });
@@ -101,12 +99,11 @@ class _TelaAdminEspeciaisState extends State<TelaAdminEspeciais> {
           .collection('config')
           .doc('copa2026')
           .set({
-        'campeaoReal':            _campeaoReal,
-        'maisGoleadoraReal':      _maisGoleadoraReal,
-        'maisVazadaReal':         _maisVazadaReal,
-        'artilheiroReal':         _artilheiroReal,
-        'melhorGoleiroReal':      _goleiroReal,
-        'melhorJogadorFinalReal': _melhorJogadorFinalReal,
+        'campeaoReal':          _campeaoReal,
+        'chuteiradeOuroReal':   _chuteiradeOuroReal,
+        'boladeOuroReal':       _boladeOuroReal,
+        'luvadeOuroReal':       _luvadeOuroReal,
+        'melhorJovemReal':      _melhorJovemReal,
         'palpitesEspeciaisCalculados': _palpitesCalculados,
       }, SetOptions(merge: true));
       if (mounted) mostrarMensagem(context, 'Configuração salva!');
@@ -295,14 +292,14 @@ class _TelaAdminEspeciaisState extends State<TelaAdminEspeciais> {
                     ]),
                   ),
 
-                // ── CAMPEÃO ──────────────────────────────────────────────────
-                _Secao(titulo: 'CAMPEÃO DO TORNEIO', children: [
+                // ── CAMPEÃO DO MUNDO ─────────────────────────────────────────
+                _Secao(titulo: 'CAMPEÃO DO MUNDO', children: [
                   _SeletorTime(
-                    label: 'Campeão',
+                    label: 'Campeão do Mundo',
                     time: _campeaoReal,
                     bloqueado: _palpitesCalculados,
                     onTap: () => _abrirSeletorTime(
-                      titulo: 'Selecionar campeão',
+                      titulo: 'Campeão do Mundo',
                       selecionadoAtual: _campeaoReal,
                       onSelecionado: (t) => setState(() => _campeaoReal = t),
                     ),
@@ -311,85 +308,69 @@ class _TelaAdminEspeciaisState extends State<TelaAdminEspeciais> {
 
                 const SizedBox(height: 16),
 
-                // ── ARTILHEIRO ───────────────────────────────────────────────
-                _Secao(titulo: 'ARTILHEIRO', children: [
+                // ── CHUTEIRA DE OURO ─────────────────────────────────────────
+                _Secao(titulo: 'CHUTEIRA DE OURO — Artilheiro', children: [
                   _SeletorJogador(
                     label: 'Artilheiro da Copa',
-                    jogadorNome: _artilheiroReal,
+                    jogadorNome: _chuteiradeOuroReal,
                     jogadores: _jogadores,
                     bloqueado: _palpitesCalculados,
                     onTap: () => _abrirSeletorJogador(
-                      titulo: 'Artilheiro',
-                      selecionadoAtual: _artilheiroReal,
-                      onSelecionado: (n) => setState(() => _artilheiroReal = n),
+                      titulo: 'Chuteira de Ouro',
+                      selecionadoAtual: _chuteiradeOuroReal,
+                      onSelecionado: (n) => setState(() => _chuteiradeOuroReal = n),
                     ),
                   ),
                 ]),
 
                 const SizedBox(height: 16),
 
-                // ── MELHOR GOLEIRO ───────────────────────────────────────────
-                _Secao(titulo: 'MELHOR GOLEIRO', children: [
-                  _SeletorJogador(
-                    label: 'Melhor goleiro',
-                    jogadorNome: _goleiroReal,
-                    jogadores: _jogadores,
-                    bloqueado: _palpitesCalculados,
-                    onTap: () => _abrirSeletorJogador(
-                      titulo: 'Melhor Goleiro',
-                      selecionadoAtual: _goleiroReal,
-                      apenasGoleiros: true,
-                      onSelecionado: (n) => setState(() => _goleiroReal = n),
-                    ),
-                  ),
-                ]),
-
-                const SizedBox(height: 16),
-
-                // ── MELHOR JOGADOR ────────────────────────────────────────────
-                _Secao(titulo: 'MELHOR JOGADOR', children: [
+                // ── BOLA DE OURO ─────────────────────────────────────────────
+                _Secao(titulo: 'BOLA DE OURO — Melhor Jogador', children: [
                   _SeletorJogador(
                     label: 'Melhor jogador do torneio',
-                    jogadorNome: _melhorJogadorFinalReal,
+                    jogadorNome: _boladeOuroReal,
                     jogadores: _jogadores,
                     bloqueado: _palpitesCalculados,
                     onTap: () => _abrirSeletorJogador(
-                      titulo: 'Melhor Jogador',
-                      selecionadoAtual: _melhorJogadorFinalReal,
-                      onSelecionado: (n) =>
-                          setState(() => _melhorJogadorFinalReal = n),
+                      titulo: 'Bola de Ouro',
+                      selecionadoAtual: _boladeOuroReal,
+                      onSelecionado: (n) => setState(() => _boladeOuroReal = n),
                     ),
                   ),
                 ]),
 
                 const SizedBox(height: 16),
 
-                // ── EQUIPE MAIS GOLEADORA ─────────────────────────────────────
-                _Secao(titulo: 'EQUIPE MAIS GOLEADORA', children: [
-                  _SeletorTime(
-                    label: 'Equipe mais goleadora',
-                    time: _maisGoleadoraReal,
+                // ── LUVA DE OURO ─────────────────────────────────────────────
+                _Secao(titulo: 'LUVA DE OURO — Melhor Goleiro', children: [
+                  _SeletorJogador(
+                    label: 'Melhor goleiro',
+                    jogadorNome: _luvadeOuroReal,
+                    jogadores: _jogadores,
                     bloqueado: _palpitesCalculados,
-                    onTap: () => _abrirSeletorTime(
-                      titulo: 'Equipe mais goleadora',
-                      selecionadoAtual: _maisGoleadoraReal,
-                      onSelecionado: (t) => setState(() => _maisGoleadoraReal = t),
+                    onTap: () => _abrirSeletorJogador(
+                      titulo: 'Luva de Ouro',
+                      selecionadoAtual: _luvadeOuroReal,
+                      apenasGoleiros: true,
+                      onSelecionado: (n) => setState(() => _luvadeOuroReal = n),
                     ),
                   ),
                 ]),
 
                 const SizedBox(height: 16),
 
-                // ── EQUIPE MENOS VAZADA ───────────────────────────────────────
-                _Secao(titulo: 'EQUIPE MENOS VAZADA', children: [
-                  _SeletorTime(
-                    label: 'Equipe menos vazada',
-                    time: _maisVazadaReal,
+                // ── MELHOR JOGADOR JOVEM ─────────────────────────────────────
+                _Secao(titulo: 'MELHOR JOGADOR JOVEM', children: [
+                  _SeletorJogador(
+                    label: 'Melhor jogador jovem (sub-21)',
+                    jogadorNome: _melhorJovemReal,
+                    jogadores: _jogadores,
                     bloqueado: _palpitesCalculados,
-                    onTap: () => _abrirSeletorTime(
-                      titulo: 'Equipe menos vazada',
-                      selecionadoAtual: _maisVazadaReal,
-                      onSelecionado: (t) => setState(() => _maisVazadaReal = t),
+                    onTap: () => _abrirSeletorJogador(
+                      titulo: 'Melhor Jogador Jovem',
+                      selecionadoAtual: _melhorJovemReal,
+                      onSelecionado: (n) => setState(() => _melhorJovemReal = n),
                     ),
                   ),
                 ]),

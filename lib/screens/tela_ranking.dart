@@ -28,7 +28,7 @@ class _TelaRankingState extends State<TelaRanking> {
 
   // Resultados reais para os critérios de desempate 3 e 4
   String? _campeaoReal;
-  String? _artilheiroReal;
+  String? _chuteiradeOuroReal;
 
   // Não usa orderBy no Firestore porque documentos sem o campo seriam excluídos.
   // A ordenação completa (com desempates) é feita no build após filtrar por grupo.
@@ -54,13 +54,13 @@ class _TelaRankingState extends State<TelaRanking> {
     if (data == null) return;
     setState(() {
       _campeaoReal = data['campeaoReal'] as String?;
-      _artilheiroReal = data['artilheiroReal'] as String?;
+      _chuteiradeOuroReal = data['chuteiradeOuroReal'] as String?;
     });
   }
 
   List<Usuario> _ordenar(List<Usuario> lista, bool modoCopa) {
     final campNorm = _campeaoReal?.toLowerCase().trim();
-    final artNorm = _artilheiroReal?.toLowerCase().trim();
+    final chutNorm = _chuteiradeOuroReal?.toLowerCase().trim();
     lista.sort((a, b) {
       final ptA =
           modoCopa ? a.pontuacaoCopaTotal : a.pontuacaoClassicaTotal;
@@ -87,16 +87,16 @@ class _TelaRankingState extends State<TelaRanking> {
               ? 1
               : 0;
       if (bCamp != aCamp) return bCamp.compareTo(aCamp);
-      // 4. Acertou o artilheiro (case-insensitive, sem espaços extras)
-      final aArt = (artNorm != null &&
-              a.palpiteArtilheiro?.toLowerCase().trim() == artNorm)
+      // 4. Acertou a Chuteira de Ouro (case-insensitive, sem espaços extras)
+      final aChut = (chutNorm != null &&
+              a.palpiteChuteiradeOuro?.toLowerCase().trim() == chutNorm)
           ? 1
           : 0;
-      final bArt = (artNorm != null &&
-              b.palpiteArtilheiro?.toLowerCase().trim() == artNorm)
+      final bChut = (chutNorm != null &&
+              b.palpiteChuteiradeOuro?.toLowerCase().trim() == chutNorm)
           ? 1
           : 0;
-      return bArt.compareTo(aArt);
+      return bChut.compareTo(aChut);
     });
     return lista;
   }
@@ -760,11 +760,10 @@ class _DadosDialog {
     required this.palpitesTravados,
     required this.especiaisCalculados,
     this.campeaoReal,
-    this.artilheiroReal,
-    this.goleiroReal,
-    this.melhorJogadorReal,
-    this.maisGoleadoraReal,
-    this.menosVazadaReal,
+    this.chuteiradeOuroReal,
+    this.boladeOuroReal,
+    this.luvadeOuroReal,
+    this.melhorJovemReal,
   });
 
   final List<Jogo> jogos;
@@ -774,11 +773,10 @@ class _DadosDialog {
   final bool palpitesTravados;
   final bool especiaisCalculados;
   final String? campeaoReal;
-  final String? artilheiroReal;
-  final String? goleiroReal;
-  final String? melhorJogadorReal;
-  final String? maisGoleadoraReal;
-  final String? menosVazadaReal;
+  final String? chuteiradeOuroReal;
+  final String? boladeOuroReal;
+  final String? luvadeOuroReal;
+  final String? melhorJovemReal;
 
   bool get temMataMata => jogos.any((j) => j.id > 72 && j.placar1 != null);
 }
@@ -870,7 +868,7 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
     Map<String, dynamic> classificacaoReal = {};
     bool palpitesTravados = false;
     bool especiaisCalculados = false;
-    String? campeaoReal, artilheiroReal, goleiroReal, melhorJogadorReal, maisGoleadoraReal, menosVazadaReal;
+    String? campeaoReal, chuteiradeOuroReal, boladeOuroReal, luvadeOuroReal, melhorJovemReal;
     if (configSnap.exists) {
       final data = configSnap.data() as Map<String, dynamic>?;
       classificacaoReal =
@@ -878,12 +876,11 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
       palpitesTravados = (data?['palpitesTravados'] as bool?) ?? false;
       especiaisCalculados = (data?['palpitesEspeciaisCalculados'] as bool?) ?? false;
       if (especiaisCalculados) {
-        campeaoReal = data?['campeaoReal'] as String?;
-        artilheiroReal = data?['artilheiroReal'] as String?;
-        goleiroReal = data?['melhorGoleiroReal'] as String?;
-        melhorJogadorReal = data?['melhorJogadorFinalReal'] as String?;
-        maisGoleadoraReal = data?['maisGoleadoraReal'] as String?;
-        menosVazadaReal = data?['maisVazadaReal'] as String?;
+        campeaoReal       = data?['campeaoReal']        as String?;
+        chuteiradeOuroReal = data?['chuteiradeOuroReal'] as String?;
+        boladeOuroReal    = data?['boladeOuroReal']      as String?;
+        luvadeOuroReal    = data?['luvadeOuroReal']      as String?;
+        melhorJovemReal   = data?['melhorJovemReal']     as String?;
       }
     }
 
@@ -895,11 +892,10 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
       palpitesTravados: palpitesTravados,
       especiaisCalculados: especiaisCalculados,
       campeaoReal: campeaoReal,
-      artilheiroReal: artilheiroReal,
-      goleiroReal: goleiroReal,
-      melhorJogadorReal: melhorJogadorReal,
-      maisGoleadoraReal: maisGoleadoraReal,
-      menosVazadaReal: menosVazadaReal,
+      chuteiradeOuroReal: chuteiradeOuroReal,
+      boladeOuroReal: boladeOuroReal,
+      luvadeOuroReal: luvadeOuroReal,
+      melhorJovemReal: melhorJovemReal,
     );
   }
 
@@ -914,26 +910,21 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
     final calc = dados.especiaisCalculados;
     return [
       if (u.palpiteCampeao != null)
-        _ItemEspecial(Icons.emoji_events, 'Campeão', u.palpiteCampeao!,
+        _ItemEspecial(Icons.emoji_events, 'Campeão do Mundo', u.palpiteCampeao!,
             isTime: true,
             acertou: calc ? _acertou(u.palpiteCampeao, dados.campeaoReal) : null),
-      if (u.palpiteArtilheiro != null)
-        _ItemEspecial(Icons.sports_soccer, 'Artilheiro', u.palpiteArtilheiro!,
-            acertou: calc ? _acertou(u.palpiteArtilheiro, dados.artilheiroReal) : null),
-      if (u.palpiteGoleiro != null)
-        _ItemEspecial(Icons.sports_handball, 'Melhor Goleiro', u.palpiteGoleiro!,
-            acertou: calc ? _acertou(u.palpiteGoleiro, dados.goleiroReal) : null),
-      if (u.palpiteMelhorJogador != null)
-        _ItemEspecial(Icons.star_rounded, 'Melhor Jogador', u.palpiteMelhorJogador!,
-            acertou: calc ? _acertou(u.palpiteMelhorJogador, dados.melhorJogadorReal) : null),
-      if (u.palpiteMaisGoleadora != null)
-        _ItemEspecial(Icons.trending_up_rounded, 'Mais Goleadora', u.palpiteMaisGoleadora!,
-            isTime: true,
-            acertou: calc ? _acertou(u.palpiteMaisGoleadora, dados.maisGoleadoraReal) : null),
-      if (u.palpiteMenosVazada != null)
-        _ItemEspecial(Icons.shield_rounded, 'Menos Vazada', u.palpiteMenosVazada!,
-            isTime: true,
-            acertou: calc ? _acertou(u.palpiteMenosVazada, dados.menosVazadaReal) : null),
+      if (u.palpiteChuteiradeOuro != null)
+        _ItemEspecial(Icons.sports_soccer, 'Chuteira de Ouro', u.palpiteChuteiradeOuro!,
+            acertou: calc ? _acertou(u.palpiteChuteiradeOuro, dados.chuteiradeOuroReal) : null),
+      if (u.palpiteBoladeOuro != null)
+        _ItemEspecial(Icons.star_rounded, 'Bola de Ouro', u.palpiteBoladeOuro!,
+            acertou: calc ? _acertou(u.palpiteBoladeOuro, dados.boladeOuroReal) : null),
+      if (u.palpiteLuvadeOuro != null)
+        _ItemEspecial(Icons.sports_handball, 'Luva de Ouro', u.palpiteLuvadeOuro!,
+            acertou: calc ? _acertou(u.palpiteLuvadeOuro, dados.luvadeOuroReal) : null),
+      if (u.palpiteMelhorJovem != null)
+        _ItemEspecial(Icons.person_rounded, 'Melhor Jogador Jovem', u.palpiteMelhorJovem!,
+            acertou: calc ? _acertou(u.palpiteMelhorJovem, dados.melhorJovemReal) : null),
     ];
   }
 

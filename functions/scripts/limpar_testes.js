@@ -104,11 +104,10 @@ async function main() {
     classificacao_real:          FVD(),
     terceiros_classificados:     FVD(),
     campeaoReal:                 FVD(),
-    artilheiroReal:              FVD(),
-    melhorGoleiroReal:           FVD(),
-    maisGoleadoraReal:           FVD(),
-    maisVazadaReal:              FVD(),
-    melhorJogadorFinalReal:      FVD(),
+    chuteiradeOuroReal:          FVD(),
+    boladeOuroReal:              FVD(),
+    luvadeOuroReal:              FVD(),
+    melhorJovemReal:             FVD(),
     palpitesEspeciaisCalculados: FVD(),
   }, { merge: true });
   console.log('✓ config/copa2026 limpo (classificação, resultados especiais).');

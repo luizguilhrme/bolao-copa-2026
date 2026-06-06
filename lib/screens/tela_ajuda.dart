@@ -124,33 +124,28 @@ class TelaAjuda extends StatelessWidget {
           ),
           const _ItemPontuacao(
             pontos: 500,
-            descricao: 'Campeão do Torneio',
+            descricao: 'Campeão do Mundo',
             exemplo: 'Time vencedor da Copa do Mundo 2026',
           ),
           const _ItemPontuacao(
             pontos: 300,
-            descricao: 'Artilheiro da Copa',
-            exemplo: 'Jogador com mais gols no torneio',
+            descricao: 'Chuteira de Ouro',
+            exemplo: 'Artilheiro (maior goleador) da Copa do Mundo',
           ),
           const _ItemPontuacao(
             pontos: 300,
-            descricao: 'Melhor Jogador da Copa',
-            exemplo: 'Prêmio Bola de Ouro do torneio',
+            descricao: 'Bola de Ouro',
+            exemplo: 'Melhor jogador do torneio, eleito pela FIFA',
           ),
           const _ItemPontuacao(
             pontos: 300,
-            descricao: 'Melhor Goleiro',
-            exemplo: 'Prêmio Luva de Ouro do torneio',
+            descricao: 'Luva de Ouro',
+            exemplo: 'Melhor goleiro do torneio, eleito pela FIFA',
           ),
           const _ItemPontuacao(
             pontos: 200,
-            descricao: 'Equipe Mais Goleadora',
-            exemplo: 'Time com mais gols marcados',
-          ),
-          const _ItemPontuacao(
-            pontos: 200,
-            descricao: 'Equipe Menos Vazada',
-            exemplo: 'Time com menos gols sofridos',
+            descricao: 'Melhor Jogador Jovem',
+            exemplo: 'Melhor jogador sub-21 do torneio, eleito pela FIFA',
           ),
           const SizedBox(height: 32),
           _SecaoHeader(icone: Icons.help_outline_rounded, titulo: 'PERGUNTAS FREQUENTES'),
@@ -224,9 +219,10 @@ class TelaAjuda extends StatelessWidget {
           const _FaqItem(
             pergunta: 'O que são os Palpites Especiais?',
             resposta:
-                'São 6 palpites feitos antes da Copa começar: Campeão (500 pts), '
-                'Artilheiro (300 pts), Melhor Jogador (300 pts), Melhor Goleiro (300 pts), '
-                'Equipe Mais Goleadora (200 pts) e Equipe Menos Vazada (200 pts). '
+                'São 5 palpites feitos antes da Copa começar: Campeão do Mundo (500 pts), '
+                'Chuteira de Ouro/Artilheiro (300 pts), Bola de Ouro/Melhor Jogador (300 pts), '
+                'Luva de Ouro/Melhor Goleiro (300 pts) e Melhor Jogador Jovem (200 pts). '
+                'Os três últimos correspondem às premiações oficiais da FIFA. '
                 'Os pontos são calculados uma única vez ao fim do torneio e contam '
                 'tanto no Modo Clássico quanto no Modo Copa.',
           ),
