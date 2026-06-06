@@ -74,6 +74,7 @@ flutter:
     - assets/dados/jogos_teste.json
     - assets/dados/jogadores.json
     - assets/avatares/
+    - assets/background-cards/
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 
