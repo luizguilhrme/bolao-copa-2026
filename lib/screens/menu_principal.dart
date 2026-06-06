@@ -23,7 +23,7 @@ import 'tela_palpites.dart';
 import 'tela_ranking.dart';
 import 'tela_tabela.dart';
 
-const _titulos = ['COPA 2026', 'PALPITES', 'RANKING', 'TABELA'];
+const _titulos = ['CRAVA AÍ!', 'PALPITES', 'RANKING', 'TABELA'];
 
 class MenuPrincipal extends StatefulWidget {
   const MenuPrincipal({super.key});

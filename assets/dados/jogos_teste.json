@@ -65,8 +65,8 @@
       "placar1": 1,
       "placar2": 0
     },
-    {"id":6,"round":"Fase de Grupos","matchday":"Rodada 3","date":"2026-06-24","time":"19:00 UTC-6","team1":"South Africa","team2":"South Korea","group":"Grupo A","ground":"Monterrey","placar1":null,"placar2":null},
-    {"id":7,"round":"Fase de Grupos","matchday":"Rodada 1","date":"2026-06-12","time":"15:00 UTC-4","team1":"Canada","team2":"Bosnia & Herzegovina","group":"Grupo B","ground":"Toronto","placar1":null,"placar2":null},
+    {"id":6,"round":"Fase de Grupos","matchday":"Rodada 3","date":"2026-06-06","time":"19:00 UTC-6","team1":"South Africa","team2":"South Korea","group":"Grupo A","ground":"Monterrey","placar1":null,"placar2":null},
+    {"id":7,"round":"Fase de Grupos","matchday":"Rodada 1","date":"2026-06-06","time":"15:00 UTC-4","team1":"Canada","team2":"Bosnia & Herzegovina","group":"Grupo B","ground":"Toronto","placar1":null,"placar2":null},
     {"id":8,"round":"Fase de Grupos","matchday":"Rodada 1","date":"2026-06-13","time":"12:00 UTC-7","team1":"Qatar","team2":"Switzerland","group":"Grupo B","ground":"San Francisco","placar1":null,"placar2":null},
     {"id":9,"round":"Fase de Grupos","matchday":"Rodada 2","date":"2026-06-18","time":"12:00 UTC-7","team1":"Switzerland","team2":"Bosnia & Herzegovina","group":"Grupo B","ground":"Los Angeles","placar1":null,"placar2":null},
     {"id":10,"round":"Fase de Grupos","matchday":"Rodada 2","date":"2026-06-18","time":"15:00 UTC-7","team1":"Canada","team2":"Qatar","group":"Grupo B","ground":"Vancouver","placar1":null,"placar2":null},

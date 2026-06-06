@@ -1,16 +1,19 @@
-﻿import 'package:bolao/utils/biblioteca.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:bolao/utils/biblioteca.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../models/jogo.dart';
+import '../models/usuario.dart';
+import '../services/grupo_service.dart';
 import '../services/jogo_service.dart';
+import '../services/usuario_service.dart';
 import '../utils/cores.dart';
 import 'tela_palpites_especiais.dart';
 
 // ─── Tela Home ────────────────────────────────────────────────────────────────
 
-// StatefulWidget porque precisamos gerenciar o estado de carregamento
-// e guardar a lista de jogos depois que o Future resolver.
 class TelaHome extends StatefulWidget {
   const TelaHome({super.key, required this.onNavegar});
 
@@ -21,18 +24,54 @@ class TelaHome extends StatefulWidget {
 }
 
 class _TelaHomeState extends State<TelaHome> {
-  // Guardamos o Future como variável de instância — isso é importante!
-  // Se fosse criado direto no build(), um novo Future seria gerado a cada
-  // rebuild, causando um loop infinito de carregamento. Aqui ele é criado
-  // uma única vez quando a tela é inicializada.
+  final _uid = FirebaseAuth.instance.currentUser!.uid;
   late final Future<List<Jogo>> _jogosDeHoje;
+  late final Future<List<_GrupoRank>> _rankInfo;
 
   @override
   void initState() {
     super.initState();
-    // initState é o equivalente ao onCreate() do Android —
-    // roda uma única vez quando o widget é inserido na árvore.
     _jogosDeHoje = JogoService().buscarPorData(DateTime.now());
+    _rankInfo = _carregarRankInfo();
+  }
+
+  Future<List<_GrupoRank>> _carregarRankInfo() async {
+    try {
+      final grupos = await GrupoService().buscarGruposDoUsuarioOnce(_uid);
+      if (grupos.isEmpty) return [];
+
+      final result = <_GrupoRank>[];
+      for (final grupo in grupos) {
+        final membros = grupo.membros;
+        if (membros.isEmpty) continue;
+
+        // whereIn suporta até 30 itens no Firestore
+        final ids = membros.length > 30 ? membros.sublist(0, 30) : membros;
+        final snap = await FirebaseFirestore.instance
+            .collection('usuarios')
+            .where(FieldPath.documentId, whereIn: ids)
+            .get();
+
+        final todos = snap.docs
+            .map((d) => Usuario.fromMap(d.data()))
+            .toList()
+          ..sort((a, b) => grupo.regra == 'copa'
+              ? b.pontuacaoCopaTotal.compareTo(a.pontuacaoCopaTotal)
+              : b.pontuacaoClassicaTotal.compareTo(a.pontuacaoClassicaTotal));
+
+        final idx = todos.indexWhere((u) => u.uid == _uid);
+        if (idx >= 0) {
+          result.add(_GrupoRank(
+            posicao: idx + 1,
+            grupoNome: grupo.nome,
+            regra: grupo.regra,
+          ));
+        }
+      }
+      return result;
+    } catch (_) {
+      return [];
+    }
   }
 
   @override
@@ -40,138 +79,208 @@ class _TelaHomeState extends State<TelaHome> {
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 88),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildSecaoJogosDeHoje(),
-          const SizedBox(height: 24),
-          _buildBentoGrid(context),
+          _buildHeroCard(),
+          const SizedBox(height: 20),
+          _buildSecaoJogos(),
+          const SizedBox(height: 20),
+          _buildAcoes(),
         ],
       ),
     );
   }
 
-  // ── Seção "Jogos de Hoje" ───────────────────────────────────────────────────
+  // ── Hero card ──────────────────────────────────────────────────────────────
 
-  Widget _buildSecaoJogosDeHoje() {
+  Widget _buildHeroCard() {
+    return StreamBuilder<Usuario?>(
+      stream: UsuarioService().observarUsuario(_uid),
+      builder: (context, userSnap) {
+        if (!userSnap.hasData) return const SizedBox.shrink();
+        final usuario = userSnap.data!;
+
+        // Só exibe depois que algum resultado for registrado
+        if (usuario.pontuacaoClassicaTotal == 0 &&
+            usuario.pontuacaoCopaTotal == 0) {
+          return const SizedBox.shrink();
+        }
+
+        return FutureBuilder<List<_GrupoRank>>(
+          future: _rankInfo,
+          builder: (context, rankSnap) {
+            if (!rankSnap.hasData) return const SizedBox.shrink();
+            final ranks = rankSnap.data!;
+            if (ranks.isEmpty) return const SizedBox.shrink();
+
+            final hasClassico = ranks.any((r) => r.regra == 'classico');
+            final hasCopa = ranks.any((r) => r.regra == 'copa');
+            final ptsClassico = usuario.pontuacaoClassicaTotal;
+            final ptsCopa = usuario.pontuacaoCopaTotal;
+            final tickerItems =
+                ranks.map((r) => '${r.posicao}º no ${r.grupoNome}').toList();
+
+            return Container(
+              margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              decoration: BoxDecoration(
+                color: Cores.verdePrincipal,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _TickerRanking(items: tickerItems),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      // Clássico — metade esquerda
+                      if (hasClassico)
+                        Expanded(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.stars_rounded,
+                                  color: Color(0xFFFCD400), size: 20),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  '$ptsClassico',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.anybody(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    height: 1,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Text('pontos',
+                                  style: TextStyle(
+                                      fontSize: 13, color: Colors.white70)),
+                            ],
+                          ),
+                        )
+                      else
+                        // Copa-only: empurra para a direita
+                        const Spacer(),
+                      // Copa — metade direita, alinhada à direita
+                      if (hasCopa)
+                        Expanded(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              const Text('🏆',
+                                  style: TextStyle(fontSize: 18)),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  '$ptsCopa',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.anybody(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    height: 1,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Text('pontos',
+                                  style: TextStyle(
+                                      fontSize: 13, color: Colors.white70)),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ── Jogos de hoje ──────────────────────────────────────────────────────────
+
+  Widget _buildSecaoJogos() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'JOGOS DE HOJE',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  fontStyle: FontStyle.italic,
-                  color: Cores.onSurface,
-                ),
-              ),
-              TextButton(
-                onPressed: () => widget.onNavegar(3),
-                style: TextButton.styleFrom(
-                  foregroundColor: Cores.azulTerciario,
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Row(
-                  children: [
-                    Text(
-                      'VER TODOS',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    Icon(Icons.chevron_right, size: 16),
-                  ],
-                ),
-              ),
-            ],
+          const Text(
+            'JOGOS DE HOJE',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+              color: Cores.onSurfaceVariant,
+            ),
           ),
-          const SizedBox(height: 12),
-
-          // FutureBuilder é o widget que "ouve" um Future e reconstrói
-          // a UI conforme o estado muda: carregando → com dados → com erro.
-          // É o equivalente ao observe() do LiveData no Android.
+          const SizedBox(height: 10),
           FutureBuilder<List<Jogo>>(
             future: _jogosDeHoje,
             builder: (context, snapshot) {
-              // Estado: ainda buscando no Firestore
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const SizedBox(
-                  height: 168,
-                  child: Center(
-                    child: CircularProgressIndicator(),
-                  ),
+                  height: 110,
+                  child: Center(child: CircularProgressIndicator()),
                 );
               }
-
-              // Estado: deu algum erro na busca
               if (snapshot.hasError) {
                 return SizedBox(
-                  height: 168,
+                  height: 40,
                   child: Center(
-                    child: Text(
-                      'Erro ao carregar jogos.',
-                      style: TextStyle(color: Cores.onSurfaceVariant),
-                    ),
+                    child: Text('Erro ao carregar jogos.',
+                        style:
+                            TextStyle(color: Cores.onSurfaceVariant)),
                   ),
                 );
               }
-
               final jogos = snapshot.data ?? [];
-
-              // Estado: busca ok, mas nenhum jogo hoje
               if (jogos.isEmpty) {
-                return SizedBox(
-                  height: 168,
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.sports_soccer,
-                            size: 40, color: Cores.outlineVariant),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Nenhum jogo hoje.',
-                          style: TextStyle(color: Cores.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.sports_soccer,
+                          size: 16, color: Cores.outlineVariant),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Nenhum jogo hoje.',
+                        style: TextStyle(
+                            fontSize: 13, color: Cores.onSurfaceVariant),
+                      ),
+                    ],
                   ),
                 );
               }
-
-              // Estado: tem jogos — ordena (encerrados por último) e renderiza
-              final jogosOrdenados = jogos.toList()
+              final ordenados = jogos.toList()
                 ..sort((a, b) {
                   final aEnc = a.placar1 != null ? 1 : 0;
                   final bEnc = b.placar1 != null ? 1 : 0;
                   if (aEnc != bEnc) return aEnc - bEnc;
                   return a.dataHora.compareTo(b.dataHora);
                 });
-
               return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(
                     height: 168,
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       clipBehavior: Clip.none,
-                      itemCount: jogosOrdenados.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
-                      itemBuilder: (context, i) =>
-                          _CardJogo(jogo: jogosOrdenados[i]),
+                      itemCount: ordenados.length,
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(width: 12),
+                      itemBuilder: (_, i) =>
+                          _CardJogo(jogo: ordenados[i]),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       const Icon(Icons.info_outline_rounded,
@@ -193,36 +302,31 @@ class _TelaHomeState extends State<TelaHome> {
     );
   }
 
-  // ── Bento Grid de navegação ─────────────────────────────────────────────────
-  // Mantido exatamente igual — não depende de dados do Firestore
+  // ── Cards de ação ──────────────────────────────────────────────────────────
 
-  Widget _buildBentoGrid(BuildContext context) {
+  Widget _buildAcoes() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: 148,
+          IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: _CardNav(
-                    titulo: 'MEUS PALPITES',
-                    subtitulo: 'Faça e gerencie suas apostas.',
-                    labelBotao: 'IR PARA PALPITES',
+                  child: _CardAcao(
+                    emoji: '🎯',
+                    titulo: 'PALPITES',
                     corFundo: Cores.verdePrincipal,
-                    corTexto: Cores.onPrimary,
+                    corTexto: Colors.white,
                     onTap: () => widget.onNavegar(1),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _CardNav(
-                    titulo: 'CLASSIFICAÇÃO',
-                    subtitulo: 'Veja quem está liderando o bolão.',
-                    labelBotao: 'VER RANKING',
+                  child: _CardAcao(
+                    emoji: '🏆',
+                    titulo: 'RANKING',
                     corFundo: Cores.secondaryContainer,
                     corTexto: Cores.onSecondaryContainer,
                     onTap: () => widget.onNavegar(2),
@@ -232,19 +336,11 @@ class _TelaHomeState extends State<TelaHome> {
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            height: 110,
-            child: _CardPalpiteEspecial(
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                    builder: (_) => const TelaPalpitesEspeciais()),
-              ),
+          _CardEspeciais(
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                  builder: (_) => const TelaPalpitesEspeciais()),
             ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 110,
-            child: _CardNavLargo(onTap: () => widget.onNavegar(3)),
           ),
         ],
       ),
@@ -252,9 +348,138 @@ class _TelaHomeState extends State<TelaHome> {
   }
 }
 
-// ─── Widget: Card de Jogo ─────────────────────────────────────────────────────
-// Agora recebe um Jogo real do Firestore em vez do _JogoCard hardcoded.
-// O visual é idêntico ao anterior.
+// ─── Dados de ranking ─────────────────────────────────────────────────────────
+
+class _GrupoRank {
+  final int posicao;
+  final String grupoNome;
+  final String regra;
+
+  const _GrupoRank({
+    required this.posicao,
+    required this.grupoNome,
+    required this.regra,
+  });
+}
+
+// ─── Ticker animado de posições ───────────────────────────────────────────────
+//
+// Técnica de marquee seamless: conteúdo duplicado dentro de SingleChildScrollView.
+// Anima de 0 → (contentWidth + gap); ao chegar lá, jumpTo(0) é invisível porque
+// copy2[0] = copy1[0] visualmente. Loop contínuo sem salto percebível.
+
+class _TickerRanking extends StatefulWidget {
+  const _TickerRanking({required this.items});
+  final List<String> items;
+
+  @override
+  State<_TickerRanking> createState() => _TickerRankingState();
+}
+
+class _TickerRankingState extends State<_TickerRanking> {
+  final _scroll = ScrollController();
+  final _contentKey = GlobalKey();
+  double _contentWidth = 0;
+
+  static const double _gap = 64.0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(_setup);
+  }
+
+  void _setup(_) async {
+    if (!mounted || !_scroll.hasClients) return;
+
+    final contentBox =
+        _contentKey.currentContext?.findRenderObject() as RenderBox?;
+    if (contentBox == null) return;
+
+    final viewW = _scroll.position.viewportDimension;
+    final naturalW = contentBox.size.width;
+    if (naturalW <= viewW) return; // cabe — sem animação
+
+    setState(() => _contentWidth = naturalW);
+    await Future.delayed(Duration.zero); // aguarda rebuild com 2 cópias
+    if (mounted) _loop();
+  }
+
+  Future<void> _loop() async {
+    while (mounted && _scroll.hasClients && _contentWidth > 0) {
+      try {
+        final target = _contentWidth + _gap;
+        await _scroll.animateTo(
+          target,
+          duration: Duration(
+              milliseconds: (target * 25).clamp(3000, 15000).round()),
+          curve: Curves.linear,
+        );
+        if (!mounted) break;
+        _scroll.jumpTo(0);
+      } catch (_) {
+        break;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Widget _buildRow({Key? key}) => Row(
+        key: key,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (int i = 0; i < widget.items.length; i++) ...[
+            if (i > 0)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child: Text(
+                  '|',
+                  style: TextStyle(
+                      color: Colors.white38, fontSize: 13, height: 1.2),
+                ),
+              ),
+            Text(
+              widget.items[i],
+              style: GoogleFonts.anybody(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                fontStyle: FontStyle.italic,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ],
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 22,
+      child: SingleChildScrollView(
+        controller: _scroll,
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildRow(key: _contentKey),
+            if (_contentWidth > 0) ...[
+              const SizedBox(width: _gap),
+              _buildRow(),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Card de Jogo ─────────────────────────────────────────────────────────────
 
 class _CardJogo extends StatelessWidget {
   const _CardJogo({required this.jogo});
@@ -284,7 +509,6 @@ class _CardJogo extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cabeçalho: chip de horário + chip AO VIVO (se tiver placar)
           Row(
             children: [
               _Chip(
@@ -302,8 +526,6 @@ class _CardJogo extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-
-          // Placar: bandeiras, siglas e gols (ou "VS" se não começou)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -376,13 +598,13 @@ class _CardJogo extends StatelessWidget {
   }
 }
 
-// ─── Os widgets abaixo são idênticos ao original ──────────────────────────────
+// ─── Chips ────────────────────────────────────────────────────────────────────
 
 class _Chip extends StatelessWidget {
   const _Chip(
       {required this.texto,
-        required this.corFundo,
-        required this.corTexto});
+      required this.corFundo,
+      required this.corTexto});
 
   final String texto;
   final Color corFundo;
@@ -485,19 +707,19 @@ class _ChipEncerrado extends StatelessWidget {
   }
 }
 
-class _CardNav extends StatelessWidget {
-  const _CardNav({
+// ─── Card de ação (Palpites / Ranking) ───────────────────────────────────────
+
+class _CardAcao extends StatelessWidget {
+  const _CardAcao({
+    required this.emoji,
     required this.titulo,
-    required this.subtitulo,
-    required this.labelBotao,
     required this.corFundo,
     required this.corTexto,
     required this.onTap,
   });
 
+  final String emoji;
   final String titulo;
-  final String subtitulo;
-  final String labelBotao;
   final Color corFundo;
   final Color corTexto;
   final VoidCallback onTap;
@@ -511,52 +733,20 @@ class _CardNav extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              Text(emoji, style: const TextStyle(fontSize: 30)),
+              const SizedBox(height: 10),
               Text(
                 titulo,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.anybody(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                   fontStyle: FontStyle.italic,
                   color: corTexto,
-                  height: 1.2,
-                ),
-              ),
-              Text(
-                subtitulo,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 12, color: corTexto.withValues(alpha: 0.85)),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: corTexto.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      labelBotao,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
-                        color: corTexto,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(Icons.arrow_forward, size: 13, color: corTexto),
-                  ],
                 ),
               ),
             ],
@@ -567,10 +757,10 @@ class _CardNav extends StatelessWidget {
   }
 }
 
-// ─── Card: Palpite Especial (Campeão & Artilheiro) ───────────────────────────
+// ─── Card de Palpites Especiais ───────────────────────────────────────────────
 
-class _CardPalpiteEspecial extends StatelessWidget {
-  const _CardPalpiteEspecial({required this.onTap});
+class _CardEspeciais extends StatelessWidget {
+  const _CardEspeciais({required this.onTap});
   final VoidCallback onTap;
 
   static const _corOuro = Color(0xFFB8860B);
@@ -584,112 +774,19 @@ class _CardPalpiteEspecial extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              const Text('⭐', style: TextStyle(fontSize: 24)),
+              const SizedBox(width: 12),
               Text(
                 'PALPITES ESPECIAIS',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.anybody(
-                  fontSize: 18,
+                  fontSize: 17,
                   fontWeight: FontWeight.w800,
                   fontStyle: FontStyle.italic,
                   color: Colors.white,
-                ),
-              ),
-              Text(
-                'Campeão, artilheiro, melhor jogador e mais.',
-                style: const TextStyle(fontSize: 13, color: Colors.white70),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'REGISTRAR PALPITES',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(width: 4),
-                    Icon(Icons.arrow_forward, size: 13, color: Colors.white),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CardNavLargo extends StatelessWidget {
-  const _CardNavLargo({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Cores.azulTerciario,
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'TODOS OS JOGOS',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.anybody(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  fontStyle: FontStyle.italic,
-                  color: Colors.white,
-                ),
-              ),
-              const Text(
-                'Tabela completa, resultados e simulador.',
-                style: TextStyle(fontSize: 13, color: Colors.white70),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'ACESSAR TABELA',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(width: 4),
-                    Icon(Icons.arrow_forward, size: 13, color: Colors.white),
-                  ],
                 ),
               ),
             ],
