@@ -31,6 +31,8 @@ C:\bolao\
                                  informação não disponível; usado pelos seletores de jogador
                                  em tela_palpites_especiais e tela_admin_especiais
     avatares/                 ← imagens dos jogadores para seleção de avatar
+    background-cards/         ← imagens de fundo dos 3 cards de ação da tela Home
+                                 (br.png → PALPITES, r9.png → RANKING, 2022.png → PALPITES ESPECIAIS)
   functions/
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
                                  calcularPontuacao, lembretesPalpite, recalcularTudo,
@@ -52,7 +54,8 @@ C:\bolao\
                                  inicializa FCM; deep linking via notificação (onMessageOpenedApp,
                                  getInitialMessage); SnackBar com botão VER em foreground
       tela_home.dart          ← hero card verde com ranking/pontuação + carrossel de jogos
-                                 do dia + cards de ação (Palpites, Ranking, Palpites Especiais)
+                                 do dia + 3 cards de ação em coluna (Palpites, Ranking,
+                                 Palpites Especiais) com imagem de fundo personalizada
       tela_login.dart         ← login e cadastro com design do Stitch; Google Sign-In com account linking
       tela_setup_perfil.dart  ← seleção de avatar no primeiro acesso (pós-cadastro);
                                  nome pré-preenchido com displayName do Google
@@ -510,7 +513,7 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 - **Hero card verde** (oculto quando sem grupos ou pontuação zerada): ticker marquee seamless com a posição do usuário em cada grupo ("1º no CLASSICO TESTE | 2º no COPA TESTE"), usando `SingleChildScrollView` horizontal + conteúdo duplicado (jumpTo invisível). Pontuação Clássico (★) à esquerda e Copa (🏆) à direita. Card aparece somente após algum resultado ser registrado (pontuação > 0)
 - Título da aba Home: `'CRAVA AÍ!'` (antes `'COPA 2026'`, alterado em `menu_principal.dart`)
 - Seção "JOGOS DE HOJE": label compacto + carrossel horizontal com `_CardJogo` (AO VIVO / ENCERRADO). Estado vazio exibido como linha inline (ícone + texto). Sem botão "VER TODOS"
-- Cards de ação (dois lado a lado + um full-width): 🎯 PALPITES (verde), 🏆 RANKING (amarelo), ⭐ PALPITES ESPECIAIS (dourado — navega para `TelaPalpitesEspeciais`)
+- 3 cards de ação em coluna vertical, mesma largura (full-width menos 32dp): PALPITES, RANKING, PALPITES ESPECIAIS. Cada card usa `_CardAcao` com imagem de fundo (`assets/background-cards/` via `DecorationImage` + `BoxFit.cover`), texto branco em `GoogleFonts.anybody` sem emoji. Navega para índice 1, 2 e `TelaPalpitesEspeciais` respectivamente.
 - Callback `onNavegar` recebido do `MenuPrincipal`
 
 ### `tela_tabela.dart` — implementada

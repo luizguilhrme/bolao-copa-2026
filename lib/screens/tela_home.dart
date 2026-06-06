@@ -308,35 +308,23 @@ class _TelaHomeState extends State<TelaHome> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: _CardAcao(
-                    emoji: '🎯',
-                    titulo: 'PALPITES',
-                    corFundo: Cores.verdePrincipal,
-                    corTexto: Colors.white,
-                    onTap: () => widget.onNavegar(1),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _CardAcao(
-                    emoji: '🏆',
-                    titulo: 'RANKING',
-                    corFundo: Cores.secondaryContainer,
-                    corTexto: Cores.onSecondaryContainer,
-                    onTap: () => widget.onNavegar(2),
-                  ),
-                ),
-              ],
-            ),
+          _CardAcao(
+            titulo: 'PALPITES',
+            imagemAsset: 'assets/background-cards/br.png',
+            onTap: () => widget.onNavegar(1),
           ),
           const SizedBox(height: 12),
-          _CardEspeciais(
+          _CardAcao(
+            titulo: 'RANKING',
+            imagemAsset: 'assets/background-cards/r9.png',
+            onTap: () => widget.onNavegar(2),
+          ),
+          const SizedBox(height: 12),
+          _CardAcao(
+            titulo: 'PALPITES ESPECIAIS',
+            imagemAsset: 'assets/background-cards/2022.png',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
                   builder: (_) => const TelaPalpitesEspeciais()),
@@ -711,45 +699,47 @@ class _ChipEncerrado extends StatelessWidget {
 
 class _CardAcao extends StatelessWidget {
   const _CardAcao({
-    required this.emoji,
     required this.titulo,
-    required this.corFundo,
-    required this.corTexto,
+    required this.imagemAsset,
     required this.onTap,
   });
 
-  final String emoji;
   final String titulo;
-  final Color corFundo;
-  final Color corTexto;
+  final String imagemAsset;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: corFundo,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(emoji, style: const TextStyle(fontSize: 30)),
-              const SizedBox(height: 10),
-              Text(
-                titulo,
-                style: GoogleFonts.anybody(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  fontStyle: FontStyle.italic,
-                  color: corTexto,
+      child: Ink(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          image: DecorationImage(
+            image: AssetImage(imagemAsset),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  titulo,
+                  style: GoogleFonts.anybody(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.white,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -757,42 +747,3 @@ class _CardAcao extends StatelessWidget {
   }
 }
 
-// ─── Card de Palpites Especiais ───────────────────────────────────────────────
-
-class _CardEspeciais extends StatelessWidget {
-  const _CardEspeciais({required this.onTap});
-  final VoidCallback onTap;
-
-  static const _corOuro = Color(0xFFB8860B);
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: _corOuro,
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('⭐', style: TextStyle(fontSize: 24)),
-              const SizedBox(width: 12),
-              Text(
-                'PALPITES ESPECIAIS',
-                style: GoogleFonts.anybody(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  fontStyle: FontStyle.italic,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
