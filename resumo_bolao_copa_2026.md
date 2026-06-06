@@ -51,7 +51,8 @@ C:\bolao\
       menu_principal.dart     ← shell com drawer lateral, AppBar, IndexedStack, NavigationBar;
                                  inicializa FCM; deep linking via notificação (onMessageOpenedApp,
                                  getInitialMessage); SnackBar com botão VER em foreground
-      tela_home.dart          ← jogos de hoje (Firestore) + bento grid de navegação
+      tela_home.dart          ← hero card verde com ranking/pontuação + carrossel de jogos
+                                 do dia + cards de ação (Palpites, Ranking, Palpites Especiais)
       tela_login.dart         ← login e cadastro com design do Stitch; Google Sign-In com account linking
       tela_setup_perfil.dart  ← seleção de avatar no primeiro acesso (pós-cadastro);
                                  nome pré-preenchido com displayName do Google
@@ -506,17 +507,11 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 - Nome pré-preenchido com `user.displayName` (Google) quando disponível
 
 ### `tela_home.dart` — implementada
-- Carrossel de jogos do dia (Firestore) com chip AO VIVO
-- Jogos com placar já inserido vão para o final do carrossel; chip "ENCERRADO" (bolinha cinza) e placar real exibido
-- AO VIVO exibe "0 – 0" (nunca exibe null); aviso "O placar é atualizado somente ao final da partida." abaixo do carrossel
-- Bento grid de navegação: MEUS PALPITES, CLASSIFICAÇÃO, CAMPEÃO & ARTILHEIRO, TODOS OS JOGOS
-- Card CAMPEÃO & ARTILHEIRO (azul) abre `_DialogPalpiteEspecial`:
-  - Campo de texto livre para artilheiro
-  - Lista rolável com todos os 48 times (ordenados por nome em PT) com bandeiras para seleção do campeão
-  - Bloqueio quando `palpitesTravados=true` em `config/copa2026`
-  - Pré-preenche com palpites já salvos no Firestore
+- **Hero card verde** (oculto quando sem grupos ou pontuação zerada): ticker marquee seamless com a posição do usuário em cada grupo ("1º no CLASSICO TESTE | 2º no COPA TESTE"), usando `SingleChildScrollView` horizontal + conteúdo duplicado (jumpTo invisível). Pontuação Clássico (★) à esquerda e Copa (🏆) à direita. Card aparece somente após algum resultado ser registrado (pontuação > 0)
+- Título da aba Home: `'CRAVA AÍ!'` (antes `'COPA 2026'`, alterado em `menu_principal.dart`)
+- Seção "JOGOS DE HOJE": label compacto + carrossel horizontal com `_CardJogo` (AO VIVO / ENCERRADO). Estado vazio exibido como linha inline (ícone + texto). Sem botão "VER TODOS"
+- Cards de ação (dois lado a lado + um full-width): 🎯 PALPITES (verde), 🏆 RANKING (amarelo), ⭐ PALPITES ESPECIAIS (dourado — navega para `TelaPalpitesEspeciais`)
 - Callback `onNavegar` recebido do `MenuPrincipal`
-- Cards exibem bandeiras reais (`Bandeira`) e nome completo em português (`nomePtDe`)
 
 ### `tela_tabela.dart` — implementada
 - Tabs "Próximos" / "Encerrados" com `AnimatedContainer`
