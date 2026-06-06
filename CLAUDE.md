@@ -73,7 +73,7 @@ Special bets: Campeão +500 | Artilheiro +300 | Melhor Jogador +300 | Melhor Gol
 
 - All identifiers, comments, and UI strings are in **Brazilian Portuguese**.
 - Utility functions in `lib/utils/biblioteca.dart` are top-level (no wrapping class): `flagDe()`, `siglaDe()`, `isoDe()`, `nomePtDe()`, `formatarData()`, `formatarCriadoEm()`, `mostrarMensagem()`, `mostrarRegras()`, `calcularPontos()`, `multiplicadorFase()`, `calcularPontosComFase()`, `corPontuacao()`, `corFundoPontuacao()`, `corBordaPontuacao()`. The `Bandeira` widget is also defined there.
-- Shared dialogs and SnackBar helpers live in `lib/utils/dialogos.dart`: `mostrarSnackBarSucesso()`, `mostrarSnackBarErro()`, `mostrarSnackBarInfo()`, and the `DialogAmbiente` widget. Import this file in any screen that needs colored SnackBars or the environment selector dialog.
+- Shared dialogs and SnackBar helpers live in `lib/utils/dialogos.dart`: `mostrarSnackBarSucesso()`, `mostrarSnackBarErro()`, `mostrarSnackBarInfo()`, `DialogAmbiente`, `JogadorData` (model), and `BottomSheetJogadores` (player-picker bottom sheet with `cor:` parameter). Import this file in any screen that needs colored SnackBars, the environment selector dialog, or the player picker.
 - Color palette is entirely in `lib/utils/cores.dart` (`Cores` class — never instantiated). Primary green is `Cores.verdePrincipal`. Error red is `Cores.error` — never use `Color(0xFFBA1A1A)` directly. Badge colors: `Cores.pontExato/pontVencedorSaldo/pontVencedorUmTime/pontVencedor/pontZero/pontNegativo`. Pódio: `Cores.prata`, `Cores.bronze`.
 - Two fonts from `google_fonts`: `GoogleFonts.anybody()` for headings/labels, `GoogleFonts.hankenGrotesk()` for body text.
 - `Jogo.dataHora` is a computed getter that parses `date`+`time` strings (including UTC offset like `"15:00 UTC-4"`) into a UTC `DateTime`. Always call `.toLocal()` before displaying times to the user.
@@ -155,12 +155,10 @@ C:\bolao\
       tela_palpites_especiais.dart ← tela azul com 6 palpites especiais do usuário;
                                  Campeão/MaisGoleadora/MenosVazada: seletor de time;
                                  Artilheiro/MelhorGoleiro/MelhorJogador: seletor de
-                                 jogador via _BottomSheetJogadores (busca por nome +
-                                 chips Ver todos/seleção ativa + botão tune_rounded →
-                                 _DialogSelecaoEquipe com busca + ordenação Padrão/A-Z/Z-A
-                                 sem acentos); MelhorGoleiro pré-filtra posição GOL;
-                                 jogadores carregados de jogadores.json em _inicializar();
-                                 bloqueio exclusivamente por palpitesTravados=true
+                                 jogador via BottomSheetJogadores (dialogos.dart) com
+                                 busca por nome + PopupMenuButton de filtro por seleção
+                                 (exibe nome completo em PT); MelhorGoleiro pré-filtra
+                                 posição GOL; bloqueio exclusivamente por palpitesTravados=true
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos;
                                  dialog de palpites com filtro A–L + MATA-MATA, palpites especiais
                                  completos (6 campos) e suporte a Modo Copa com pontuação por posição;
@@ -194,7 +192,8 @@ C:\bolao\
       tela_admin_definicoes.dart ← ações: popular jogos (Teste/Produção), recalcular Reg. Clássica,
                                  recalcular Reg. Copa, limpar dados de teste, limpar órfãos;
                                  botão Travar/Destravar Palpites (grava palpitesTravados em config/copa2026)
-      tela_ajuda.dart         ← FAQ estático
+      tela_ajuda.dart         ← FAQ: pontuação Modo Clássico, multiplicadores de fase,
+                                 pontuação Modo Copa, palpites especiais
     services/
       jogo_service.dart       ← popularJogosNoFirestore({bool teste}), buscarTodos, buscarPorData
       usuario_service.dart    ← criarPerfil, buscarPorUid, observarUsuario,
@@ -215,7 +214,9 @@ C:\bolao\
       biblioteca.dart         ← funções utilitárias top-level (flagDe, siglaDe,
                                  formatarData, mostrarMensagem, ehPlaceholder,
                                  calcularPontos, multiplicadorFase, calcularPontosComFase)
-      avatares.dart           ← lista kJogadores + widgets WidgetAvatar e CardAvatar
+      avatares.dart           ← lista kJogadores + widgets WidgetAvatar e CardAvatar;
+                                 CardAvatar é StatefulWidget com animação 3D flip para
+                                 "avatares secretos" (long-press abre foto alternativa *2.jpg)
   web/
     index.html              ← meta tags PWA iOS (apple-mobile-web-app-capable etc)
     manifest.json           ← PWA manifest (nome "Bolão Copa 2026", tema #006D32)
@@ -618,7 +619,7 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 - Banner de bloqueio quando a Copa já começou
 - 6 palpites: Campeão (seletor de time), Artilheiro (seletor de jogador), Melhor Goleiro (seletor de jogador — pré-filtrado para `posicao == 'GOL'`), Melhor Jogador (seletor de jogador), Equipe Mais Goleadora (seletor de time), Equipe Menos Vazada (seletor de time)
 - Seletores de time: `_BottomSheetTimes` com `DraggableScrollableSheet` + busca
-- Seletores de jogador: `_BottomSheetJogadores` com campo de busca por nome + linha de chips `[Ver todos]` / chip da seleção ativa / botão `Icons.tune_rounded`; botão abre `_DialogSelecaoEquipe` com busca por nome + chips de ordenação Padrão / A-Z ↑ / A-Z ↓ (comparação sem acento via `_norm`)
+- Seletores de jogador: `BottomSheetJogadores` (de `dialogos.dart`, `cor: Cores.azulTerciario`) com campo de busca por nome + `PopupMenuButton` pill-chip de filtro por seleção (exibe nome completo em PT no estado fechado)
 - Jogadores carregados de `assets/dados/jogadores.json` via `rootBundle.loadString()` em `_inicializar()`, em paralelo com Firestore; cada item da lista exibe bandeira da seleção + nome do jogador + seleção · clube
 - Artilheiro obrigatório; Melhor Goleiro e Melhor Jogador opcionais
 - Botão "SALVAR PALPITES" azul fixo no rodapé
@@ -673,7 +674,7 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 
 ### `tela_admin_especiais.dart` — implementada
 - Resultados reais na mesma ordem da tela do usuário: Campeão (seletor de time), Artilheiro (seletor de jogador), Melhor Goleiro (seletor — só GOL), Melhor Jogador (seletor de jogador), Equipe Mais Goleadora (seletor de time), Equipe Menos Vazada (seletor de time)
-- Seletores de jogador usam `_BottomSheetJogadores` (busca por nome + filtro por seleção com `_DialogSelecaoEquipe` + chips de ordenação) e carregam `jogadores.json` em paralelo com o Firestore no `initState`
+- Seletores de jogador usam `BottomSheetJogadores` (de `dialogos.dart`, `cor: Cores.verdePrincipal`); `_DialogSeletorTime` para seleção de time (dialog interno)
 - Botão SALVAR grava em `config/copa2026`
 - Botão CALCULAR chama `calcularPalpitesEspeciais` (irreversível; desabilitado após execução)
 
@@ -690,7 +691,7 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 - Toggles: lembrete de palpite / mudança no ranking
 
 ### `tela_ajuda.dart` — implementada
-- FAQ estático com `ExpansionTile` e badges de pontuação
+- FAQ com `ExpansionTile` e badges de pontuação: seção MODO CLÁSSICO (tabela de pontos + card de multiplicadores de fase), seção MODO COPA (regras de classificação), seção PALPITES ESPECIAIS
 
 ---
 
@@ -704,7 +705,9 @@ const kJogadores = [
 ];
 
 WidgetAvatar(avatarId: usuario.avatar, nome: usuario.nome, tamanho: 64)
-CardAvatar(jogador: jogador, selecionado: true, onTap: () { ... })
+// interface nova (StatefulWidget com flip):
+CardAvatar(jogador: jogador, avatarSelecionadoId: _avatarSelecionado, onTap: (id) { ... })
+// Long-press revela foto alternativa (assets/avatares/{id}2.jpg) com animação 3D flip
 ```
 
 ---

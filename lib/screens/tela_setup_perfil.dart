@@ -220,8 +220,8 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
                     final jogador = kJogadores[index];
                     return CardAvatar(
                       jogador: jogador,
-                      selecionado: _avatarSelecionado == jogador.id,
-                      onTap: () => setState(() => _avatarSelecionado = jogador.id),
+                      avatarSelecionadoId: _avatarSelecionado,
+                      onTap: (id) => setState(() => _avatarSelecionado = id),
                     );
                   },
                 ),

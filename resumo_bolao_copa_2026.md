@@ -64,10 +64,10 @@ C:\bolao\
                                  banner verde no topo quando palpitesTravados=true
       tela_palpites_especiais.dart ← 6 palpites especiais; Campeão/MaisGoleadora/MenosVazada:
                                  seletor de time; Artilheiro/MelhorGoleiro/MelhorJogador:
-                                 seletor de jogador com busca por nome + filtro por seleção
-                                 (dialog com ordenação A-Z/Z-A sem acento); MelhorGoleiro
-                                 pré-filtra posição GOL; jogadores de jogadores.json;
-                                 bloqueio exclusivamente por palpitesTravados=true
+                                 seletor de jogador via BottomSheetJogadores (dialogos.dart,
+                                 cor: azulTerciario) com busca por nome + PopupMenuButton
+                                 de filtro por seleção (nome completo em PT); MelhorGoleiro
+                                 pré-filtra posição GOL; bloqueio por palpitesTravados=true
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos;
                                  dialog de palpites via CF buscarPalpitesUsuario (valida grupo em comum);
                                  filtro A–L + MATA-MATA, palpites especiais completos (6 campos)
@@ -88,11 +88,13 @@ C:\bolao\
                                  ao salvar, atualiza automaticamente team1/team2 dos jogos 73–88
       tela_admin_especiais.dart ← resultados reais na mesma ordem da tela do usuário: Campeão,
                                  Artilheiro, Melhor Goleiro, Melhor Jogador, Mais Goleadora,
-                                 Menos Vazada; seletores de time e jogador idênticos à tela do
-                                 usuário (cores verdes); botão SALVAR + botão CALCULAR
+                                 Menos Vazada; seletor de jogador via BottomSheetJogadores
+                                 (dialogos.dart, cor: verdePrincipal); seletor de time via
+                                 _DialogSeletorTime (interno); botão SALVAR + botão CALCULAR
       tela_admin_definicoes.dart ← popular jogos, recalcular regras, limpar dados de teste, limpar órfãos;
                                  botão Travar/Destravar Palpites (grava palpitesTravados em config/copa2026)
-      tela_ajuda.dart         ← FAQ estático
+      tela_ajuda.dart         ← FAQ: pontuação Modo Clássico + multiplicadores de fase,
+                                 pontuação Modo Copa, palpites especiais
     services/
       jogo_service.dart       ← popularJogosNoFirestore({bool teste}), buscarTodos, buscarPorData
       usuario_service.dart    ← criarPerfil, buscarPorUid, observarUsuario,
@@ -114,9 +116,12 @@ C:\bolao\
                                  mostrarRegras, ehPlaceholder, calcularPontos, multiplicadorFase,
                                  calcularPontosComFase, corPontuacao, corFundoPontuacao,
                                  corBordaPontuacao; widget Bandeira
-      dialogos.dart           ← helpers de SnackBar (mostrarSnackBarSucesso/Erro/Info) e
-                                 widget DialogAmbiente (seleção Produção/Teste)
-      avatares.dart           ← lista kJogadores + widgets WidgetAvatar e CardAvatar
+      dialogos.dart           ← helpers de SnackBar (mostrarSnackBarSucesso/Erro/Info),
+                                 DialogAmbiente (seleção Produção/Teste), JogadorData (model)
+                                 e BottomSheetJogadores (seletor de jogador com cor:)
+      avatares.dart           ← lista kJogadores + widgets WidgetAvatar e CardAvatar;
+                                 CardAvatar é StatefulWidget com flip 3D para avatares secretos
+                                 (long-press revela foto *2.jpg)
   web/
     index.html              ← meta tags PWA iOS (apple-mobile-web-app-capable etc)
     manifest.json           ← PWA manifest (nome "Bolão - Crava aí!", tema #006D32)
@@ -575,8 +580,10 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 - Auto-save a cada toggle
 
 ### `tela_ajuda.dart` — implementada
-- FAQ estático com perguntas e respostas expansíveis
-- Seção de pontuação com badges coloridos e exemplos
+- FAQ com `ExpansionTile` e badges de pontuação
+- Seção PONTUAÇÃO — MODO CLÁSSICO: tabela de pontos + card de multiplicadores de fase
+- Seção PONTUAÇÃO — MODO COPA: regras de classificação de grupos
+- Seção PALPITES ESPECIAIS: lista de premiações
 
 ---
 
@@ -593,8 +600,10 @@ const kJogadores = [
 // Exibe foto do jogador em círculo; fallback: inicial do nome
 WidgetAvatar(avatarId: usuario.avatar, nome: usuario.nome, tamanho: 64)
 
-// Card de seleção com borda verde e check quando selecionado
-CardAvatar(jogador: jogador, selecionado: true, onTap: () { ... })
+// Card de seleção com borda verde, check quando selecionado e flip 3D em long-press
+// Interface nova (StatefulWidget):
+CardAvatar(jogador: jogador, avatarSelecionadoId: _avatarSelecionado, onTap: (id) { ... })
+// Long-press revela assets/avatares/{id}2.jpg se existir
 ```
 
 `WidgetAvatar` aceita `corFundo`, `corTexto`, `borderColor` e `borderWidth` para se adaptar ao drawer (fundo verde-claro) e ao perfil (fundo verde-escuro).
