@@ -2223,7 +2223,7 @@ class _LinhaResultadoCopa extends StatelessWidget {
   (IconData, Color, int) get _indicador {
     if (timePalpite == null) return (Icons.remove, Cores.outlineVariant, 0);
     if (timeReal != null && timePalpite == timeReal) return (Icons.check_rounded, Cores.verdePrincipal, 200);
-    if (classificadosReais.contains(timePalpite)) return (Icons.swap_horiz_rounded, const Color(0xFFB8860B), 100);
+    if (classificadosReais.contains(timePalpite)) return (Icons.swap_horiz_rounded, Cores.ouro, 100);
     return (Icons.close_rounded, Cores.error, 0);
   }
 

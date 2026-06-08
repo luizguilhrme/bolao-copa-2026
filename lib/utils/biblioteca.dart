@@ -476,7 +476,7 @@ class _BottomSheetRegrasState extends State<_BottomSheetRegras>
   Color get _corAba {
     switch (_tabController.index) {
       case 1:  return Cores.azulTerciario;
-      case 2:  return const Color(0xFFB8860B);
+      case 2:  return Cores.ouro;
       default: return Cores.verdePrincipal;
     }
   }
@@ -857,7 +857,7 @@ class _LinhaEspecial extends StatelessWidget {
   final String label;
   final String pontos;
 
-  static const _cor = Color(0xFFB8860B);
+  static const _cor = Cores.ouro;
 
   @override
   Widget build(BuildContext context) {

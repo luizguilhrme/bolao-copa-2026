@@ -74,7 +74,7 @@ Special bets: Campeão do Mundo +500 | Chuteira de Ouro +300 | Bola de Ouro +300
 - All identifiers, comments, and UI strings are in **Brazilian Portuguese**.
 - Utility functions in `lib/utils/biblioteca.dart` are top-level (no wrapping class): `flagDe()`, `siglaDe()`, `isoDe()`, `nomePtDe()`, `formatarData()`, `formatarCriadoEm()`, `mostrarMensagem()`, `mostrarRegras()`, `calcularPontos()`, `multiplicadorFase()`, `calcularPontosComFase()`, `corPontuacao()`, `corFundoPontuacao()`, `corBordaPontuacao()`. The `Bandeira` widget is also defined there.
 - Shared dialogs and SnackBar helpers live in `lib/utils/dialogos.dart`: `mostrarSnackBarSucesso()`, `mostrarSnackBarErro()`, `mostrarSnackBarInfo()`, `DialogAmbiente`, `JogadorData` (model), and `BottomSheetJogadores` (player-picker bottom sheet with `cor:` parameter). Import this file in any screen that needs colored SnackBars, the environment selector dialog, or the player picker.
-- Color palette is entirely in `lib/utils/cores.dart` (`Cores` class — never instantiated). Primary green is `Cores.verdePrincipal`. Error red is `Cores.error` — never use `Color(0xFFBA1A1A)` directly. Badge colors: `Cores.pontExato/pontVencedorSaldo/pontVencedorUmTime/pontVencedor/pontZero/pontNegativo`. Pódio: `Cores.prata`, `Cores.bronze`.
+- Color palette is entirely in `lib/utils/cores.dart` (`Cores` class — never instantiated). Primary green is `Cores.verdePrincipal`. Error red is `Cores.error` — never use `Color(0xFFBA1A1A)` directly. Badge colors: `Cores.pontExato/pontVencedorSaldo/pontVencedorUmTime/pontVencedor/pontZero/pontNegativo`. Pódio: `Cores.ouro`, `Cores.prata`, `Cores.bronze`. Never use `Color(0xFFB8860B)` diretamente — use `Cores.ouro`.
 - Two fonts from `google_fonts`: `GoogleFonts.anybody()` for headings/labels, `GoogleFonts.hankenGrotesk()` for body text.
 - `Jogo.dataHora` is a computed getter that parses `date`+`time` strings (including UTC offset like `"15:00 UTC-4"`) into a UTC `DateTime`. Always call `.toLocal()` before displaying times to the user.
 - `Palpite.docId` is the compound key `{uid}_{jogoId}` used as the Firestore document ID.
@@ -286,9 +286,9 @@ Cores.outline                 = Color(0xFF6C7B6C)
 `MenuPrincipal` é um **shell** — só gerencia a navegação. Contém:
 
 - `Drawer` lateral com perfil do usuário, menu e seção admin (condicional)
-- `AppBar` com ícone de menu (abre drawer) + título dinâmico + botão de regras
-- `IndexedStack` com as 4 telas como filhos (scroll preservado entre abas)
-- `NavigationBar` (Material 3) com 4 destinos
+- `AppBar` fundo branco (`Colors.white`), ícone de menu + título dinâmico (verde) + botão de regras
+- `IndexedStack` com as 4 telas como filhos (scroll preservado entre abas); `Scaffold` com `backgroundColor: Colors.transparent` sobre `Container(color: Cores.background)`
+- `NavigationBar` (Material 3) com fundo `Cores.verdePrincipal`, ícones/labels brancos (70% alpha quando não selecionados), indicador `Cores.secondaryContainer`, ícone selecionado `Cores.verdePrincipal`; estilizado via `NavigationBarTheme`
 
 ```dart
 // O leading usa Builder para acessar o Scaffold correto
@@ -301,7 +301,7 @@ leading: Builder(
 ```
 
 ### Drawer lateral
-- Cabeçalho com GIF animado de fundo (`assets/background-cards/cabecalho.gif`, `BoxFit.cover`) e conteúdo sobreposto via `Stack`: avatar, nome e pontuação via `StreamBuilder<Usuario?>`
+- Cabeçalho com GIF animado de fundo (`assets/background-cards/cabecalho.gif`, `BoxFit.cover`) e conteúdo sobreposto via `Stack`: card glassmorphism (`ClipRRect` + `BackdropFilter` blur 10px + fundo `Colors.white` 18% alpha + borda 35% alpha) envolvendo avatar, nome e pontuação Clássico via `StreamBuilder<Usuario?>`
 - Seção "CONTA": Meu Perfil → `TelaPerfil`; Notificações → `TelaNotificacoes`
 - Seção "GRUPOS": Meus Grupos → `TelaGrupos`
 - Seção "ADMIN" (só para `isAdmin == true`), 4 itens:
@@ -619,14 +619,14 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 ### `tela_palpites_especiais.dart` — implementada
 - Tela completa com AppBar azul (`Cores.azulTerciario`)
 - Banner de bloqueio quando a Copa já começou
-- AppBar dourada (`Color(0xFFB8860B)`)
-- 5 palpites com estrutura: **Campeão do Mundo** (seletor de time) + header **"PREMIAÇÕES OFICIAIS FIFA"** + **Chuteira de Ouro** (jogador), **Bola de Ouro** (jogador), **Luva de Ouro** (jogador — pré-filtrado `posicao == 'GOL'`), **Melhor Jogador Jovem** (jogador)
+- AppBar dourada (`Cores.ouro`)
+- 5 palpites com estrutura: **Campeão do Mundo** (seletor de time, fora do card FIFA) + **card dourado "PREMIAÇÕES OFICIAIS FIFA"** (`Cores.ouro` 8% alpha + borda 25% alpha) envolvendo os 4 prêmios: **Chuteira de Ouro**, **Bola de Ouro**, **Luva de Ouro** (pré-filtrada `posicao == 'GOL'`), **Melhor Jogador Jovem**
 - Cada prêmio FIFA tem ícone "?" na margem direita que abre um `AlertDialog` explicando o prêmio
 - Seletor de time: `_BottomSheetTimes` com `DraggableScrollableSheet` + busca
-- Seletores de jogador: `BottomSheetJogadores` (de `dialogos.dart`, `cor: Color(0xFFB8860B)`) com busca por nome + filtro por seleção
+- Seletores de jogador: `BottomSheetJogadores` (de `dialogos.dart`, `cor: Cores.ouro`) com busca por nome + filtro por seleção
 - Jogadores carregados de `assets/dados/jogadores.json` via `rootBundle.loadString()` em `_inicializar()`, em paralelo com Firestore
 - Apenas campeão obrigatório; demais opcionais
-- Botão "SALVAR PALPITES" dourado fixo no rodapé
+- Botão "SALVAR PALPITES" dourado fixo no rodapé (`Cores.ouro`)
 - Salva via `UsuarioService.salvarPalpitesEspeciais()`
 
 ### `tela_tabela.dart` — implementada
@@ -652,7 +652,7 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 
 ### `tela_ranking.dart` — implementada
 - Ranking filtrado por grupo (sem ranking global)
-- Pódio top 3 + lista 4º em diante
+- Pódio top 3 + lista 4º em diante; 1º lugar usa `Cores.ouro` (corBorda e corBase), 2º `Cores.prata`, 3º `Cores.bronze`
 - Dialog com histórico de palpites do usuário via Cloud Function `buscarPalpitesUsuario`: verifica grupo em comum entre solicitante e alvo, retorna palpites clássicos + Copa; suporte a filtro A–L + MATA-MATA, palpites especiais completos (6 campos) e Modo Copa com pontuação por posição; palpites Copa e Especiais ocultos até palpitesTravados=true
 - Usa `calcularPontosComFase` com multiplicador de fase correto
 - Desempate 3 (campeão) e desempate 4 (artilheiro) ambos usam comparação case-insensitive + trim()
@@ -690,6 +690,7 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 
 ### `tela_perfil.dart` — implementada
 - Exibe avatar com botão de troca; edição de nome; alterar senha; excluir conta
+- Card de pontuação verde exibe Clássico (★ amarelo) à esquerda e Copa (🏆) à direita, seguindo o mesmo padrão visual do hero card da `tela_home.dart`
 
 ### `tela_notificacoes.dart` — implementada
 - Toggles: lembrete de palpite / mudança no ranking

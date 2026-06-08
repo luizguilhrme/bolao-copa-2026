@@ -45,6 +45,7 @@ class Cores {
   static const Color pontNegativo       = Color(0xFFE53935); // negativo
 
   // ── Pódio ─────────────────────────────────────────────────────────
+  static const Color ouro   = Color(0xFFC69E3B);
   static const Color prata  = Color(0xFFC0C0C0);
   static const Color bronze = Color(0xFFCD7F32);
 }

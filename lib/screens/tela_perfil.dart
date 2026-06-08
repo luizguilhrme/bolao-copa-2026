@@ -230,32 +230,90 @@ class _PerfilConteudoState extends State<_PerfilConteudo> {
 
         // Card de pontuação
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           decoration: BoxDecoration(
             color: Cores.verdePrincipal,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Row(
             children: [
-              const Icon(Icons.emoji_events_rounded, color: Colors.white, size: 32),
-              const SizedBox(width: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Pontuação total',
-                    style: GoogleFonts.hankenGrotesk(fontSize: 13, color: Colors.white70),
-                  ),
-                  Text(
-                    '${usuario.pontuacaoClassicaTotal} pts',
-                    style: GoogleFonts.anybody(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      height: 1.1,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.stars_rounded,
+                            color: Color(0xFFFCD400), size: 20),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            '${usuario.pontuacaoClassicaTotal}',
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.anybody(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Text('pts',
+                            style: TextStyle(
+                                fontSize: 13, color: Colors.white70)),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Clássico',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white60,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        const Text('🏆', style: TextStyle(fontSize: 18)),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            '${usuario.pontuacaoCopaTotal}',
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.anybody(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Text('pts',
+                            style: TextStyle(
+                                fontSize: 13, color: Colors.white70)),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Copa',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white60,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

@@ -78,15 +78,24 @@ class _TelaHomeState extends State<TelaHome> {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 88),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildHeroCard(),
-          const SizedBox(height: 20),
-          _buildSecaoJogos(),
-          const SizedBox(height: 20),
-          _buildAcoes(),
-        ],
+      child: FutureBuilder<List<Jogo>>(
+        future: _jogosDeHoje,
+        builder: (context, snap) {
+          final jogosHoje =
+              (snap.hasData && snap.data!.isNotEmpty) ? snap.data! : null;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildHeroCard(),
+              const SizedBox(height: 20),
+              if (jogosHoje != null) ...[
+                _buildSecaoJogos(jogosHoje),
+                const SizedBox(height: 20),
+              ],
+              _buildAcoes(),
+            ],
+          );
+        },
       ),
     );
   }
@@ -115,6 +124,7 @@ class _TelaHomeState extends State<TelaHome> {
 
             final hasClassico = ranks.any((r) => r.regra == 'classico');
             final hasCopa = ranks.any((r) => r.regra == 'copa');
+            final hasBoth = hasClassico && hasCopa;
             final ptsClassico = usuario.pontuacaoClassicaTotal;
             final ptsCopa = usuario.pontuacaoCopaTotal;
             final tickerItems =
@@ -134,62 +144,90 @@ class _TelaHomeState extends State<TelaHome> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      // Clássico — metade esquerda
                       if (hasClassico)
                         Expanded(
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.stars_rounded,
-                                  color: Color(0xFFFCD400), size: 20),
-                              const SizedBox(width: 5),
-                              Flexible(
-                                child: Text(
-                                  '$ptsClassico',
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.anybody(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white,
-                                    height: 1,
+                              Row(
+                                children: [
+                                  const Icon(Icons.stars_rounded,
+                                      color: Color(0xFFFCD400), size: 20),
+                                  const SizedBox(width: 5),
+                                  Flexible(
+                                    child: Text(
+                                      '$ptsClassico',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.anybody(
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.white,
+                                        height: 1,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(width: 4),
+                                  const Text('pts',
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.white70)),
+                                ],
                               ),
-                              const SizedBox(width: 4),
-                              const Text('pontos',
-                                  style: TextStyle(
-                                      fontSize: 13, color: Colors.white70)),
+                              const SizedBox(height: 3),
+                              const Text(
+                                'Clássico',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white60,
+                                    fontWeight: FontWeight.w500),
+                              ),
                             ],
                           ),
-                        )
-                      else
-                        // Copa-only: empurra para a direita
-                        const Spacer(),
-                      // Copa — metade direita, alinhada à direita
+                        ),
                       if (hasCopa)
                         Expanded(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
+                          child: Column(
+                            crossAxisAlignment: hasBoth
+                                ? CrossAxisAlignment.end
+                                : CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text('🏆',
-                                  style: TextStyle(fontSize: 18)),
-                              const SizedBox(width: 5),
-                              Flexible(
-                                child: Text(
-                                  '$ptsCopa',
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.anybody(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white,
-                                    height: 1,
+                              Row(
+                                mainAxisAlignment: hasBoth
+                                    ? MainAxisAlignment.end
+                                    : MainAxisAlignment.start,
+                                children: [
+                                  const Text('🏆',
+                                      style: TextStyle(fontSize: 18)),
+                                  const SizedBox(width: 5),
+                                  Flexible(
+                                    child: Text(
+                                      '$ptsCopa',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.anybody(
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.white,
+                                        height: 1,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(width: 4),
+                                  const Text('pts',
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.white70)),
+                                ],
                               ),
-                              const SizedBox(width: 4),
-                              const Text('pontos',
-                                  style: TextStyle(
-                                      fontSize: 13, color: Colors.white70)),
+                              const SizedBox(height: 3),
+                              const Text(
+                                'Copa',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white60,
+                                    fontWeight: FontWeight.w500),
+                              ),
                             ],
                           ),
                         ),
@@ -206,7 +244,15 @@ class _TelaHomeState extends State<TelaHome> {
 
   // ── Jogos de hoje ──────────────────────────────────────────────────────────
 
-  Widget _buildSecaoJogos() {
+  Widget _buildSecaoJogos(List<Jogo> jogos) {
+    final ordenados = jogos.toList()
+      ..sort((a, b) {
+        final aEnc = a.placar1 != null ? 1 : 0;
+        final bEnc = b.placar1 != null ? 1 : 0;
+        if (aEnc != bEnc) return aEnc - bEnc;
+        return a.dataHora.compareTo(b.dataHora);
+      });
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -222,80 +268,28 @@ class _TelaHomeState extends State<TelaHome> {
             ),
           ),
           const SizedBox(height: 10),
-          FutureBuilder<List<Jogo>>(
-            future: _jogosDeHoje,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const SizedBox(
-                  height: 110,
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              if (snapshot.hasError) {
-                return SizedBox(
-                  height: 40,
-                  child: Center(
-                    child: Text('Erro ao carregar jogos.',
-                        style:
-                            TextStyle(color: Cores.onSurfaceVariant)),
-                  ),
-                );
-              }
-              final jogos = snapshot.data ?? [];
-              if (jogos.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.sports_soccer,
-                          size: 16, color: Cores.outlineVariant),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Nenhum jogo hoje.',
-                        style: TextStyle(
-                            fontSize: 13, color: Cores.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              final ordenados = jogos.toList()
-                ..sort((a, b) {
-                  final aEnc = a.placar1 != null ? 1 : 0;
-                  final bEnc = b.placar1 != null ? 1 : 0;
-                  if (aEnc != bEnc) return aEnc - bEnc;
-                  return a.dataHora.compareTo(b.dataHora);
-                });
-              return Column(
-                children: [
-                  SizedBox(
-                    height: 168,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      clipBehavior: Clip.none,
-                      itemCount: ordenados.length,
-                      separatorBuilder: (_, __) =>
-                          const SizedBox(width: 12),
-                      itemBuilder: (_, i) =>
-                          _CardJogo(jogo: ordenados[i]),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(Icons.info_outline_rounded,
-                          size: 13, color: Cores.onSurfaceVariant),
-                      const SizedBox(width: 5),
-                      Text(
-                        'O placar é atualizado somente ao final da partida.',
-                        style: TextStyle(
-                            fontSize: 11.5, color: Cores.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
+          SizedBox(
+            height: 168,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
+              itemCount: ordenados.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (_, i) => _CardJogo(jogo: ordenados[i]),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.info_outline_rounded,
+                  size: 13, color: Cores.onSurfaceVariant),
+              const SizedBox(width: 5),
+              Text(
+                'O placar é atualizado somente ao final da partida.',
+                style:
+                    TextStyle(fontSize: 11.5, color: Cores.onSurfaceVariant),
+              ),
+            ],
           ),
         ],
       ),

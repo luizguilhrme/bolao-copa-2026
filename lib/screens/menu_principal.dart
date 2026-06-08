@@ -1,4 +1,6 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'dart:ui';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -174,11 +176,13 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
       const TelaTabela(),
     ];
 
-    return StreamBuilder<Usuario?>(
-      stream: _streamUsuario,
-      builder: (context, snapshot) {
-        return Scaffold(
-          backgroundColor: Cores.background,
+    return Container(
+      color: Cores.background,
+      child: StreamBuilder<Usuario?>(
+        stream: _streamUsuario,
+        builder: (context, snapshot) {
+          return Scaffold(
+          backgroundColor: Colors.transparent,
           appBar: _buildAppBar(),
           drawer: _DrawerNav(
             usuario: snapshot.data,
@@ -193,12 +197,13 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
           bottomNavigationBar: _buildBottomNav(),
         );
       },
+    ),
     );
   }
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: Cores.surface,
+      backgroundColor: Colors.white,
       elevation: 1,
       shadowColor: Colors.black12,
       // Builder necessário: o leading precisa de um BuildContext que
@@ -237,33 +242,56 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
   }
 
   Widget _buildBottomNav() {
-    return NavigationBar(
-      backgroundColor: Cores.surfaceContainer,
-      indicatorColor: Cores.secondaryContainer,
-      selectedIndex: _indiceNav,
-      onDestinationSelected: (i) => setState(() => _indiceNav = i),
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.dashboard_outlined),
-          selectedIcon: Icon(Icons.dashboard),
-          label: 'Home',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.edit_outlined),
-          selectedIcon: Icon(Icons.edit_square),
-          label: 'Palpites',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.leaderboard_outlined),
-          selectedIcon: Icon(Icons.leaderboard),
-          label: 'Ranking',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.calendar_month_outlined),
-          selectedIcon: Icon(Icons.calendar_month),
-          label: 'Tabela',
-        ),
-      ],
+    return NavigationBarTheme(
+      data: NavigationBarThemeData(
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(color: Cores.verdePrincipal);
+          }
+          return const IconThemeData(color: Colors.white70);
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return GoogleFonts.hankenGrotesk(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            );
+          }
+          return GoogleFonts.hankenGrotesk(
+            color: Colors.white70,
+            fontSize: 12,
+          );
+        }),
+      ),
+      child: NavigationBar(
+        backgroundColor: Cores.verdePrincipal,
+        indicatorColor: Cores.secondaryContainer,
+        selectedIndex: _indiceNav,
+        onDestinationSelected: (i) => setState(() => _indiceNav = i),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.edit_outlined),
+            selectedIcon: Icon(Icons.edit_square),
+            label: 'Palpites',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.leaderboard_outlined),
+            selectedIcon: Icon(Icons.leaderboard),
+            label: 'Ranking',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.calendar_month_outlined),
+            selectedIcon: Icon(Icons.calendar_month),
+            label: 'Tabela',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -445,53 +473,70 @@ class _CabecalhoDrawer extends StatelessWidget {
         ),
         Container(
           width: double.infinity,
-          padding: EdgeInsets.fromLTRB(20, statusBarHeight + 20, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              WidgetAvatar(
-                avatarId: usuario?.avatar,
-                nome: usuario?.nome ?? '',
-                tamanho: 64,
-                corFundo: Cores.primaryContainer,
-                corTexto: Cores.verdePrincipal,
-                borderColor: Colors.white54,
-                borderWidth: 2,
-              ),
-              const SizedBox(height: 14),
-              Text(
-                usuario?.nome ?? '...',
-                style: GoogleFonts.anybody(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                  shadows: const [
-                    Shadow(color: Colors.black54, blurRadius: 6),
-                    Shadow(color: Colors.black38, blurRadius: 12),
+          padding: EdgeInsets.fromLTRB(16, statusBarHeight + 16, 16, 20),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.35),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    WidgetAvatar(
+                      avatarId: usuario?.avatar,
+                      nome: usuario?.nome ?? '',
+                      tamanho: 64,
+                      corFundo: Cores.primaryContainer,
+                      corTexto: Cores.verdePrincipal,
+                      borderColor: Colors.white54,
+                      borderWidth: 2,
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      usuario?.nome ?? '...',
+                      style: GoogleFonts.anybody(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        shadows: const [
+                          Shadow(color: Colors.black54, blurRadius: 6),
+                          Shadow(color: Colors.black38, blurRadius: 12),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.stars_rounded,
+                            color: Color(0xFFFCD400), size: 18,
+                            shadows: [Shadow(color: Colors.black54, blurRadius: 6)]),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${usuario?.pontuacaoClassicaTotal ?? 0} pts',
+                          style: GoogleFonts.hankenGrotesk(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            shadows: const [
+                              Shadow(color: Colors.black54, blurRadius: 6),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  const Icon(Icons.stars_rounded,
-                      color: Color(0xFFFCD400), size: 18,
-                      shadows: [Shadow(color: Colors.black54, blurRadius: 6)]),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${usuario?.pontuacaoClassicaTotal ?? 0} pts',
-                    style: GoogleFonts.hankenGrotesk(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      shadows: const [
-                        Shadow(color: Colors.black54, blurRadius: 6),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ],
