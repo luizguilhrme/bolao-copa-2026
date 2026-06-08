@@ -205,7 +205,7 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
       // contenha o Scaffold para chamar openDrawer().
       leading: Builder(
         builder: (ctx) => IconButton(
-          icon: const Icon(Icons.sports_soccer, color: Cores.verdePrincipal),
+          icon: const Icon(Icons.menu, color: Cores.verdePrincipal),
           tooltip: 'Menu',
           onPressed: () => Scaffold.of(ctx).openDrawer(),
         ),
@@ -435,51 +435,58 @@ class _CabecalhoDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     final statusBarHeight = MediaQuery.of(context).padding.top;
 
-    return Container(
-      width: double.infinity,
-      color: Cores.verdePrincipal,
-      padding: EdgeInsets.fromLTRB(20, statusBarHeight + 20, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          WidgetAvatar(
-            avatarId: usuario?.avatar,
-            nome: usuario?.nome ?? '',
-            tamanho: 64,
-            corFundo: Cores.primaryContainer,
-            corTexto: Cores.verdePrincipal,
-            borderColor: Colors.white54,
-            borderWidth: 2,
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Image.asset(
+            'assets/background-cards/cabecalho.gif',
+            fit: BoxFit.cover,
           ),
-          const SizedBox(height: 14),
-
-          Text(
-            usuario?.nome ?? '...',
-            style: GoogleFonts.anybody(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 4),
-
-          Row(
+        ),
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.fromLTRB(20, statusBarHeight + 20, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.stars_rounded,
-                  color: Color(0xFFFCD400), size: 18),
-              const SizedBox(width: 4),
+              WidgetAvatar(
+                avatarId: usuario?.avatar,
+                nome: usuario?.nome ?? '',
+                tamanho: 64,
+                corFundo: Cores.primaryContainer,
+                corTexto: Cores.verdePrincipal,
+                borderColor: Colors.white54,
+                borderWidth: 2,
+              ),
+              const SizedBox(height: 14),
               Text(
-                '${usuario?.pontuacaoClassicaTotal ?? 0} pts',
-                style: GoogleFonts.hankenGrotesk(
-                  fontSize: 13,
+                usuario?.nome ?? '...',
+                style: GoogleFonts.anybody(
+                  fontSize: 20,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
               ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(Icons.stars_rounded,
+                      color: Color(0xFFFCD400), size: 18),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${usuario?.pontuacaoClassicaTotal ?? 0} pts',
+                    style: GoogleFonts.hankenGrotesk(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
