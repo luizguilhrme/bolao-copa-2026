@@ -115,6 +115,7 @@ C:\bolao\
     avatares/                 ← imagens dos jogadores para seleção de avatar
     background-cards/         ← imagens de fundo dos 3 cards de ação da tela Home
                                  (br.png → PALPITES, r9.png → RANKING, 2022.png → PALPITES ESPECIAIS)
+                                 cabecalho.gif → GIF animado de fundo do cabeçalho do drawer
   functions/
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
                                  calcularPontuacao, lembretesPalpite, recalcularTudo,
@@ -285,7 +286,7 @@ Cores.outline                 = Color(0xFF6C7B6C)
 `MenuPrincipal` é um **shell** — só gerencia a navegação. Contém:
 
 - `Drawer` lateral com perfil do usuário, menu e seção admin (condicional)
-- `AppBar` com ícone da bola (abre drawer) + título dinâmico + botão de regras
+- `AppBar` com ícone de menu (abre drawer) + título dinâmico + botão de regras
 - `IndexedStack` com as 4 telas como filhos (scroll preservado entre abas)
 - `NavigationBar` (Material 3) com 4 destinos
 
@@ -293,14 +294,14 @@ Cores.outline                 = Color(0xFF6C7B6C)
 // O leading usa Builder para acessar o Scaffold correto
 leading: Builder(
   builder: (ctx) => IconButton(
-    icon: const Icon(Icons.sports_soccer),
+    icon: const Icon(Icons.menu),
     onPressed: () => Scaffold.of(ctx).openDrawer(),
   ),
 ),
 ```
 
 ### Drawer lateral
-- Cabeçalho verde com avatar do jogador selecionado, nome e pontuação via `StreamBuilder<Usuario?>`
+- Cabeçalho com GIF animado de fundo (`assets/background-cards/cabecalho.gif`, `BoxFit.cover`) e conteúdo sobreposto via `Stack`: avatar, nome e pontuação via `StreamBuilder<Usuario?>`
 - Seção "CONTA": Meu Perfil → `TelaPerfil`; Notificações → `TelaNotificacoes`
 - Seção "GRUPOS": Meus Grupos → `TelaGrupos`
 - Seção "ADMIN" (só para `isAdmin == true`), 4 itens:
