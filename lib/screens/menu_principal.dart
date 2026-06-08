@@ -465,13 +465,18 @@ class _CabecalhoDrawer extends StatelessWidget {
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
+                  shadows: const [
+                    Shadow(color: Colors.black54, blurRadius: 6),
+                    Shadow(color: Colors.black38, blurRadius: 12),
+                  ],
                 ),
               ),
               const SizedBox(height: 4),
               Row(
                 children: [
                   const Icon(Icons.stars_rounded,
-                      color: Color(0xFFFCD400), size: 18),
+                      color: Color(0xFFFCD400), size: 18,
+                      shadows: [Shadow(color: Colors.black54, blurRadius: 6)]),
                   const SizedBox(width: 4),
                   Text(
                     '${usuario?.pontuacaoClassicaTotal ?? 0} pts',
@@ -479,6 +484,9 @@ class _CabecalhoDrawer extends StatelessWidget {
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
+                      shadows: const [
+                        Shadow(color: Colors.black54, blurRadius: 6),
+                      ],
                     ),
                   ),
                 ],
