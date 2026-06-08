@@ -170,7 +170,7 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
         jogadores: _jogadores,
         selecionadoAtual: selecionadoAtual,
         apenasGoleiros: apenasGoleiros,
-        cor: const Color(0xFFB8860B),
+        cor: Cores.ouro,
         onSelecionado: (nome) {
           onSelecionado(nome);
           Navigator.of(context).pop();
@@ -208,7 +208,7 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
               'OK',
               style: GoogleFonts.anybody(
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFFB8860B),
+                color: Cores.ouro,
               ),
             ),
           ),
@@ -222,7 +222,7 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
     return Scaffold(
       backgroundColor: Cores.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFB8860B),
+        backgroundColor: Cores.ouro,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
@@ -242,7 +242,7 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
       ),
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFB8860B)))
+              child: CircularProgressIndicator(color: Cores.ouro))
           : Column(
               children: [
                 if (_bloqueado)
@@ -250,17 +250,17 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 10),
-                    color: const Color(0xFFB8860B).withValues(alpha: 0.12),
+                    color: Cores.ouro.withValues(alpha: 0.12),
                     child: Row(
                       children: [
                         const Icon(Icons.lock_rounded,
-                            size: 16, color: Color(0xFFB8860B)),
+                            size: 16, color: Cores.ouro),
                         const SizedBox(width: 8),
                         Text(
                           'Bloqueado — a Copa já começou.',
                           style: GoogleFonts.hankenGrotesk(
                             fontSize: 13,
-                            color: const Color(0xFFB8860B),
+                            color: Cores.ouro,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -299,107 +299,137 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
 
                       const SizedBox(height: 24),
 
-                      // ── PREMIAÇÕES OFICIAIS FIFA ───────────────────────────
-                      _buildHeaderFifa(),
-
-                      const SizedBox(height: 16),
-
-                      // ── CHUTEIRA DE OURO ───────────────────────────────────
-                      _buildSecaoLabel(
-                        'CHUTEIRA DE OURO',
-                        dica: 'Troféu entregue ao artilheiro (maior goleador) da Copa do Mundo.',
-                        onDica: () => _mostrarDica(
-                          'Chuteira de Ouro',
-                          'Troféu entregue ao artilheiro (maior goleador) da Copa do Mundo.',
+                      // ── PREMIAÇÕES OFICIAIS FIFA (card) ───────────────────
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Cores.ouro.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: Cores.ouro.withValues(alpha: 0.25)),
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      _SeletorJogador(
-                        label: 'Artilheiro da Copa',
-                        jogadorNome: _chuteiradeOuroSelecionado,
-                        jogadores: _jogadores,
-                        bloqueado: _bloqueado,
-                        onTap: () => _abrirSeletorJogador(
-                          titulo: 'Chuteira de Ouro',
-                          selecionadoAtual: _chuteiradeOuroSelecionado,
-                          onSelecionado: (n) =>
-                              setState(() => _chuteiradeOuroSelecionado = n),
-                        ),
-                      ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Header
+                            Row(
+                              children: [
+                                const Icon(Icons.emoji_events_rounded,
+                                    size: 15, color: Cores.ouro),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'PREMIAÇÕES OFICIAIS FIFA',
+                                  style: GoogleFonts.anybody(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                    color: Cores.ouro,
+                                  ),
+                                ),
+                              ],
+                            ),
 
-                      const SizedBox(height: 20),
+                            const SizedBox(height: 16),
 
-                      // ── BOLA DE OURO ───────────────────────────────────────
-                      _buildSecaoLabel(
-                        'BOLA DE OURO',
-                        dica: 'Prêmio concedido ao melhor jogador do torneio, eleito pela FIFA.',
-                        onDica: () => _mostrarDica(
-                          'Bola de Ouro',
-                          'Prêmio concedido ao melhor jogador do torneio, eleito pela FIFA.',
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      _SeletorJogador(
-                        label: 'Melhor jogador do torneio',
-                        jogadorNome: _boladeOuroSelecionado,
-                        jogadores: _jogadores,
-                        bloqueado: _bloqueado,
-                        onTap: () => _abrirSeletorJogador(
-                          titulo: 'Bola de Ouro',
-                          selecionadoAtual: _boladeOuroSelecionado,
-                          onSelecionado: (n) =>
-                              setState(() => _boladeOuroSelecionado = n),
-                        ),
-                      ),
+                            // ── CHUTEIRA DE OURO ───────────────────────────
+                            _buildSecaoLabel(
+                              'CHUTEIRA DE OURO',
+                              dica: 'Troféu entregue ao artilheiro (maior goleador) da Copa do Mundo.',
+                              onDica: () => _mostrarDica(
+                                'Chuteira de Ouro',
+                                'Troféu entregue ao artilheiro (maior goleador) da Copa do Mundo.',
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            _SeletorJogador(
+                              label: 'Artilheiro da Copa',
+                              jogadorNome: _chuteiradeOuroSelecionado,
+                              jogadores: _jogadores,
+                              bloqueado: _bloqueado,
+                              onTap: () => _abrirSeletorJogador(
+                                titulo: 'Chuteira de Ouro',
+                                selecionadoAtual: _chuteiradeOuroSelecionado,
+                                onSelecionado: (n) =>
+                                    setState(() => _chuteiradeOuroSelecionado = n),
+                              ),
+                            ),
 
-                      const SizedBox(height: 20),
+                            const SizedBox(height: 20),
 
-                      // ── LUVA DE OURO ───────────────────────────────────────
-                      _buildSecaoLabel(
-                        'LUVA DE OURO',
-                        dica: 'Prêmio ao melhor goleiro da Copa do Mundo, eleito pela FIFA.',
-                        onDica: () => _mostrarDica(
-                          'Luva de Ouro',
-                          'Prêmio ao melhor goleiro da Copa do Mundo, eleito pela FIFA.',
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      _SeletorJogador(
-                        label: 'Melhor goleiro',
-                        jogadorNome: _luvadeOuroSelecionado,
-                        jogadores: _jogadores,
-                        bloqueado: _bloqueado,
-                        onTap: () => _abrirSeletorJogador(
-                          titulo: 'Luva de Ouro',
-                          selecionadoAtual: _luvadeOuroSelecionado,
-                          apenasGoleiros: true,
-                          onSelecionado: (n) =>
-                              setState(() => _luvadeOuroSelecionado = n),
-                        ),
-                      ),
+                            // ── BOLA DE OURO ───────────────────────────────
+                            _buildSecaoLabel(
+                              'BOLA DE OURO',
+                              dica: 'Prêmio concedido ao melhor jogador do torneio, eleito pela FIFA.',
+                              onDica: () => _mostrarDica(
+                                'Bola de Ouro',
+                                'Prêmio concedido ao melhor jogador do torneio, eleito pela FIFA.',
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            _SeletorJogador(
+                              label: 'Melhor jogador do torneio',
+                              jogadorNome: _boladeOuroSelecionado,
+                              jogadores: _jogadores,
+                              bloqueado: _bloqueado,
+                              onTap: () => _abrirSeletorJogador(
+                                titulo: 'Bola de Ouro',
+                                selecionadoAtual: _boladeOuroSelecionado,
+                                onSelecionado: (n) =>
+                                    setState(() => _boladeOuroSelecionado = n),
+                              ),
+                            ),
 
-                      const SizedBox(height: 20),
+                            const SizedBox(height: 20),
 
-                      // ── MELHOR JOGADOR JOVEM ───────────────────────────────
-                      _buildSecaoLabel(
-                        'MELHOR JOGADOR JOVEM',
-                        dica: 'Prêmio ao melhor jogador jovem (sub-21) da Copa do Mundo, eleito pela FIFA.',
-                        onDica: () => _mostrarDica(
-                          'Melhor Jogador Jovem',
-                          'Prêmio ao melhor jogador jovem (sub-21) da Copa do Mundo, eleito pela FIFA.',
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      _SeletorJogador(
-                        label: 'Melhor jogador jovem',
-                        jogadorNome: _melhorJovemSelecionado,
-                        jogadores: _jogadores,
-                        bloqueado: _bloqueado,
-                        onTap: () => _abrirSeletorJogador(
-                          titulo: 'Melhor Jogador Jovem',
-                          selecionadoAtual: _melhorJovemSelecionado,
-                          onSelecionado: (n) =>
-                              setState(() => _melhorJovemSelecionado = n),
+                            // ── LUVA DE OURO ───────────────────────────────
+                            _buildSecaoLabel(
+                              'LUVA DE OURO',
+                              dica: 'Prêmio ao melhor goleiro da Copa do Mundo, eleito pela FIFA.',
+                              onDica: () => _mostrarDica(
+                                'Luva de Ouro',
+                                'Prêmio ao melhor goleiro da Copa do Mundo, eleito pela FIFA.',
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            _SeletorJogador(
+                              label: 'Melhor goleiro',
+                              jogadorNome: _luvadeOuroSelecionado,
+                              jogadores: _jogadores,
+                              bloqueado: _bloqueado,
+                              onTap: () => _abrirSeletorJogador(
+                                titulo: 'Luva de Ouro',
+                                selecionadoAtual: _luvadeOuroSelecionado,
+                                apenasGoleiros: true,
+                                onSelecionado: (n) =>
+                                    setState(() => _luvadeOuroSelecionado = n),
+                              ),
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            // ── MELHOR JOGADOR JOVEM ───────────────────────
+                            _buildSecaoLabel(
+                              'MELHOR JOGADOR JOVEM',
+                              dica: 'Prêmio ao melhor jogador jovem (sub-21) da Copa do Mundo, eleito pela FIFA.',
+                              onDica: () => _mostrarDica(
+                                'Melhor Jogador Jovem',
+                                'Prêmio ao melhor jogador jovem (sub-21) da Copa do Mundo, eleito pela FIFA.',
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            _SeletorJogador(
+                              label: 'Melhor jogador jovem',
+                              jogadorNome: _melhorJovemSelecionado,
+                              jogadores: _jogadores,
+                              bloqueado: _bloqueado,
+                              onTap: () => _abrirSeletorJogador(
+                                titulo: 'Melhor Jogador Jovem',
+                                selecionadoAtual: _melhorJovemSelecionado,
+                                onSelecionado: (n) =>
+                                    setState(() => _melhorJovemSelecionado = n),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
 
@@ -451,35 +481,6 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
     );
   }
 
-  Widget _buildHeaderFifa() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFB8860B).withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: const Color(0xFFB8860B).withValues(alpha: 0.25),
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.emoji_events_rounded,
-              size: 15, color: Color(0xFFB8860B)),
-          const SizedBox(width: 8),
-          Text(
-            'PREMIAÇÕES OFICIAIS FIFA',
-            style: GoogleFonts.anybody(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-              color: const Color(0xFFB8860B),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildBotaoSalvar() {
     return Container(
       color: Cores.surface,
@@ -503,7 +504,7 @@ class _TelaPalpitesEspeciaisState extends State<TelaPalpitesEspeciais> {
                 fontSize: 14, fontWeight: FontWeight.w700),
           ),
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFFB8860B),
+            backgroundColor: Cores.ouro,
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12)),
@@ -806,7 +807,7 @@ class _BottomSheetTimesState extends State<_BottomSheetTimes> {
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(
-                        color: Color(0xFFB8860B), width: 2),
+                        color: Cores.ouro, width: 2),
                   ),
                 ),
               ),
@@ -838,16 +839,16 @@ class _BottomSheetTimesState extends State<_BottomSheetTimes> {
                             ? FontWeight.w700
                             : FontWeight.w400,
                         color: selecionado
-                            ? const Color(0xFFB8860B)
+                            ? Cores.ouro
                             : Cores.onSurface,
                       ),
                     ),
                     trailing: selecionado
                         ? const Icon(Icons.check_circle,
-                            color: Color(0xFFB8860B), size: 22)
+                            color: Cores.ouro, size: 22)
                         : null,
                     tileColor: selecionado
-                        ? const Color(0xFFB8860B).withValues(alpha: 0.08)
+                        ? Cores.ouro.withValues(alpha: 0.08)
                         : null,
                     onTap: () => widget.onSelecionado(time),
                   );

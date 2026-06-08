@@ -67,12 +67,13 @@ C:\bolao\
                                  bloqueio do Modo Copa exclusivamente por palpitesTravados=true;
                                  card de resultado exibe "Avançou: [time]" quando jogo.vencedor != null;
                                  banner verde no topo quando palpitesTravados=true
-      tela_palpites_especiais.dart ← 5 palpites especiais com AppBar dourada; Campeão do Mundo:
-                                 seletor de time; header "PREMIAÇÕES OFICIAIS FIFA"; Chuteira
-                                 de Ouro/Bola de Ouro/Luva de Ouro/Melhor Jogador Jovem:
-                                 seletor de jogador via BottomSheetJogadores (dialogos.dart,
-                                 cor: Color(0xFFB8860B)); Luva de Ouro pré-filtra GOL; cada
-                                 prêmio FIFA tem botão "?" que abre AlertDialog explicativo;
+      tela_palpites_especiais.dart ← 5 palpites especiais com AppBar dourada (Cores.ouro);
+                                 Campeão do Mundo: seletor de time (fora do card FIFA);
+                                 card dourado "PREMIAÇÕES OFICIAIS FIFA" (Cores.ouro 8% alpha)
+                                 engloba Chuteira de Ouro/Bola de Ouro/Luva de Ouro/Melhor
+                                 Jogador Jovem; seletor de jogador via BottomSheetJogadores
+                                 (cor: Cores.ouro); Luva de Ouro pré-filtra GOL; cada prêmio
+                                 tem botão "?" que abre AlertDialog explicativo;
                                  bloqueio por palpitesTravados=true
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos;
                                  dialog de palpites via CF buscarPalpitesUsuario (valida grupo em comum);
@@ -116,7 +117,8 @@ C:\bolao\
                                  de grupos em palpites_copa/{uid}
     utils/
       cores.dart              ← constantes de cores; inclui Cores.error (vermelho),
-                                 Cores.pont* (badges de pontuação), Cores.prata/bronze (pódio)
+                                 Cores.pont* (badges de pontuação), Cores.ouro/prata/bronze (pódio);
+                                 nunca usar Color(0xFFB8860B) diretamente — usar Cores.ouro
       biblioteca.dart         ← funções utilitárias top-level: flagDe, siglaDe, isoDe,
                                  nomePtDe, formatarData, formatarCriadoEm, mostrarMensagem,
                                  mostrarRegras, ehPlaceholder, calcularPontos, multiplicadorFase,
@@ -193,9 +195,9 @@ Cores.outline                 = Color(0xFF6C7B6C)
 `MenuPrincipal` é um **shell** — só gerencia a navegação. Contém:
 
 - `Drawer` lateral com perfil do usuário, menu e seção admin (condicional)
-- `AppBar` com ícone de menu (abre drawer) + título dinâmico + botão de regras
-- `IndexedStack` com as 4 telas como filhos (scroll preservado entre abas)
-- `NavigationBar` (Material 3) com 4 destinos
+- `AppBar` fundo branco, ícone de menu + título dinâmico (verde) + botão de regras
+- `IndexedStack` com as 4 telas como filhos (scroll preservado entre abas); `Scaffold` transparente sobre `Container(color: Cores.background)`
+- `NavigationBar` verde (`Cores.verdePrincipal`), ícones/labels brancos, indicador amarelo (`Cores.secondaryContainer`), estilizado via `NavigationBarTheme`
 
 ```dart
 // O leading usa Builder para acessar o Scaffold correto
@@ -208,7 +210,7 @@ leading: Builder(
 ```
 
 ### Drawer lateral
-- Cabeçalho com GIF animado de fundo (`assets/background-cards/cabecalho.gif`, `BoxFit.cover`) e conteúdo sobreposto via `Stack`: avatar, nome e pontuação via `StreamBuilder<Usuario?>`
+- Cabeçalho com GIF animado de fundo (`assets/background-cards/cabecalho.gif`, `BoxFit.cover`) e conteúdo sobreposto via `Stack`: card glassmorphism (`ClipRRect` + `BackdropFilter` blur 10px + branco 18% alpha + borda branca 35% alpha) envolvendo avatar, nome e pontuação Clássico
 - Seção "CONTA": Meu Perfil → `TelaPerfil`; Notificações → `TelaNotificacoes`
 - Seção "GRUPOS": Meus Grupos → `TelaGrupos`
 - Seção "ADMIN" (só para `isAdmin == true`): Atualizar Placares → navega para `TelaAdmin`
@@ -543,7 +545,7 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 - Usuário sem grupos → mensagem orientando a criar/entrar via Meus Grupos
 - Usuário com 1 grupo → ranking desse grupo, sem seletor
 - Usuário com 2+ grupos → chips no topo para alternar; seleção explícita em `_grupoSelecionado`; se grupo selecionado sair da lista, volta automaticamente para o primeiro
-- Pódio visual para top 3: avatar real (foto do jogador via `WidgetAvatar`); fundo do degrau dourado/prata (`Color(0xFFC0C0C0)`)/bronze (`Color(0xFFCD7F32)`)
+- Pódio visual para top 3: avatar real (foto do jogador via `WidgetAvatar`); fundo do degrau `Cores.ouro` (1º) / `Cores.prata` (2º) / `Cores.bronze` (3º)
 - Lista para 4º em diante com avatar real; usuário logado destacado com borda verde
 - Tocar em qualquer card (pódio ou lista) abre `_DialogPalpitesUsuario`:
   - Cabeçalho verde (Clássico) ou azul (Copa) com avatar + nome
@@ -571,6 +573,7 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 
 ### `tela_perfil.dart` — implementada
 - Exibe avatar do jogador com botão de troca (bottom sheet grid)
+- Card de pontuação verde exibe ★ Clássico (esquerda) e 🏆 Copa (direita), mesmo padrão visual do hero card da home
 - Edição de nome inline via dialog
 - Alterar senha: dialog com senha atual + nova senha + confirmação + reautenticação
 - Excluir conta: dialog com senha para confirmação; remove doc Firestore + conta Auth
