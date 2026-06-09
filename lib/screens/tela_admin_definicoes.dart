@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/jogo_service.dart';
+import '../utils/avatares.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 import '../utils/dialogos.dart';
@@ -22,6 +23,7 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
   bool _limpando = false;
   bool _limpandoTeste = false;
   bool _travando = false;
+  bool _adicionandoAoGrupo = false;
   bool? _palpitesTravados; // null = ainda carregando
 
   @override
@@ -282,6 +284,37 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
     }
   }
 
+  Future<void> _adicionarUsuariosGrupoGeral() async {
+    final uidsParaAdicionar = await showDialog<List<String>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _DialogSelecionarUsuariosGeral(),
+    );
+    if (uidsParaAdicionar == null || uidsParaAdicionar.isEmpty || !mounted) {
+      return;
+    }
+
+    setState(() => _adicionandoAoGrupo = true);
+    try {
+      final fn = FirebaseFunctions.instanceFor(region: 'southamerica-east1');
+      final result = await fn.httpsCallable('adicionarTodosAoGrupo').call({
+        'codigo': '0TZGSG',
+        'uids': uidsParaAdicionar,
+      });
+      final adicionados = result.data['adicionados'];
+      if (mounted) {
+        mostrarMensagem(
+            context, '$adicionados usuário(s) adicionado(s) ao grupo GERAL.');
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) mostrarMensagem(context, e.message ?? 'Erro ao adicionar.');
+    } catch (e) {
+      if (mounted) mostrarMensagem(context, 'Erro: $e');
+    } finally {
+      if (mounted) setState(() => _adicionandoAoGrupo = false);
+    }
+  }
+
   Future<void> _limparOrfaos() async {
     final confirmar = await showDialog<bool>(
       context: context,
@@ -399,6 +432,16 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
           ),
           const SizedBox(height: 12),
           _CardOpcao(
+            icone: Icons.group_add_rounded,
+            corIcone: Cores.verdePrincipal,
+            titulo: 'Adicionar Usuários ao Grupo GERAL',
+            descricao:
+                'Seleciona quais usuários adicionar ao grupo GERAL (código 0TZGSG).',
+            carregando: _adicionandoAoGrupo,
+            onTap: _adicionarUsuariosGrupoGeral,
+          ),
+          const SizedBox(height: 12),
+          _CardOpcao(
             icone: Icons.cleaning_services_rounded,
             corIcone: Cores.error,
             titulo: 'Limpar Dados de Teste',
@@ -418,6 +461,302 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
             onTap: _limparOrfaos,
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Model auxiliar ──────────────────────────────────────────────────────────
+
+class _UsuarioItem {
+  final String uid;
+  final String nome;
+  final String? avatar;
+  final bool jaMembro;
+  bool selecionado = false;
+
+  _UsuarioItem({
+    required this.uid,
+    required this.nome,
+    this.avatar,
+    required this.jaMembro,
+  });
+}
+
+// ─── Dialog de seleção de usuários ───────────────────────────────────────────
+
+class _DialogSelecionarUsuariosGeral extends StatefulWidget {
+  const _DialogSelecionarUsuariosGeral();
+
+  @override
+  State<_DialogSelecionarUsuariosGeral> createState() =>
+      _DialogSelecionarUsuariosGeralState();
+}
+
+class _DialogSelecionarUsuariosGeralState
+    extends State<_DialogSelecionarUsuariosGeral> {
+  bool _carregando = true;
+  String? _erro;
+  List<_UsuarioItem> _usuarios = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _carregar();
+  }
+
+  Future<void> _carregar() async {
+    try {
+      final results = await Future.wait([
+        FirebaseFirestore.instance
+            .collection('grupos')
+            .where('codigo', isEqualTo: '0TZGSG')
+            .limit(1)
+            .get(),
+        FirebaseFirestore.instance.collection('usuarios').get(),
+      ]);
+
+      final gruposSnap = results[0];
+      final usuariosSnap = results[1];
+
+      final membros = gruposSnap.docs.isNotEmpty
+          ? Set<String>.from(
+              (gruposSnap.docs.first.data()['membros'] as List? ?? []))
+          : <String>{};
+
+      final lista = usuariosSnap.docs.map((doc) {
+        final data = doc.data();
+        return _UsuarioItem(
+          uid: doc.id,
+          nome: (data['nome'] as String?) ?? doc.id,
+          avatar: data['avatar'] as String?,
+          jaMembro: membros.contains(doc.id),
+        );
+      }).toList()
+        ..sort((a, b) {
+          // não-membros primeiro; dentro de cada grupo, ordem alfabética
+          if (a.jaMembro != b.jaMembro) return a.jaMembro ? 1 : -1;
+          return a.nome.toLowerCase().compareTo(b.nome.toLowerCase());
+        });
+
+      if (mounted) {
+        setState(() {
+          _usuarios = lista;
+          _carregando = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _erro = e.toString(); _carregando = false; });
+    }
+  }
+
+  List<String> get _selecionados =>
+      _usuarios.where((u) => u.selecionado).map((u) => u.uid).toList();
+
+  void _toggleTodos() {
+    final naoMembros = _usuarios.where((u) => !u.jaMembro).toList();
+    final todosSelected = naoMembros.every((u) => u.selecionado);
+    setState(() {
+      for (final u in naoMembros) {
+        u.selecionado = !todosSelected;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selecionadosCount = _selecionados.length;
+    final naoMembros = _usuarios.where((u) => !u.jaMembro).toList();
+    final todosSelected =
+        naoMembros.isNotEmpty && naoMembros.every((u) => u.selecionado);
+
+    return Dialog(
+      backgroundColor: Cores.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Cabeçalho
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
+            child: Text(
+              'Adicionar ao Grupo GERAL',
+              style: GoogleFonts.anybody(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: Cores.onSurface,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: Text(
+              'Selecione quem deseja adicionar ao grupo.',
+              style: GoogleFonts.hankenGrotesk(
+                  fontSize: 13, color: Cores.onSurfaceVariant),
+            ),
+          ),
+          const Divider(height: 1),
+
+          // Botão "Selecionar todos" — só visível quando há não-membros
+          if (!_carregando && _erro == null && naoMembros.isNotEmpty)
+            InkWell(
+              onTap: _toggleTodos,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: todosSelected,
+                      tristate: true,
+                      onChanged: (_) => _toggleTodos(),
+                      activeColor: Cores.verdePrincipal,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4)),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      todosSelected
+                          ? 'Desmarcar todos'
+                          : 'Selecionar todos',
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Cores.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          if (!_carregando && _erro == null && naoMembros.isNotEmpty)
+            const Divider(height: 1),
+
+          // Lista
+          Flexible(
+            child: _carregando
+                ? const Padding(
+                    padding: EdgeInsets.all(48),
+                    child: CircularProgressIndicator(),
+                  )
+                : _erro != null
+                    ? Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text('Erro ao carregar: $_erro',
+                            style: GoogleFonts.hankenGrotesk()),
+                      )
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 6),
+                        itemCount: _usuarios.length,
+                        itemBuilder: (_, i) => _buildTile(_usuarios[i]),
+                      ),
+          ),
+
+          const Divider(height: 1),
+
+          // Ações
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: Row(
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(null),
+                  child: Text('CANCELAR',
+                      style: GoogleFonts.anybody(
+                          color: Cores.onSurfaceVariant)),
+                ),
+                const Spacer(),
+                FilledButton(
+                  onPressed: selecionadosCount == 0
+                      ? null
+                      : () => Navigator.of(context).pop(_selecionados),
+                  style: FilledButton.styleFrom(
+                      backgroundColor: Cores.verdePrincipal),
+                  child: Text(
+                    selecionadosCount > 0
+                        ? 'ADICIONAR ($selecionadosCount)'
+                        : 'ADICIONAR',
+                    style:
+                        GoogleFonts.anybody(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTile(_UsuarioItem u) {
+    if (u.jaMembro) {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 2),
+        decoration: BoxDecoration(
+          color: Cores.verdePrincipal.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: ListTile(
+          dense: true,
+          leading: WidgetAvatar(
+              avatarId: u.avatar, nome: u.nome, tamanho: 34),
+          title: Text(u.nome,
+              style: GoogleFonts.hankenGrotesk(
+                  color: Cores.onSurfaceVariant, fontSize: 14)),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Já membro',
+                  style: GoogleFonts.hankenGrotesk(
+                      fontSize: 11, color: Cores.verdePrincipal)),
+              const SizedBox(width: 4),
+              const Icon(Icons.check_circle_rounded,
+                  color: Cores.verdePrincipal, size: 18),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final sel = u.selecionado;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      decoration: BoxDecoration(
+        color: sel
+            ? Cores.verdePrincipal.withValues(alpha: 0.10)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        border: sel
+            ? Border.all(
+                color: Cores.verdePrincipal.withValues(alpha: 0.35),
+                width: 1.2)
+            : Border.all(color: Colors.transparent),
+      ),
+      child: ListTile(
+        dense: true,
+        onTap: () => setState(() => u.selecionado = !u.selecionado),
+        leading: WidgetAvatar(
+            avatarId: u.avatar, nome: u.nome, tamanho: 34),
+        title: Text(u.nome,
+            style: GoogleFonts.hankenGrotesk(
+              fontSize: 14,
+              fontWeight:
+                  sel ? FontWeight.w600 : FontWeight.w400,
+              color: Cores.onSurface,
+            )),
+        trailing: Checkbox(
+          value: sel,
+          onChanged: (_) =>
+              setState(() => u.selecionado = !u.selecionado),
+          activeColor: Cores.verdePrincipal,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4)),
+        ),
       ),
     );
   }
