@@ -911,6 +911,53 @@ exports.buscarPalpitesUsuario = onCall(
   }
 );
 
+// ─── adicionarTodosAoGrupo ────────────────────────────────────────────────────
+// Adiciona todos os usuários existentes a um grupo pelo código.
+// Ignora quem já é membro. Só pode ser chamada por admin.
+
+exports.adicionarTodosAoGrupo = onCall(
+  { region: 'southamerica-east1' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Não autenticado.');
+
+    const db = getFirestore();
+    const userDoc = await db.collection('usuarios').doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data().isAdmin !== true) {
+      throw new HttpsError('permission-denied', 'Acesso restrito ao admin.');
+    }
+
+    const { codigo, uids } = request.data;
+    if (!codigo) throw new HttpsError('invalid-argument', 'codigo obrigatório.');
+    if (!Array.isArray(uids) || uids.length === 0) {
+      throw new HttpsError('invalid-argument', 'uids deve ser uma lista não vazia.');
+    }
+
+    const gruposSnap = await db.collection('grupos')
+      .where('codigo', '==', codigo.toUpperCase())
+      .limit(1)
+      .get();
+
+    if (gruposSnap.empty) {
+      throw new HttpsError('not-found', `Grupo com código "${codigo}" não encontrado.`);
+    }
+
+    const grupoDoc = gruposSnap.docs[0];
+    const membrosAtuais = new Set(grupoDoc.data().membros || []);
+    const novosUids = uids.filter((uid) => !membrosAtuais.has(uid));
+
+    if (novosUids.length > 0) {
+      await grupoDoc.ref.update({
+        membros: FieldValue.arrayUnion(...novosUids),
+      });
+    }
+
+    return {
+      adicionados: novosUids.length,
+      grupo: grupoDoc.data().nome,
+    };
+  }
+);
+
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 
 // Envia notificação FCM e remove token inválido do Firestore se necessário.
