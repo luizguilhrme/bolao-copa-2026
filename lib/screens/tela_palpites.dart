@@ -15,6 +15,7 @@ import '../services/palpite_service.dart';
 import '../services/usuario_service.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
+import '../utils/dialogos.dart';
 
 // ─── Modelo interno ───────────────────────────────────────────────────────────
 
@@ -69,6 +70,11 @@ class _TelaPalpitesState extends State<TelaPalpites> {
 
   // Modo ativo: 'classico' ou 'copa' (só relevante quando ambos os modos presentes)
   bool _modoClassico = true;
+
+  // Rascunhos digitados mas ainda não salvos — vivem no pai para sobreviver
+  // à troca de abas/modo (chave = jogoId)
+  final Map<int, ({String p1, String p2})> _rascunhos = {};
+  Map<String, Map<String, String?>>? _copaRascunho;
 
   DateTime? _criadoEm;
   Timer? _timer;
@@ -350,6 +356,8 @@ class _TelaPalpitesState extends State<TelaPalpites> {
                         key: const ValueKey('copa-proximos'),
                         timesPorGrupo: _timesPorGrupo,
                         palpites: _palpitesCopa,
+                        rascunho: _copaRascunho,
+                        onRascunho: (m) => _copaRascunho = m,
                         bloqueado: _copaBloqueada,
                         onSalvar: _salvarPalpitesCopa,
                       )
@@ -364,6 +372,7 @@ class _TelaPalpitesState extends State<TelaPalpites> {
                         grupos: _proximosFiltrados,
                         datasAtivas: _datasAtivas,
                         palpitesMap: _palpitesMap,
+                        rascunhos: _rascunhos,
                         temMais: _temMaisProximos,
                         onVerMais: () => setState(() => _datasVisiveis++),
                         onPalpiteSalvo: _onPalpiteSalvo,
@@ -494,6 +503,7 @@ class _AbaProximos extends StatefulWidget {
     required this.grupos,
     required this.datasAtivas,
     required this.palpitesMap,
+    required this.rascunhos,
     required this.temMais,
     required this.onVerMais,
     required this.onPalpiteSalvo,
@@ -502,6 +512,7 @@ class _AbaProximos extends StatefulWidget {
   final Map<String, List<Jogo>> grupos;
   final List<String> datasAtivas;
   final Map<int, Palpite> palpitesMap;
+  final Map<int, ({String p1, String p2})> rascunhos;
   final bool temMais;
   final VoidCallback onVerMais;
   final void Function(Palpite) onPalpiteSalvo;
@@ -609,8 +620,10 @@ class _AbaProximosState extends State<_AbaProximos> {
               return Padding(
                 padding: const EdgeInsets.only(top: 16, bottom: 4),
                 child: _CardPalpite(
+                  key: ValueKey(jogos[i].id),
                   jogo: jogos[i],
                   palpiteInicial: widget.palpitesMap[jogos[i].id],
+                  rascunhos: widget.rascunhos,
                   onPalpiteSalvo: widget.onPalpiteSalvo,
                   focusCtrl1: idx < _focusNodes.length ? _focusNodes[idx] : null,
                   onSalvoComEnter: () => _onSalvoComEnter(idx),
@@ -684,8 +697,10 @@ class _AbaEncerrados extends StatelessWidget {
 
 class _CardPalpite extends StatefulWidget {
   const _CardPalpite({
+    super.key,
     required this.jogo,
     required this.palpiteInicial,
+    required this.rascunhos,
     required this.onPalpiteSalvo,
     this.focusCtrl1,
     this.onSalvoComEnter,
@@ -693,6 +708,7 @@ class _CardPalpite extends StatefulWidget {
 
   final Jogo jogo;
   final Palpite? palpiteInicial;
+  final Map<int, ({String p1, String p2})> rascunhos;
   final void Function(Palpite) onPalpiteSalvo;
   final FocusNode? focusCtrl1;
   final VoidCallback? onSalvoComEnter;
@@ -707,41 +723,120 @@ class _CardPalpiteState extends State<_CardPalpite> {
   final _focusCtrl2 = FocusNode();
   final _uid = FirebaseAuth.instance.currentUser!.uid;
 
-  bool _salvo = false;
+  Palpite? _ultimoSalvo; // último palpite persistido no Firestore
   bool _salvando = false;
+  Timer? _debounce;
+  String _txtAnterior1 = '';
+  String _txtAnterior2 = '';
+
+  /// True quando os campos refletem exatamente o palpite salvo.
+  bool get _salvo {
+    final p = _ultimoSalvo;
+    return p != null &&
+        _ctrl1.text == '${p.palpite1}' &&
+        _ctrl2.text == '${p.palpite2}';
+  }
+
+  /// True quando há texto digitado que ainda não foi persistido.
+  bool get _pendente =>
+      !_salvo && (_ctrl1.text.isNotEmpty || _ctrl2.text.isNotEmpty);
 
   @override
   void initState() {
     super.initState();
-    // Pré-preenche com o palpite precarregado pelo pai — sem query adicional
+    _ultimoSalvo = widget.palpiteInicial;
+    // Restaura rascunho não salvo (sobrevive à troca de aba/modo);
+    // senão pré-preenche com o palpite precarregado pelo pai
+    final r = widget.rascunhos[widget.jogo.id];
     final p = widget.palpiteInicial;
-    _ctrl1 = TextEditingController(text: p != null ? '${p.palpite1}' : '');
-    _ctrl2 = TextEditingController(text: p != null ? '${p.palpite2}' : '');
-    _salvo = p != null;
+    _ctrl1 = TextEditingController(
+        text: r?.p1 ?? (p != null ? '${p.palpite1}' : ''));
+    _ctrl2 = TextEditingController(
+        text: r?.p2 ?? (p != null ? '${p.palpite2}' : ''));
+    _txtAnterior1 = _ctrl1.text;
+    _txtAnterior2 = _ctrl2.text;
+    _ctrl1.addListener(_onTextoAlterado);
+    _ctrl2.addListener(_onTextoAlterado);
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _salvarPendenteAoSair();
     _ctrl1.dispose();
     _ctrl2.dispose();
     _focusCtrl2.dispose();
     super.dispose();
   }
 
-  Future<void> _salvar({bool fromEnter = false}) async {
+  // Última chance: card sendo destruído (troca de aba/modo) com palpite
+  // completo ainda não salvo — dispara o save sem aguardar o resultado.
+  void _salvarPendenteAoSair() {
+    if (_salvo || _salvando || _estaBloqueado(widget.jogo)) return;
+    final v1 = int.tryParse(_ctrl1.text);
+    final v2 = int.tryParse(_ctrl2.text);
+    if (v1 == null || v2 == null) return;
+    final novo = Palpite(
+      uid: _uid,
+      jogoId: widget.jogo.id,
+      palpite1: v1,
+      palpite2: v2,
+      criadoEm: DateTime.now(),
+    );
+    PalpiteService().salvar(novo);
+    widget.onPalpiteSalvo(novo);
+    widget.rascunhos.remove(widget.jogo.id);
+  }
+
+  void _onTextoAlterado() {
+    // O controller também notifica mudanças de seleção/cursor — ignora
+    if (_ctrl1.text == _txtAnterior1 && _ctrl2.text == _txtAnterior2) return;
+    _txtAnterior1 = _ctrl1.text;
+    _txtAnterior2 = _ctrl2.text;
+
+    if (_salvo) {
+      widget.rascunhos.remove(widget.jogo.id);
+    } else {
+      widget.rascunhos[widget.jogo.id] = (p1: _ctrl1.text, p2: _ctrl2.text);
+    }
+
+    // Auto-save: dispara sozinho 1s após o usuário parar de digitar,
+    // quando os dois placares estão preenchidos
+    _debounce?.cancel();
+    if (!_salvo &&
+        int.tryParse(_ctrl1.text) != null &&
+        int.tryParse(_ctrl2.text) != null) {
+      _debounce = Timer(const Duration(seconds: 1), () => _salvar(auto: true));
+    }
+
+    setState(() {}); // atualiza borda/cadeado (estado "não salvo")
+  }
+
+  Future<void> _salvar({bool fromEnter = false, bool auto = false}) async {
+    if (!mounted || _salvando) return;
+
     // Trava de segurança: impede salvar após o cutoff de 5 min
     if (_estaBloqueado(widget.jogo)) {
-      mostrarMensagem(context, 'Palpites encerrados para este jogo.');
+      if (!auto) mostrarMensagem(context, 'Palpites encerrados para este jogo.');
       return;
     }
 
     final v1 = int.tryParse(_ctrl1.text);
     final v2 = int.tryParse(_ctrl2.text);
     if (v1 == null || v2 == null) {
-      mostrarMensagem(context, 'Preencha os dois placares antes de salvar.');
+      if (!auto) {
+        mostrarMensagem(context, 'Preencha os dois placares antes de salvar.');
+      }
       return;
     }
 
+    // Nada mudou desde o último save — só trata a navegação por Enter
+    if (_salvo) {
+      if (fromEnter) widget.onSalvoComEnter?.call();
+      return;
+    }
+
+    _debounce?.cancel();
     setState(() => _salvando = true);
 
     final novoPalpite = Palpite(
@@ -763,18 +858,27 @@ class _CardPalpiteState extends State<_CardPalpite> {
 
     if (!mounted) return;
     setState(() {
-      _salvo = true;
+      _ultimoSalvo = novoPalpite;
       _salvando = false;
     });
-    if (fromEnter && widget.onSalvoComEnter != null) {
-      widget.onSalvoComEnter!();
-    } else {
+    widget.rascunhos.remove(widget.jogo.id);
+    widget.onPalpiteSalvo(novoPalpite);
+
+    if (fromEnter) {
+      widget.onSalvoComEnter?.call();
+    } else if (!auto) {
       FocusScope.of(context).unfocus();
     }
-    widget.onPalpiteSalvo(novoPalpite);
-  }
 
-  void _editar() => setState(() => _salvo = false);
+    // Confirmação visual do save
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    mostrarSnackBarSucesso(
+      context,
+      'Palpite salvo: ${nomePtDe(widget.jogo.team1)} $v1 × $v2 '
+      '${nomePtDe(widget.jogo.team2)}',
+      duration: const Duration(milliseconds: 1600),
+    );
+  }
 
   String get _horario {
     final l = widget.jogo.dataHora.toLocal();
@@ -783,16 +887,22 @@ class _CardPalpiteState extends State<_CardPalpite> {
 
   @override
   Widget build(BuildContext context) {
+    final salvo = _salvo;
+    final pendente = _pendente;
     return Stack(
       clipBehavior: Clip.none,
       children: [
         AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            color: _salvo ? Cores.surfaceContainer : Cores.surface,
+            color: salvo ? Cores.surfaceContainer : Cores.surface,
             border: Border.all(
-              color: _salvo ? Cores.verdePrincipal : Cores.outlineVariant,
-              width: _salvo ? 2 : 1,
+              color: salvo
+                  ? Cores.verdePrincipal
+                  : pendente
+                      ? Cores.secondaryContainer
+                      : Cores.outlineVariant,
+              width: salvo || pendente ? 2 : 1,
             ),
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
@@ -809,7 +919,7 @@ class _CardPalpiteState extends State<_CardPalpite> {
               Expanded(
                   flex: 2,
                   child: _InputsProximos(
-                      ctrl1: _ctrl1, ctrl2: _ctrl2, salvo: _salvo,
+                      ctrl1: _ctrl1, ctrl2: _ctrl2, salvo: salvo,
                       focusCtrl1: widget.focusCtrl1,
                       focusCtrl2: _focusCtrl2,
                       onSalvar: () => _salvar(fromEnter: true))),
@@ -844,7 +954,10 @@ class _CardPalpiteState extends State<_CardPalpite> {
           ),
         ),
 
-        // Lock
+        // Status do save: spinner (salvando), cadeado fechado verde (salvo),
+        // cadeado aberto amarelo (digitado mas não salvo) ou cinza (vazio).
+        // Tocar também salva — redundante com o auto-save, mas mantém o
+        // gesto antigo funcionando.
         Positioned(
           top: 8,
           right: 8,
@@ -855,18 +968,20 @@ class _CardPalpiteState extends State<_CardPalpite> {
               child: CircularProgressIndicator(
                   strokeWidth: 2, color: Cores.verdePrincipal))
               : GestureDetector(
-            onTap: _salvo ? _editar : _salvar,
+            onTap: salvo ? null : () => _salvar(),
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               child: Icon(
-                _salvo
+                salvo
                     ? Icons.lock_rounded
                     : Icons.lock_open_rounded,
-                key: ValueKey(_salvo),
+                key: ValueKey('$salvo-$pendente'),
                 size: 20,
-                color: _salvo
+                color: salvo
                     ? Cores.verdePrincipal
-                    : Cores.onSurfaceVariant,
+                    : pendente
+                        ? Cores.onSecondaryContainer
+                        : Cores.onSurfaceVariant,
               ),
             ),
           ),
@@ -1367,7 +1482,6 @@ class _CampoGol extends StatelessWidget {
       height: 68,
       child: TextField(
         controller: controller,
-        readOnly: salvo,
         textAlign: TextAlign.center,
         keyboardType: TextInputType.number,
         focusNode: focusNode,
@@ -1594,12 +1708,16 @@ class _AbaCopaProximos extends StatefulWidget {
     super.key,
     required this.timesPorGrupo,
     required this.palpites,
+    required this.rascunho,
+    required this.onRascunho,
     required this.bloqueado,
     required this.onSalvar,
   });
 
   final Map<String, List<String>> timesPorGrupo;
   final Map<String, Map<String, String?>> palpites;
+  final Map<String, Map<String, String?>>? rascunho;
+  final void Function(Map<String, Map<String, String?>>) onRascunho;
   final bool bloqueado;
   final Future<void> Function(Map<String, Map<String, String?>>) onSalvar;
 
@@ -1614,13 +1732,17 @@ class _AbaCopaProximosState extends State<_AbaCopaProximos> {
   @override
   void initState() {
     super.initState();
-    // Copia palpites existentes para edição local
+    // Copia o rascunho não salvo (sobrevive à troca de aba/modo) ou os
+    // palpites existentes para edição local
+    final r = widget.rascunho;
     _local = {
       for (final k in widget.timesPorGrupo.keys)
-        k: Map<String, String?>.from(widget.palpites[k] ?? {
+        k: Map<String, String?>.from(r?[k] ?? widget.palpites[k] ?? {
           'primeiro': null, 'segundo': null, 'terceiro': null,
         }),
     };
+    // Registra a referência no pai — toda mutação de _local fica preservada
+    widget.onRascunho(_local);
   }
 
   int get _terceirosCount => _local.values
