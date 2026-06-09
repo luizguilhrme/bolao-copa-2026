@@ -153,6 +153,9 @@ C:\bolao\
       tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
       tela_palpites.dart      ← abas MODO CLÁSSICO / MODO COPA (exibidas quando usuário tem grupos
                                  dos dois modos E Fase de Grupos ativa); sub-abas Próximos / Encerrados;
+                                 auto-save com debounce de 1s nos cards de palpite (cadeado é
+                                 indicador de status, não botão obrigatório); rascunhos não salvos
+                                 preservados na troca de abas/modo (Clássico e Copa);
                                  MODO COPA: form de palpite de classificação (12 grupos, FAB SALVAR);
                                  detecção automática de fim da Fase de Grupos (jogos 73+ com times reais);
                                  bloqueio do Modo Copa exclusivamente por palpitesTravados=true
@@ -640,6 +643,8 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 - Abas superiores **MODO CLÁSSICO** / **MODO COPA** em verde (só visíveis quando usuário tem grupos dos dois modos E Fase de Grupos ativa)
 - Sub-abas **Próximos** / **Encerrados** dentro de cada modo
 - MODO CLÁSSICO: exibe jogos da Fase de Grupos (id 1–72) com palpite de placar
+- Auto-save com debounce: palpite completo é salvo automaticamente 1s após o usuário parar de digitar (ou na hora via Enter/tap no cadeado). Cadeado é indicador de status: fechado verde = salvo, aberto amarelo + borda `Cores.secondaryContainer` = digitado mas não salvo, aberto cinza = vazio. Campos sempre editáveis até o cutoff de 5 min; SnackBar verde confirma cada save
+- Rascunhos não salvos preservados na troca de sub-aba/modo: `Map<int, ({String p1, String p2})>` no state do pai (Clássico) e referência de `_local` registrada no pai via `onRascunho` (Copa); `dispose()` do card dispara save fire-and-forget se houver palpite completo pendente
 - MODO COPA: formulário de palpite de classificação dos 12 grupos (dropdowns 1º/2º/3º por grupo); FAB quadrado "SALVAR" no canto inferior direito; bloqueado após início do 1º jogo
 - Detecção automática de fim da Fase de Grupos: quando jogos 73+ têm times reais, abas de modo somem e todos os jogos restantes aparecem em único Próximos/Encerrados
 - `Future.wait` carrega jogos + palpites + perfil + grupos em paralelo; palpites Copa carregados separadamente para não bloquear o resto

@@ -63,6 +63,9 @@ C:\bolao\
       tela_perfil.dart        ← exibe/edita nome e avatar; alterar senha; excluir conta
       tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
       tela_palpites.dart      ← abas MODO CLÁSSICO/MODO COPA (condicionais) + sub-abas Próximos/Encerrados;
+                                 auto-save com debounce de 1s nos cards de palpite (cadeado é
+                                 indicador de status, não botão obrigatório); rascunhos não salvos
+                                 preservados na troca de abas/modo (Clássico e Copa);
                                  MODO COPA: form de palpite de classificação dos 12 grupos;
                                  bloqueio do Modo Copa exclusivamente por palpitesTravados=true;
                                  card de resultado exibe "Avançou: [time]" quando jogo.vencedor != null;
@@ -530,6 +533,8 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 ### `tela_palpites.dart` — implementada
 - **Abas superiores MODO CLÁSSICO / MODO COPA** (verde, só visíveis quando usuário tem grupos dos dois modos E Fase de Grupos ativa); sub-abas **Próximos** / **Encerrados** dentro de cada modo
 - **MODO CLÁSSICO:** palpite de placar nos jogos da Fase de Grupos (id 1–72)
+- **Auto-save com debounce:** quando os dois placares estão preenchidos, o palpite é salvo automaticamente 1s após o usuário parar de digitar (ou imediatamente ao pressionar Enter / tocar no cadeado). O cadeado é indicador de status — fechado verde = salvo, aberto amarelo (`Cores.secondaryContainer` na borda) = digitado mas não salvo, aberto cinza = vazio. Campos sempre editáveis até o cutoff de 5 min. SnackBar verde confirma cada save ("Palpite salvo: Brasil 2 × 1 México")
+- **Rascunhos preservados:** valores digitados e ainda não salvos vivem em `Map<int, ({String p1, String p2})>` no state do pai (`_TelaPalpitesState._rascunhos`) — sobrevivem à troca de sub-aba e de modo. O form do Modo Copa registra a referência de `_local` no pai (`_copaRascunho`) com o mesmo efeito. Como rede final, o `dispose()` do card dispara um save fire-and-forget se houver palpite completo não salvo
 - **MODO COPA:** formulário de palpite de classificação dos 12 grupos A–L com dropdowns 1º/2º/3º; FAB quadrado "SALVAR" no canto inferior direito; bloqueado quando `palpitesTravados=true`
 - **Detecção automática de fim da Fase de Grupos:** quando jogos 73+ têm times reais (sem placeholder), abas de modo somem e todos os jogos restantes aparecem em único Próximos/Encerrados
 - `Future.wait` carrega jogos + palpites + perfil + grupos em paralelo; palpites Copa em bloco separado com try-catch próprio para não bloquear o resto em caso de erro de permissão
