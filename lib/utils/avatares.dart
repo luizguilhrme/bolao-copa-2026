@@ -27,6 +27,41 @@ const kJogadores = [
   Jogador('ochoa', 'Ochoa', 'Mexico'),
 ];
 
+// Fotos oficiais FIFA da seleção brasileira convocada para a Copa 2026
+// (ensaio de 04/06/2026 em Morristown) + Ancelotti. Neymar, Vini Jr. e
+// Paquetá usam o sufixo 2026 para não colidir com os avatares deles em
+// "Principais". Alex Sandro (#6) não tem retrato individual na galeria FIFA.
+const kJogadoresBrasil2026 = [
+  Jogador('alisson', 'Alisson', 'Brazil'),
+  Jogador('ederson', 'Ederson', 'Brazil'),
+  Jogador('weverton', 'Weverton', 'Brazil'),
+  Jogador('neymar2026', 'Neymar Jr.', 'Brazil'),
+  Jogador('marquinhos', 'Marquinhos', 'Brazil'),
+  Jogador('danilo', 'Danilo', 'Brazil'),
+  Jogador('casemiro', 'Casemiro', 'Brazil'),
+  Jogador('vini2026', 'Vinicius Jr.', 'Brazil'),
+  Jogador('raphinha', 'Raphinha', 'Brazil'),
+  Jogador('bremer', 'Bremer', 'Brazil'),
+  Jogador('brunog', 'Bruno Guimarães', 'Brazil'),
+  Jogador('fabinho', 'Fabinho', 'Brazil'),
+  Jogador('paqueta2026', 'Paquetá', 'Brazil'),
+  Jogador('martinelli', 'Martinelli', 'Brazil'),
+  Jogador('wesley', 'Wesley', 'Brazil'),
+  Jogador('douglassantos', 'Douglas Santos', 'Brazil'),
+  Jogador('leopereira', 'Léo Pereira', 'Brazil'),
+  Jogador('ibanez', 'Ibañez', 'Brazil'),
+  Jogador('gabrielmagalhaes', 'Gabriel Magalhães', 'Brazil'),
+  Jogador('danilosantos', 'Danilo Santos', 'Brazil'),
+  Jogador('luizhenrique', 'Luiz Henrique', 'Brazil'),
+  Jogador('rayan', 'Rayan', 'Brazil'),
+  Jogador('endrick', 'Endrick', 'Brazil'),
+  Jogador('matheuscunha', 'Matheus Cunha', 'Brazil'),
+  Jogador('igorthiago', 'Igor Thiago', 'Brazil'),
+  // Técnico da seleção — bandeira do Brasil porque 'Italy' não tem
+  // mapeamento em isoDe() (não está entre as 48 classificadas)
+  Jogador('ancelotti', 'Ancelotti', 'Brazil'),
+];
+
 // Widget de avatar circular reutilizável.
 // Exibe a foto do jogador se disponível, senão mostra a inicial do nome.
 class WidgetAvatar extends StatelessWidget {
@@ -271,6 +306,131 @@ class _CardAvatarState extends State<CardAvatar> with SingleTickerProviderStateM
           ),
           Bandeira(widget.jogador.pais, tamanho: 14),
         ],
+      ),
+    );
+  }
+}
+
+// Grade de seleção de avatar com abas lado a lado (PRINCIPAIS / BRASIL 2026).
+// Abre na aba do avatar atualmente selecionado. Não rola sozinha — deve ser
+// colocada dentro de um scroll do chamador (SingleChildScrollView, ListView etc).
+class GradeAvataresSecionada extends StatefulWidget {
+  const GradeAvataresSecionada({
+    super.key,
+    required this.avatarSelecionadoId,
+    required this.onTap,
+  });
+
+  final String? avatarSelecionadoId;
+  final void Function(String avatarId) onTap;
+
+  @override
+  State<GradeAvataresSecionada> createState() => _GradeAvataresSecionadaState();
+}
+
+class _GradeAvataresSecionadaState extends State<GradeAvataresSecionada> {
+  late bool _abaPrincipais;
+
+  @override
+  void initState() {
+    super.initState();
+    // Abre na aba do avatar já selecionado
+    _abaPrincipais = !kJogadoresBrasil2026
+        .any((j) => widget.avatarSelecionadoId == j.id);
+  }
+
+  Widget _grade(List<Jogador> jogadores) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 0.82,
+      ),
+      itemCount: jogadores.length,
+      itemBuilder: (context, index) => CardAvatar(
+        jogador: jogadores[index],
+        avatarSelecionadoId: widget.avatarSelecionadoId,
+        onTap: widget.onTap,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _BotaoAbaAvatar(
+                label: 'PRINCIPAIS',
+                ativo: _abaPrincipais,
+                onTap: () => setState(() => _abaPrincipais = true),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _BotaoAbaAvatar(
+                label: 'BRASIL 2026',
+                comBandeira: true,
+                ativo: !_abaPrincipais,
+                onTap: () => setState(() => _abaPrincipais = false),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _grade(_abaPrincipais ? kJogadores : kJogadoresBrasil2026),
+      ],
+    );
+  }
+}
+
+class _BotaoAbaAvatar extends StatelessWidget {
+  const _BotaoAbaAvatar({
+    required this.label,
+    required this.ativo,
+    required this.onTap,
+    this.comBandeira = false,
+  });
+
+  final String label;
+  final bool ativo;
+  final VoidCallback onTap;
+  final bool comBandeira;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: ativo ? Cores.verdePrincipal : Cores.surfaceContainer,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.anybody(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: ativo ? Colors.white : Cores.onSurfaceVariant,
+              ),
+            ),
+            if (comBandeira) ...[
+              const SizedBox(width: 6),
+              const Bandeira('Brazil', tamanho: 14),
+            ],
+          ],
+        ),
       ),
     );
   }

@@ -206,24 +206,9 @@ class _TelaSetupPerfilState extends State<TelaSetupPerfil> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    childAspectRatio: 0.82,
-                  ),
-                  itemCount: kJogadores.length,
-                  itemBuilder: (context, index) {
-                    final jogador = kJogadores[index];
-                    return CardAvatar(
-                      jogador: jogador,
-                      avatarSelecionadoId: _avatarSelecionado,
-                      onTap: (id) => setState(() => _avatarSelecionado = id),
-                    );
-                  },
+                GradeAvataresSecionada(
+                  avatarSelecionadoId: _avatarSelecionado,
+                  onTap: (id) => setState(() => _avatarSelecionado = id),
                 ),
               ],
             ),

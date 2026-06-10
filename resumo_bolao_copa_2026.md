@@ -30,7 +30,12 @@ C:\bolao\
                                  {nome, posicao (GOL/DEF/MEI/ATA), clube}; "-" no clube =
                                  informação não disponível; usado pelos seletores de jogador
                                  em tela_palpites_especiais e tela_admin_especiais
-    avatares/                 ← imagens dos jogadores para seleção de avatar
+    avatares/                 ← imagens dos jogadores para seleção de avatar;
+                                 inclui as 26 fotos oficiais FIFA da seleção brasileira da
+                                 Copa 2026 (25 jogadores + Ancelotti; 512×512, recortadas dos
+                                 retratos do ensaio de 04/06/2026); neymar2026/vini2026/
+                                 paqueta2026 não colidem com os avatares de "Principais";
+                                 Alex Sandro (#6) não tem retrato individual na galeria FIFA
     background-cards/         ← imagens de fundo dos 3 cards de ação da tela Home
                                  (br.png → PALPITES, r9.png → RANKING, 2022.png → PALPITES ESPECIAIS)
                                  cabecalho.gif → GIF animado de fundo do cabeçalho do drawer
@@ -130,7 +135,12 @@ C:\bolao\
       dialogos.dart           ← helpers de SnackBar (mostrarSnackBarSucesso/Erro/Info),
                                  DialogAmbiente (seleção Produção/Teste), JogadorData (model)
                                  e BottomSheetJogadores (seletor de jogador com cor:)
-      avatares.dart           ← lista kJogadores + widgets WidgetAvatar e CardAvatar;
+      avatares.dart           ← listas kJogadores (Principais) e kJogadoresBrasil2026
+                                 (26 fotos oficiais FIFA: 25 jogadores + Ancelotti)
+                                 + widgets WidgetAvatar, CardAvatar
+                                 e GradeAvataresSecionada (abas lado a lado PRINCIPAIS /
+                                 BRASIL 2026, abre na aba do avatar selecionado;
+                                 usada no setup e no perfil);
                                  CardAvatar é StatefulWidget com flip 3D para avatares secretos
                                  (long-press revela foto *2.jpg)
   web/
@@ -600,11 +610,20 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 ## avatares.dart — widgets e dados compartilhados
 
 ```dart
-// Lista dos 12 jogadores disponíveis como avatar
+// Lista dos 12 jogadores da seção PRINCIPAIS
 const kJogadores = [
   Jogador('messi', 'Messi', 'Argentina'),
   Jogador('cr7', 'Cristiano Ronaldo', 'Portugal'),
   // ... 10 mais
+];
+
+// 26 fotos oficiais FIFA da seleção brasileira da Copa 2026 (25 jogadores
+// + Ancelotti no final); Neymar/Vini Jr./Paquetá usam ids com sufixo 2026
+// (neymar2026, vini2026, paqueta2026) para não colidir com os avatares
+// deles em PRINCIPAIS
+const kJogadoresBrasil2026 = [
+  Jogador('alisson', 'Alisson', 'Brazil'),
+  // ... 25 mais
 ];
 
 // Exibe foto do jogador em círculo; fallback: inicial do nome
@@ -614,6 +633,12 @@ WidgetAvatar(avatarId: usuario.avatar, nome: usuario.nome, tamanho: 64)
 // Interface nova (StatefulWidget):
 CardAvatar(jogador: jogador, avatarSelecionadoId: _avatarSelecionado, onTap: (id) { ... })
 // Long-press revela assets/avatares/{id}2.jpg se existir
+
+// Grade com abas lado a lado PRINCIPAIS / BRASIL 2026 (alterna a grade
+// exibida; abre na aba do avatar selecionado) — usada em tela_setup_perfil
+// e no bottom sheet de troca de avatar da tela_perfil;
+// não rola sozinha (colocar dentro de um scroll do chamador)
+GradeAvataresSecionada(avatarSelecionadoId: _avatarSelecionado, onTap: (id) { ... })
 ```
 
 `WidgetAvatar` aceita `corFundo`, `corTexto`, `borderColor` e `borderWidth` para se adaptar ao drawer (fundo verde-claro) e ao perfil (fundo verde-escuro).
