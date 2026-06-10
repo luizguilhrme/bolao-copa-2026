@@ -814,7 +814,9 @@ A Copa 2026 tem 48 seleções e 7 fases eliminatórias. `jogos.json` e `jogos_te
 - ID 104: `"Final"`
 
 ### Logout a cada reabertura do app Android (builds da Play Store)
-O R8 **full mode** (padrão desde o AGP 8.0) + `isMinifyEnabled = true` quebrava a desserialização da sessão persistida do Firebase Auth ao reabrir o app (`JSONArray[0] not a string` — [firebase-android-sdk#6375](https://github.com/firebase/firebase-android-sdk/issues/6375)): `authStateChanges()` emitia `null` e o usuário caía na tela de login em toda reabertura. Afetava só builds minificados (release/Play Store) e variava por aparelho (reproduzido em Samsung). Corrigido com `android.enableR8.fullMode=false` em `android/gradle.properties` — mantém minificação e shrink de recursos, só desativa as otimizações agressivas de reflexão.
+Duas causas encadeadas:
+1. **R8 full mode** (padrão desde o AGP 8.0) + `isMinifyEnabled = true` quebrava a persistência da sessão do Firebase Auth (`JSONArray[0] not a string` — [firebase-android-sdk#6375](https://github.com/firebase/firebase-android-sdk/issues/6375)): `authStateChanges()` emitia `null` e o usuário caía na tela de login em toda reabertura. Corrigido com `android.enableR8.fullMode=false` em `android/gradle.properties` (mantém minificação e shrink, só desativa otimizações agressivas de reflexão).
+2. **Auto Backup do Android**: o Google fez backup dos dados do app na era do bug; toda instalação via Play Store fazia "restore at install" desse snapshot com estado de auth corrompido, que impedia a gravação de novas sessões **mesmo com o binário corrigido** (instalação via cabo não dispara restore — por isso o APK local funcionava e a versão da loja não). Diagnóstico via `adb logcat` (FirebaseAuth inicializava sem usuário e sem erro) + `dumpsys backup` (eventos "Full restore" a cada install). Corrigido com `android:allowBackup="false"` no AndroidManifest; "Limpar dados" do app saneia aparelhos já afetados.
 
 ---
 
