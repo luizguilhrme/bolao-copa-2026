@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/usuario.dart';
+import '../services/auth_service.dart';
 import '../services/usuario_service.dart';
 import '../utils/avatares.dart';
 import '../utils/biblioteca.dart';
@@ -135,17 +136,30 @@ class _PerfilConteudoState extends State<_PerfilConteudo> {
     );
   }
 
+  /// Usuários que entraram só com o Google não têm provedor de senha.
+  bool get _temSenha => FirebaseAuth.instance.currentUser!.providerData
+      .any((p) => p.providerId == 'password');
+
   Future<void> _alterarSenha(BuildContext context) async {
-    await showDialog(
-      context: context,
-      builder: (_) => _DialogAlterarSenha(email: usuario.email),
-    );
+    if (_temSenha) {
+      await showDialog(
+        context: context,
+        builder: (_) => _DialogAlterarSenha(email: usuario.email),
+      );
+    } else {
+      await showDialog(
+        context: context,
+        builder: (_) => const _DialogDefinirSenha(),
+      );
+      // Se a senha foi criada, o item muda de "Definir senha" para "Alterar senha"
+      if (mounted) setState(() {});
+    }
   }
 
   Future<void> _excluirConta(BuildContext context) async {
     final confirmado = await showDialog<bool>(
       context: context,
-      builder: (_) => _DialogExcluirConta(email: usuario.email),
+      builder: (_) => _DialogExcluirConta(email: usuario.email, temSenha: _temSenha),
     );
     if (confirmado == true && context.mounted) {
       Navigator.of(context).pop(); // fecha TelaPerfil — authStateChanges redireciona para login
@@ -331,7 +345,7 @@ class _PerfilConteudoState extends State<_PerfilConteudo> {
             children: [
               _ItemAcao(
                 icone: Icons.lock_outline_rounded,
-                label: 'Alterar senha',
+                label: _temSenha ? 'Alterar senha' : 'Definir senha',
                 onTap: () => _alterarSenha(context),
                 primeiro: true,
               ),
@@ -608,6 +622,147 @@ class _DialogAlterarSenhaState extends State<_DialogAlterarSenha> {
   }
 }
 
+// ─── Dialog de definir senha (usuário Google sem senha) ──────────────────────
+
+class _DialogDefinirSenha extends StatefulWidget {
+  const _DialogDefinirSenha();
+
+  @override
+  State<_DialogDefinirSenha> createState() => _DialogDefinirSenhaState();
+}
+
+class _DialogDefinirSenhaState extends State<_DialogDefinirSenha> {
+  final _novaSenhaCtrl = TextEditingController();
+  final _confirmarCtrl = TextEditingController();
+
+  bool _verSenha = false;
+  bool _salvando = false;
+
+  @override
+  void dispose() {
+    _novaSenhaCtrl.dispose();
+    _confirmarCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _salvar() async {
+    final novaSenha = _novaSenhaCtrl.text.trim();
+    final confirmar = _confirmarCtrl.text.trim();
+
+    if (novaSenha.isEmpty || confirmar.isEmpty) {
+      mostrarMensagem(context, 'Preencha todos os campos.');
+      return;
+    }
+    if (novaSenha.length < 6) {
+      mostrarMensagem(context, 'A senha deve ter ao menos 6 caracteres.');
+      return;
+    }
+    if (novaSenha != confirmar) {
+      mostrarMensagem(context, 'As senhas não coincidem.');
+      return;
+    }
+
+    setState(() => _salvando = true);
+    try {
+      final user = FirebaseAuth.instance.currentUser!;
+      try {
+        await user.updatePassword(novaSenha);
+      } on FirebaseAuthException catch (e) {
+        if (e.code != 'requires-recent-login') rethrow;
+        // Login antigo: o Firebase exige reautenticação antes de criar a senha
+        final confirmou = await AuthService().reautenticarComGoogle();
+        if (!confirmou) {
+          if (mounted) setState(() => _salvando = false);
+          return;
+        }
+        await user.updatePassword(novaSenha);
+      }
+      // Atualiza providerData local para o item virar "Alterar senha"
+      await user.reload();
+      if (mounted) {
+        Navigator.of(context).pop();
+        mostrarMensagem(
+            context, 'Senha criada! Agora você também pode entrar com e-mail e senha.');
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        final String msg;
+        if (e.code == 'weak-password') {
+          msg = 'A senha é muito fraca.';
+        } else if (e.code == 'user-mismatch') {
+          msg = 'Selecione a mesma conta Google que você usa para entrar no app.';
+        } else {
+          msg = 'Erro ao criar senha. Tente novamente.';
+        }
+        mostrarMensagem(context, msg);
+        setState(() => _salvando = false);
+      }
+    } catch (_) {
+      if (mounted) {
+        mostrarMensagem(context, 'Erro ao criar senha. Tente novamente.');
+        setState(() => _salvando = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Cores.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        'Definir senha',
+        style: GoogleFonts.anybody(fontWeight: FontWeight.w800, color: Cores.onSurface),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Você entrou com o Google e ainda não criou uma senha. Defina uma '
+            'para também poder entrar com e-mail e senha.',
+            style: GoogleFonts.hankenGrotesk(
+                fontSize: 13, color: Cores.onSurfaceVariant, height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          _CampoSenha(
+            controller: _novaSenhaCtrl,
+            label: 'Nova senha',
+            mostrar: _verSenha,
+            onToggle: () => setState(() => _verSenha = !_verSenha),
+          ),
+          const SizedBox(height: 12),
+          _CampoSenha(
+            controller: _confirmarCtrl,
+            label: 'Confirmar nova senha',
+            mostrar: _verSenha,
+            onToggle: () => setState(() => _verSenha = !_verSenha),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _salvando ? null : () => Navigator.of(context).pop(),
+          child: Text('Cancelar',
+              style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant)),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Cores.verdePrincipal),
+          onPressed: _salvando ? null : _salvar,
+          child: _salvando
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : Text('Salvar',
+                  style: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w700)),
+        ),
+      ],
+    );
+  }
+}
+
 class _CampoSenha extends StatelessWidget {
   const _CampoSenha({
     required this.controller,
@@ -652,8 +807,9 @@ class _CampoSenha extends StatelessWidget {
 // ─── Dialog de excluir conta ──────────────────────────────────────────────────
 
 class _DialogExcluirConta extends StatefulWidget {
-  const _DialogExcluirConta({required this.email});
+  const _DialogExcluirConta({required this.email, required this.temSenha});
   final String email;
+  final bool temSenha;
 
   @override
   State<_DialogExcluirConta> createState() => _DialogExcluirContaState();
@@ -672,7 +828,7 @@ class _DialogExcluirContaState extends State<_DialogExcluirConta> {
 
   Future<void> _excluir() async {
     final senha = _senhaCtrl.text.trim();
-    if (senha.isEmpty) {
+    if (widget.temSenha && senha.isEmpty) {
       mostrarMensagem(context, 'Digite sua senha para confirmar.');
       return;
     }
@@ -680,11 +836,21 @@ class _DialogExcluirContaState extends State<_DialogExcluirConta> {
     setState(() => _excluindo = true);
     try {
       final user = FirebaseAuth.instance.currentUser!;
-      final credential = EmailAuthProvider.credential(
-        email: widget.email,
-        password: senha,
-      );
-      await user.reauthenticateWithCredential(credential);
+      if (widget.temSenha) {
+        final credential = EmailAuthProvider.credential(
+          email: widget.email,
+          password: senha,
+        );
+        await user.reauthenticateWithCredential(credential);
+      } else {
+        // Usuário só com Google: reautentica pelo seletor de conta
+        final confirmou = await AuthService().reautenticarComGoogle();
+        if (!confirmou) {
+          // Usuário fechou o seletor sem confirmar
+          if (mounted) setState(() => _excluindo = false);
+          return;
+        }
+      }
       // Remove o documento do Firestore antes de deletar a conta Auth
       await FirebaseFirestore.instance.collection('usuarios').doc(user.uid).delete();
       await user.delete();
@@ -692,10 +858,21 @@ class _DialogExcluirContaState extends State<_DialogExcluirConta> {
       if (mounted) Navigator.of(context).pop(true);
     } on FirebaseAuthException catch (e) {
       if (mounted) {
-        final msg = e.code == 'wrong-password' || e.code == 'invalid-credential'
-            ? 'Senha incorreta.'
-            : 'Erro ao excluir conta. Tente novamente.';
+        final String msg;
+        if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+          msg = 'Senha incorreta.';
+        } else if (e.code == 'user-mismatch') {
+          msg = 'Selecione a mesma conta Google que você usa para entrar no app.';
+        } else {
+          msg = 'Erro ao excluir conta. Tente novamente.';
+        }
         mostrarMensagem(context, msg);
+        setState(() => _excluindo = false);
+      }
+    } catch (_) {
+      // PlatformException do seletor Google etc.
+      if (mounted) {
+        mostrarMensagem(context, 'Erro ao excluir conta. Tente novamente.');
         setState(() => _excluindo = false);
       }
     }
@@ -726,12 +903,24 @@ class _DialogExcluirContaState extends State<_DialogExcluirConta> {
             style: GoogleFonts.hankenGrotesk(fontSize: 13, color: Cores.onSurfaceVariant),
           ),
           const SizedBox(height: 16),
-          _CampoSenha(
-            controller: _senhaCtrl,
-            label: 'Digite sua senha para confirmar',
-            mostrar: _verSenha,
-            onToggle: () => setState(() => _verSenha = !_verSenha),
-          ),
+          if (widget.temSenha)
+            _CampoSenha(
+              controller: _senhaCtrl,
+              label: 'Digite sua senha para confirmar',
+              mostrar: _verSenha,
+              onToggle: () => setState(() => _verSenha = !_verSenha),
+            )
+          else
+            Text(
+              'Ao tocar em EXCLUIR, sua conta será excluída imediatamente. '
+              'Como você entrou com o Google, pode ser exigida uma reautenticação '
+              'com sua conta Google antes de concluir.',
+              style: GoogleFonts.hankenGrotesk(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Cores.onSurface,
+              ),
+            ),
         ],
       ),
       actions: [

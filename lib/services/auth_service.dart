@@ -95,6 +95,30 @@ class AuthService {
     await _auth.signOut();
   }
 
+  /// Reautentica o usuário logado com a conta Google dele.
+  /// Necessário antes de operações sensíveis (excluir conta, definir senha)
+  /// quando o usuário não tem provedor de senha.
+  ///
+  /// Retorna false se o usuário fechou o seletor de conta sem confirmar.
+  /// Lança FirebaseAuthException com code 'user-mismatch' se a conta Google
+  /// selecionada não for a mesma do login.
+  Future<bool> reautenticarComGoogle() async {
+    final user = _auth.currentUser!;
+    if (kIsWeb) {
+      await user.reauthenticateWithPopup(GoogleAuthProvider());
+      return true;
+    }
+    final googleUser = await _googleSignIn.signIn();
+    if (googleUser == null) return false;
+    final googleAuth = await googleUser.authentication;
+    final credencial = GoogleAuthProvider.credential(
+      idToken: googleAuth.idToken,
+      accessToken: googleAuth.accessToken,
+    );
+    await user.reauthenticateWithCredential(credencial);
+    return true;
+  }
+
   /// Vincula uma credencial Google a uma conta que já existe com e-mail/senha.
   Future<User?> vincularGoogle({
     required String email,

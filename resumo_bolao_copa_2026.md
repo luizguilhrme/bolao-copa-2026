@@ -29,7 +29,12 @@ C:\bolao\
                                  {nome, nomePt, grupo, iso, jogadores}; cada jogador tem
                                  {nome, posicao (GOL/DEF/MEI/ATA), clube}; "-" no clube =
                                  informação não disponível; usado pelos seletores de jogador
-                                 em tela_palpites_especiais e tela_admin_especiais
+                                 em tela_palpites_especiais e tela_admin_especiais;
+                                 nomes de jogador são únicos — o nome é a chave de comparação
+                                 dos palpites especiais; homônimos desambiguados:
+                                 "Montassar Talbi" (Tunísia, vs "Talbi" do Marrocos) e
+                                 "Emiliano Martínez (Dibu)" (GOL Argentina, vs "Emiliano
+                                 Martínez" MEI do Uruguai)
     avatares/                 ← imagens dos jogadores para seleção de avatar;
                                  inclui as 26 fotos oficiais FIFA da seleção brasileira da
                                  Copa 2026 (25 jogadores + Ancelotti; 512×512, recortadas dos
@@ -65,7 +70,9 @@ C:\bolao\
       tela_login.dart         ← login e cadastro com design do Stitch; Google Sign-In com account linking
       tela_setup_perfil.dart  ← seleção de avatar no primeiro acesso (pós-cadastro);
                                  nome pré-preenchido com displayName do Google
-      tela_perfil.dart        ← exibe/edita nome e avatar; alterar senha; excluir conta
+      tela_perfil.dart        ← exibe/edita nome e avatar; alterar/definir senha; excluir
+                                 conta; usuário Google-only (sem provedor password) define
+                                 senha e exclui conta com reautenticação via Google
       tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
       tela_palpites.dart      ← abas MODO CLÁSSICO/MODO COPA (condicionais) + sub-abas Próximos/Encerrados;
                                  auto-save com debounce de 1s nos cards de palpite (cadeado é
@@ -111,6 +118,11 @@ C:\bolao\
       tela_ajuda.dart         ← FAQ: pontuação Modo Clássico + multiplicadores de fase,
                                  pontuação Modo Copa, palpites especiais
     services/
+      auth_service.dart       ← login Google (GIS na web / fluxo nativo no Android),
+                                 vincularGoogle (account linking com conta e-mail/senha),
+                                 reautenticarComGoogle (popup na web / seletor nativo no
+                                 Android; usado por excluir conta e definir senha de
+                                 usuário Google-only), inicializar, sair
       jogo_service.dart       ← popularJogosNoFirestore({bool teste}), buscarTodos, buscarPorData
       usuario_service.dart    ← criarPerfil, buscarPorUid, observarUsuario,
                                  atualizarNome, atualizarAvatar
@@ -592,6 +604,8 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 - Edição de nome inline via dialog
 - Alterar senha: dialog com senha atual + nova senha + confirmação + reautenticação
 - Excluir conta: dialog com senha para confirmação; remove doc Firestore + conta Auth
+- Detecção de provedor via `user.providerData` (getter `_temSenha`): usuário Google-only (sem provedor `password`) vê **"Definir senha"** no lugar de "Alterar senha" — dialog explica que não há senha criada e chama `updatePassword` direto (se `requires-recent-login`, reautentica via `AuthService.reautenticarComGoogle()` e tenta de novo); após criar, `user.reload()` e o item vira "Alterar senha"
+- Excluir conta para usuário Google-only: dialog sem campo de senha avisa que a exclusão é imediata e que pode ser exigida reautenticação com a conta Google; confirma via `reautenticarComGoogle()` (cancelar o seletor aborta sem excluir; conta Google diferente → erro `user-mismatch` traduzido)
 
 ### `tela_notificacoes.dart` — implementada
 - Toggle **Lembrete de palpite**: notificação 30 min antes de jogos sem palpite
