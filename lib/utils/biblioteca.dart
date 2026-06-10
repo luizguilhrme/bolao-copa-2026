@@ -18,6 +18,16 @@ import 'cores.dart';
 //   flagDe('Brazil')       → '🇧🇷'
 //   siglaDe('Germany')     → 'GER'
 //   formatarData(agora)    → '12/06/2026 às 20h00'
+
+// ─── Sinal de ressincronização ────────────────────────────────────────────────
+
+/// Notificador usado pelo MenuPrincipal para avisar uma tela do IndexedStack
+/// que ela deve recarregar seus dados silenciosamente (sem spinner, preservando
+/// scroll e rascunhos). Disparado ao selecionar a aba no NavigationBar e ao
+/// voltar de rotas abertas pelo drawer (Meus Grupos, Perfil, telas admin).
+class Sinal extends ChangeNotifier {
+  void disparar() => notifyListeners();
+}
 // =============================================================================
 
 // -----------------------------------------------------------------------------

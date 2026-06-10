@@ -41,12 +41,36 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
   final _uid = FirebaseAuth.instance.currentUser!.uid;
   late final Stream<Usuario?> _streamUsuario;
 
+  // Sinais de ressincronização das telas do IndexedStack (que só rodam
+  // initState uma vez). Disparados ao selecionar a aba e ao voltar de rotas
+  // do drawer, para a tela recarregar dados sem perder scroll/rascunhos.
+  final _sinalHome = Sinal();
+  final _sinalPalpites = Sinal();
+  final _sinalRanking = Sinal();
+
   @override
   void initState() {
     super.initState();
     _streamUsuario = UsuarioService().observarUsuario(_uid);
     _verificarAdmin();
     _inicializarFcm();
+  }
+
+  @override
+  void dispose() {
+    _sinalHome.dispose();
+    _sinalPalpites.dispose();
+    _sinalRanking.dispose();
+    super.dispose();
+  }
+
+  void _sinalizarAba(int indice) {
+    switch (indice) {
+      case 0: _sinalHome.disparar();
+      case 1: _sinalPalpites.disparar();
+      case 2: _sinalRanking.disparar();
+      // Tabela (3) tem pull-to-refresh próprio
+    }
   }
 
   void _navegarPorNotificacao(Map<String, dynamic> data) {
@@ -133,33 +157,32 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
 
   void _abrirRegras() => mostrarRegras(context);
 
-  void _abrirAdminPlacares() {
+  // Fecha o drawer, abre a rota e, ao voltar, ressincroniza a aba visível —
+  // mudanças feitas na rota (entrar em grupo, placar inserido etc.) aparecem
+  // sem precisar fechar e reabrir o app.
+  Future<void> _abrirRota(Widget tela) async {
     Navigator.of(context).pop();
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const TelaAdminPlacares()),
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => tela),
     );
+    _sinalizarAba(_indiceNav);
   }
 
-  void _abrirAdminCopa() {
-    Navigator.of(context).pop();
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const TelaAdminCopa()),
-    );
-  }
+  void _abrirPerfil() => _abrirRota(const TelaPerfil());
 
-  void _abrirAdminEspeciais() {
-    Navigator.of(context).pop();
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const TelaAdminEspeciais()),
-    );
-  }
+  void _abrirNotificacoes() => _abrirRota(const TelaNotificacoes());
 
-  void _abrirAdminDefinicoes() {
-    Navigator.of(context).pop();
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const TelaAdminDefinicoes()),
-    );
-  }
+  void _abrirGrupos() => _abrirRota(const TelaGrupos());
+
+  void _abrirAjuda() => _abrirRota(const TelaAjuda());
+
+  void _abrirAdminPlacares() => _abrirRota(const TelaAdminPlacares());
+
+  void _abrirAdminCopa() => _abrirRota(const TelaAdminCopa());
+
+  void _abrirAdminEspeciais() => _abrirRota(const TelaAdminEspeciais());
+
+  void _abrirAdminDefinicoes() => _abrirRota(const TelaAdminDefinicoes());
 
   Future<void> _logout() async {
     Navigator.of(context).pop(); // fecha o drawer
@@ -170,9 +193,12 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
   @override
   Widget build(BuildContext context) {
     final telas = [
-      TelaHome(onNavegar: (i) => setState(() => _indiceNav = i)),
-      const TelaPalpites(),
-      const TelaRanking(),
+      TelaHome(
+        onNavegar: (i) => setState(() => _indiceNav = i),
+        sinalAtualizar: _sinalHome,
+      ),
+      TelaPalpites(sinalAtualizar: _sinalPalpites),
+      TelaRanking(sinalAtualizar: _sinalRanking),
       const TelaTabela(),
     ];
 
@@ -187,6 +213,10 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
           drawer: _DrawerNav(
             usuario: snapshot.data,
             isAdmin: _isAdmin,
+            onPerfil: _abrirPerfil,
+            onNotificacoes: _abrirNotificacoes,
+            onGrupos: _abrirGrupos,
+            onAjuda: _abrirAjuda,
             onAdminPlacares: _abrirAdminPlacares,
             onAdminCopa: _abrirAdminCopa,
             onAdminEspeciais: _abrirAdminEspeciais,
@@ -268,7 +298,10 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
         backgroundColor: Cores.verdePrincipal,
         indicatorColor: Cores.secondaryContainer,
         selectedIndex: _indiceNav,
-        onDestinationSelected: (i) => setState(() => _indiceNav = i),
+        onDestinationSelected: (i) {
+          setState(() => _indiceNav = i);
+          _sinalizarAba(i);
+        },
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
@@ -302,6 +335,10 @@ class _DrawerNav extends StatelessWidget {
   const _DrawerNav({
     required this.usuario,
     required this.isAdmin,
+    required this.onPerfil,
+    required this.onNotificacoes,
+    required this.onGrupos,
+    required this.onAjuda,
     required this.onAdminPlacares,
     required this.onAdminCopa,
     required this.onAdminEspeciais,
@@ -311,6 +348,10 @@ class _DrawerNav extends StatelessWidget {
 
   final Usuario? usuario;
   final bool isAdmin;
+  final VoidCallback onPerfil;
+  final VoidCallback onNotificacoes;
+  final VoidCallback onGrupos;
+  final VoidCallback onAjuda;
   final VoidCallback onAdminPlacares;
   final VoidCallback onAdminCopa;
   final VoidCallback onAdminEspeciais;
@@ -333,22 +374,12 @@ class _DrawerNav extends StatelessWidget {
                 _ItemDrawer(
                   icone: Icons.person_outline_rounded,
                   label: 'Meu Perfil',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const TelaPerfil()),
-                    );
-                  },
+                  onTap: onPerfil,
                 ),
                 _ItemDrawer(
                   icone: Icons.notifications_outlined,
                   label: 'Notificações',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const TelaNotificacoes()),
-                    );
-                  },
+                  onTap: onNotificacoes,
                 ),
 
                 const Divider(
@@ -361,12 +392,7 @@ class _DrawerNav extends StatelessWidget {
                 _ItemDrawer(
                   icone: Icons.group_outlined,
                   label: 'Meus Grupos',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const TelaGrupos()),
-                    );
-                  },
+                  onTap: onGrupos,
                 ),
 
                 // Seção admin — só visível para o administrador
@@ -414,12 +440,7 @@ class _DrawerNav extends StatelessWidget {
                 _ItemDrawer(
                   icone: Icons.help_outline_rounded,
                   label: 'Ajuda & FAQ',
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const TelaAjuda()),
-                    );
-                  },
+                  onTap: onAjuda,
                 ),
               ],
             ),

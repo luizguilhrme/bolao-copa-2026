@@ -148,7 +148,11 @@ C:\bolao\
       menu_principal.dart     ← shell com drawer lateral, AppBar, IndexedStack, NavigationBar;
                                  inicializa FCM; deep linking via notificação (onMessageOpenedApp,
                                  getInitialMessage); SnackBar com botão VER em foreground;
-                                 seção ADMIN com 4 itens separados
+                                 seção ADMIN com 4 itens separados; sinais de ressincronização
+                                 (classe Sinal) disparados ao selecionar aba e ao voltar de rotas
+                                 do drawer — Home/Palpites/Ranking recarregam dados silenciosamente
+                                 (sem perder scroll/rascunhos), corrigindo dados congelados pelo
+                                 IndexedStack (ex: grupo Copa criado não exibia aba MODO COPA)
       tela_home.dart          ← hero card verde com ranking/pontuação + carrossel de jogos
                                  do dia + 3 cards de ação em coluna (Palpites, Ranking,
                                  Palpites Especiais) com imagem de fundo personalizada
@@ -270,6 +274,7 @@ C:\bolao\
 - Notificações via FCM: `lembretesPalpite` (scheduled `*/30min`) + `calcularPontuacao` envia ranking change. Token salvo no campo `fcmToken` do documento do usuário
 - Bandeiras exibidas como imagens reais via pacote `country_flags` (não emojis); mapeamento de nome → ISO em `isoDe()`
 - Telas admin separadas por responsabilidade (placares, classificação copa, palpites especiais, definições) em vez de uma tela única — cada tela tem foco claro e é navegada via drawer
+- Ressincronização das telas do IndexedStack via `Sinal` (ChangeNotifier em `biblioteca.dart`): o `MenuPrincipal` dispara o sinal da aba ao selecioná-la no NavigationBar e ao voltar de qualquer rota do drawer (`_abrirRota` com `await`); Home, Palpites e Ranking escutam e recarregam dados silenciosamente — preserva scroll e rascunhos (que uma `Key` nova destruiria)
 
 ---
 
