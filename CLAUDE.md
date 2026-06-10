@@ -112,7 +112,12 @@ C:\bolao\
                                  tela_palpites_especiais e tela_admin_especiais para
                                  seletores de jogador; "-" no campo clube = informação
                                  não disponível
-    avatares/                 ← imagens dos jogadores para seleção de avatar
+    avatares/                 ← imagens dos jogadores para seleção de avatar;
+                                 inclui as 26 fotos oficiais FIFA da seleção brasileira da
+                                 Copa 2026 (25 jogadores + Ancelotti; 512×512, recortadas dos
+                                 retratos do ensaio de 04/06/2026); neymar2026/vini2026/
+                                 paqueta2026 não colidem com os avatares de "Principais";
+                                 Alex Sandro (#6) não tem retrato individual na galeria FIFA
     background-cards/         ← imagens de fundo dos 3 cards de ação da tela Home
                                  (br.png → PALPITES, r9.png → RANKING, 2022.png → PALPITES ESPECIAIS)
                                  cabecalho.gif → GIF animado de fundo do cabeçalho do drawer
@@ -220,7 +225,12 @@ C:\bolao\
       biblioteca.dart         ← funções utilitárias top-level (flagDe, siglaDe,
                                  formatarData, mostrarMensagem, ehPlaceholder,
                                  calcularPontos, multiplicadorFase, calcularPontosComFase)
-      avatares.dart           ← lista kJogadores + widgets WidgetAvatar e CardAvatar;
+      avatares.dart           ← listas kJogadores (Principais) e kJogadoresBrasil2026
+                                 (26 fotos oficiais FIFA: 25 jogadores + Ancelotti)
+                                 + widgets WidgetAvatar, CardAvatar
+                                 e GradeAvataresSecionada (abas lado a lado PRINCIPAIS /
+                                 BRASIL 2026, abre na aba do avatar selecionado;
+                                 usada no setup e no perfil);
                                  CardAvatar é StatefulWidget com animação 3D flip para
                                  "avatares secretos" (long-press abre foto alternativa *2.jpg)
   web/
@@ -714,10 +724,25 @@ const kJogadores = [
   // ... 10 mais
 ];
 
+// 26 fotos oficiais FIFA da seleção brasileira da Copa 2026 (25 jogadores
+// + Ancelotti no final); Neymar/Vini Jr./Paquetá usam ids com sufixo 2026
+// (neymar2026, vini2026, paqueta2026) para não colidir com os avatares
+// deles em PRINCIPAIS
+const kJogadoresBrasil2026 = [
+  Jogador('alisson', 'Alisson', 'Brazil'),
+  // ... 25 mais
+];
+
 WidgetAvatar(avatarId: usuario.avatar, nome: usuario.nome, tamanho: 64)
 // interface nova (StatefulWidget com flip):
 CardAvatar(jogador: jogador, avatarSelecionadoId: _avatarSelecionado, onTap: (id) { ... })
 // Long-press revela foto alternativa (assets/avatares/{id}2.jpg) com animação 3D flip
+
+// Grade com abas lado a lado PRINCIPAIS / BRASIL 2026 (alterna a grade
+// exibida; abre na aba do avatar selecionado) — usada em tela_setup_perfil
+// e no bottom sheet de troca de avatar da tela_perfil;
+// não rola sozinha (colocar dentro de um scroll do chamador)
+GradeAvataresSecionada(avatarSelecionadoId: _avatarSelecionado, onTap: (id) { ... })
 ```
 
 ---

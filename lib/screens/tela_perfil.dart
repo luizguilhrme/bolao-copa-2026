@@ -401,27 +401,18 @@ class _SeletorAvatarSheetState extends State<_SeletorAvatarSheet> {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: GridView.builder(
+            child: ListView(
               controller: scrollController,
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 0.82,
-              ),
-              itemCount: kJogadores.length,
-              itemBuilder: (context, index) {
-                final jogador = kJogadores[index];
-                return CardAvatar(
-                  jogador: jogador,
+              children: [
+                GradeAvataresSecionada(
                   avatarSelecionadoId: _selecionado,
                   onTap: (id) {
                     setState(() => _selecionado = id);
                     widget.onSelecionado(id);
                   },
-                );
-              },
+                ),
+              ],
             ),
           ),
         ],
