@@ -729,11 +729,11 @@ class _AbaEspeciais extends StatelessWidget {
             label: 'Campeão do Mundo',
             pontos: '+500'),
         const _LinhaEspecial(
-            icone: Icons.sports_soccer_rounded,
+            icone: Icons.star_rounded,
             label: 'Chuteira de Ouro (artilheiro)',
             pontos: '+300'),
         const _LinhaEspecial(
-            icone: Icons.star_rounded,
+            icone: Icons.sports_soccer_rounded,
             label: 'Bola de Ouro (melhor jogador)',
             pontos: '+300'),
         const _LinhaEspecial(
