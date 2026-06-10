@@ -111,7 +111,11 @@ C:\bolao\
                                  posicao(GOL/DEF/MEI/ATA),clube}]}]}; usado em
                                  tela_palpites_especiais e tela_admin_especiais para
                                  seletores de jogador; "-" no campo clube = informação
-                                 não disponível
+                                 não disponível; nomes de jogador são únicos — o nome é a
+                                 chave de comparação dos palpites especiais; homônimos
+                                 desambiguados: "Montassar Talbi" (Tunísia, vs "Talbi" do
+                                 Marrocos) e "Emiliano Martínez (Dibu)" (GOL Argentina,
+                                 vs "Emiliano Martínez" MEI do Uruguai)
     avatares/                 ← imagens dos jogadores para seleção de avatar;
                                  inclui as 26 fotos oficiais FIFA da seleção brasileira da
                                  Copa 2026 (25 jogadores + Ancelotti; 512×512, recortadas dos
@@ -154,7 +158,9 @@ C:\bolao\
       tela_setup_perfil.dart  ← ordem: Nome → Grupos (criar/entrar opcional) → Avatar;
                                  dialogs de criar/entrar grupo inline;
                                  nome pré-preenchido com displayName do Google quando disponível
-      tela_perfil.dart        ← exibe/edita nome e avatar; alterar senha; excluir conta
+      tela_perfil.dart        ← exibe/edita nome e avatar; alterar/definir senha; excluir
+                                 conta; usuário Google-only (sem provedor password) define
+                                 senha e exclui conta com reautenticação via Google
       tela_notificacoes.dart  ← toggles de preferência de notificação (lembrete / ranking)
       tela_palpites.dart      ← abas MODO CLÁSSICO / MODO COPA (exibidas quando usuário tem grupos
                                  dos dois modos E Fase de Grupos ativa); sub-abas Próximos / Encerrados;
@@ -207,6 +213,11 @@ C:\bolao\
       tela_ajuda.dart         ← FAQ: pontuação Modo Clássico, multiplicadores de fase,
                                  pontuação Modo Copa, palpites especiais
     services/
+      auth_service.dart       ← login Google (GIS na web / fluxo nativo no Android),
+                                 vincularGoogle (account linking com conta e-mail/senha),
+                                 reautenticarComGoogle (popup na web / seletor nativo no
+                                 Android; usado por excluir conta e definir senha de
+                                 usuário Google-only), inicializar, sair
       jogo_service.dart       ← popularJogosNoFirestore({bool teste}), buscarTodos, buscarPorData
       usuario_service.dart    ← criarPerfil, buscarPorUid, observarUsuario,
                                  atualizarNome, atualizarAvatar,
@@ -706,6 +717,8 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 ### `tela_perfil.dart` — implementada
 - Exibe avatar com botão de troca; edição de nome; alterar senha; excluir conta
 - Card de pontuação verde exibe Clássico (★ amarelo) à esquerda e Copa (🏆) à direita, seguindo o mesmo padrão visual do hero card da `tela_home.dart`
+- Detecção de provedor via `user.providerData` (getter `_temSenha`): usuário Google-only (sem provedor `password`) vê **"Definir senha"** no lugar de "Alterar senha" — dialog explica que não há senha criada e chama `updatePassword` direto (se `requires-recent-login`, reautentica via `AuthService.reautenticarComGoogle()` e tenta de novo); após criar, `user.reload()` e o item vira "Alterar senha"
+- Excluir conta para usuário Google-only: dialog sem campo de senha avisa que a exclusão é imediata e que pode ser exigida reautenticação com a conta Google; confirma via `reautenticarComGoogle()` (cancelar o seletor aborta sem excluir; conta Google diferente → erro `user-mismatch` traduzido)
 
 ### `tela_notificacoes.dart` — implementada
 - Toggles: lembrete de palpite / mudança no ranking

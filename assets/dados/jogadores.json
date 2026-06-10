@@ -792,7 +792,7 @@
         { "nome": "Valery", "posicao": "DEF", "clube": "-" },
         { "nome": "Neffati", "posicao": "DEF", "clube": "-" },
         { "nome": "Bronn", "posicao": "DEF", "clube": "-" },
-        { "nome": "Talbi", "posicao": "DEF", "clube": "-" },
+        { "nome": "Montassar Talbi", "posicao": "DEF", "clube": "-" },
         { "nome": "Rekik", "posicao": "DEF", "clube": "-" },
         { "nome": "Arous", "posicao": "DEF", "clube": "-" },
         { "nome": "Chikhaoui", "posicao": "DEF", "clube": "-" },
@@ -1225,7 +1225,7 @@
       "grupo": "J",
       "iso": "AR",
       "jogadores": [
-        { "nome": "Emiliano Martínez", "posicao": "GOL", "clube": "Aston Villa" },
+        { "nome": "Emiliano Martínez (Dibu)", "posicao": "GOL", "clube": "Aston Villa" },
         { "nome": "Gerónimo Rulli", "posicao": "GOL", "clube": "Olympique Marselha" },
         { "nome": "Juan Musso", "posicao": "GOL", "clube": "Atlético de Madrid" },
         { "nome": "Nahuel Molina", "posicao": "DEF", "clube": "Atlético de Madrid" },
