@@ -14,7 +14,13 @@ import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 
 class TelaRanking extends StatefulWidget {
-  const TelaRanking({super.key});
+  const TelaRanking({super.key, this.sinalAtualizar});
+
+  /// Disparado pelo MenuPrincipal quando a tela precisa ressincronizar
+  /// (aba selecionada ou retorno de rota do drawer). Usuários e grupos já
+  /// são reativos via streams; o sinal recarrega só o config (resultados
+  /// reais usados nos desempates).
+  final Sinal? sinalAtualizar;
 
   @override
   State<TelaRanking> createState() => _TelaRankingState();
@@ -42,6 +48,13 @@ class _TelaRankingState extends State<TelaRanking> {
   void initState() {
     super.initState();
     _carregarConfig();
+    widget.sinalAtualizar?.addListener(_carregarConfig);
+  }
+
+  @override
+  void dispose() {
+    widget.sinalAtualizar?.removeListener(_carregarConfig);
+    super.dispose();
   }
 
   Future<void> _carregarConfig() async {

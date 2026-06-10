@@ -15,9 +15,13 @@ import 'tela_palpites_especiais.dart';
 // ─── Tela Home ────────────────────────────────────────────────────────────────
 
 class TelaHome extends StatefulWidget {
-  const TelaHome({super.key, required this.onNavegar});
+  const TelaHome({super.key, required this.onNavegar, this.sinalAtualizar});
 
   final void Function(int) onNavegar;
+
+  /// Disparado pelo MenuPrincipal quando a tela precisa ressincronizar
+  /// (aba selecionada ou retorno de rota do drawer).
+  final Sinal? sinalAtualizar;
 
   @override
   State<TelaHome> createState() => _TelaHomeState();
@@ -25,14 +29,37 @@ class TelaHome extends StatefulWidget {
 
 class _TelaHomeState extends State<TelaHome> {
   final _uid = FirebaseAuth.instance.currentUser!.uid;
-  late final Future<List<Jogo>> _jogosDeHoje;
-  late final Future<List<_GrupoRank>> _rankInfo;
+  late Future<List<Jogo>> _jogosDeHoje;
+  late Future<List<_GrupoRank>> _rankInfo;
 
   @override
   void initState() {
     super.initState();
     _jogosDeHoje = JogoService().buscarPorData(DateTime.now());
     _rankInfo = _carregarRankInfo();
+    widget.sinalAtualizar?.addListener(_recarregarSilencioso);
+  }
+
+  @override
+  void dispose() {
+    widget.sinalAtualizar?.removeListener(_recarregarSilencioso);
+    super.dispose();
+  }
+
+  // Rebusca jogos do dia e posições no ranking sem flash de loading:
+  // os dados novos só substituem os antigos quando já estão prontos.
+  Future<void> _recarregarSilencioso() async {
+    try {
+      final jogos = await JogoService().buscarPorData(DateTime.now());
+      final rank = await _carregarRankInfo();
+      if (!mounted) return;
+      setState(() {
+        _jogosDeHoje = Future.value(jogos);
+        _rankInfo = Future.value(rank);
+      });
+    } catch (_) {
+      // Mantém os dados antigos em caso de erro
+    }
   }
 
   Future<List<_GrupoRank>> _carregarRankInfo() async {

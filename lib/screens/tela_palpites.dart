@@ -45,7 +45,11 @@ bool _estaBloqueado(Jogo jogo) => DateTime.now().isAfter(
 // ─── Tela principal ───────────────────────────────────────────────────────────
 
 class TelaPalpites extends StatefulWidget {
-  const TelaPalpites({super.key});
+  const TelaPalpites({super.key, this.sinalAtualizar});
+
+  /// Disparado pelo MenuPrincipal quando a tela precisa ressincronizar
+  /// (aba selecionada ou retorno de rota do drawer).
+  final Sinal? sinalAtualizar;
 
   @override
   State<TelaPalpites> createState() => _TelaPalpitesState();
@@ -84,6 +88,7 @@ class _TelaPalpitesState extends State<TelaPalpites> {
   void initState() {
     super.initState();
     _carregar();
+    widget.sinalAtualizar?.addListener(_recarregarSilencioso);
     // Reclassifica a cada 30s para mover jogos entre abas automaticamente
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) _reclassificar(preservarDatasVisiveis: true);
@@ -92,12 +97,18 @@ class _TelaPalpitesState extends State<TelaPalpites> {
 
   @override
   void dispose() {
+    widget.sinalAtualizar?.removeListener(_recarregarSilencioso);
     _timer?.cancel();
     super.dispose();
   }
 
-  Future<void> _carregar() async {
-    setState(() => _carregando = true);
+  // Ressincroniza os dados sem spinner de tela cheia: scroll, sub-aba ativa
+  // e rascunhos digitados são preservados. Cobre o caso de entrar/criar grupo
+  // de outro modo em Meus Grupos e voltar para cá.
+  void _recarregarSilencioso() => _carregar(silencioso: true);
+
+  Future<void> _carregar({bool silencioso = false}) async {
+    if (!silencioso) setState(() => _carregando = true);
     try {
       // Carrega dados essenciais em paralelo
       final results = await Future.wait([
@@ -142,9 +153,10 @@ class _TelaPalpitesState extends State<TelaPalpites> {
         _classificacaoReal = {};
       }
 
-      _reclassificar(preservarDatasVisiveis: false);
+      _reclassificar(preservarDatasVisiveis: silencioso);
     } catch (e) {
-      setState(() => _carregando = false);
+      // Em recarga silenciosa, mantém os dados antigos em caso de erro
+      if (!silencioso) setState(() => _carregando = false);
     }
   }
 
