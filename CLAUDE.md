@@ -124,7 +124,8 @@ C:\bolao\
                                  Alex Sandro (#6) não tem retrato individual na galeria FIFA
     background-cards/         ← imagens de fundo dos 3 cards de ação da tela Home
                                  (br.png → PALPITES, r9.png → RANKING, 2022.png → PALPITES ESPECIAIS)
-                                 cabecalho.gif → GIF animado de fundo do cabeçalho do drawer
+                                 cabecalho.webp → animação de fundo do cabeçalho do drawer
+                                 (WebP animado q70; convertido do GIF original de 3,2 MB → 655 KB)
   functions/
     index.js                  ← Cloud Functions (Node 22, região southamerica-east1):
                                  calcularPontuacao, lembretesPalpite, recalcularTudo,
@@ -325,7 +326,7 @@ leading: Builder(
 ```
 
 ### Drawer lateral
-- Cabeçalho com GIF animado de fundo (`assets/background-cards/cabecalho.gif`, `BoxFit.cover`) e conteúdo sobreposto via `Stack`: card glassmorphism (`ClipRRect` + `BackdropFilter` blur 10px + fundo `Colors.white` 18% alpha + borda 35% alpha) envolvendo avatar, nome e pontuação Clássico via `StreamBuilder<Usuario?>`
+- Cabeçalho com animação de fundo (`assets/background-cards/cabecalho.webp`, WebP animado, `BoxFit.cover`) e conteúdo sobreposto via `Stack`: card glassmorphism (`ClipRRect` + `BackdropFilter` blur 10px + fundo `Colors.white` 18% alpha + borda 35% alpha) envolvendo avatar, nome e pontuação Clássico via `StreamBuilder<Usuario?>`
 - Seção "CONTA": Meu Perfil → `TelaPerfil`; Notificações → `TelaNotificacoes`
 - Seção "GRUPOS": Meus Grupos → `TelaGrupos`
 - Seção "ADMIN" (só para `isAdmin == true`), 4 itens:

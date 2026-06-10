@@ -467,7 +467,7 @@ class _CabecalhoDrawer extends StatelessWidget {
       children: [
         Positioned.fill(
           child: Image.asset(
-            'assets/background-cards/cabecalho.gif',
+            'assets/background-cards/cabecalho.webp',
             fit: BoxFit.cover,
           ),
         ),
