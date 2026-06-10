@@ -726,27 +726,23 @@ class _AbaEspeciais extends StatelessWidget {
         const SizedBox(height: 16),
         const _LinhaEspecial(
             icone: Icons.emoji_events_rounded,
-            label: 'Campeão do Torneio',
+            label: 'Campeão do Mundo',
             pontos: '+500'),
         const _LinhaEspecial(
             icone: Icons.sports_soccer_rounded,
-            label: 'Artilheiro da Copa',
+            label: 'Chuteira de Ouro (artilheiro)',
+            pontos: '+300'),
+        const _LinhaEspecial(
+            icone: Icons.star_rounded,
+            label: 'Bola de Ouro (melhor jogador)',
+            pontos: '+300'),
+        const _LinhaEspecial(
+            icone: Icons.back_hand_rounded,
+            label: 'Luva de Ouro (melhor goleiro)',
             pontos: '+300'),
         const _LinhaEspecial(
             icone: Icons.person_rounded,
-            label: 'Melhor Jogador da Copa',
-            pontos: '+300'),
-        const _LinhaEspecial(
-            icone: Icons.sports_rounded,
-            label: 'Melhor Goleiro',
-            pontos: '+300'),
-        const _LinhaEspecial(
-            icone: Icons.bolt_rounded,
-            label: 'Equipe Mais Goleadora',
-            pontos: '+200'),
-        const _LinhaEspecial(
-            icone: Icons.shield_rounded,
-            label: 'Equipe Menos Vazada',
+            label: 'Melhor Jogador Jovem (sub-21)',
             pontos: '+200'),
       ],
     );
