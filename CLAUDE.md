@@ -800,6 +800,9 @@ A Copa 2026 tem 48 seleções e 7 fases eliminatórias. `jogos.json` e `jogos_te
 - ID 103: `"Disputa de 3º Lugar"`
 - ID 104: `"Final"`
 
+### Logout a cada reabertura do app Android (builds da Play Store)
+O R8 **full mode** (padrão desde o AGP 8.0) + `isMinifyEnabled = true` quebrava a desserialização da sessão persistida do Firebase Auth ao reabrir o app (`JSONArray[0] not a string` — [firebase-android-sdk#6375](https://github.com/firebase/firebase-android-sdk/issues/6375)): `authStateChanges()` emitia `null` e o usuário caía na tela de login em toda reabertura. Afetava só builds minificados (release/Play Store) e variava por aparelho (reproduzido em Samsung). Corrigido com `android.enableR8.fullMode=false` em `android/gradle.properties` — mantém minificação e shrink de recursos, só desativa as otimizações agressivas de reflexão.
+
 ---
 
 ## Conceitos Flutter aprendidos
