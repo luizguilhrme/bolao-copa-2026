@@ -982,7 +982,7 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 | `recalcularTudo` | HTTPS Callable (admin only) | Recalcula `pontuacaoClassica` (jogos 1–72) e `pontuacaoEliminatorias` (jogos 73–104) do zero. Não toca em `pontuacaoEspeciais` nem `pontuacaoCopa`. |
 | `membroEntrou` | Firestore trigger (`grupos/{grupoId}`) | Detecta novo membro e envia FCM para o dono do grupo |
 | `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Aplica pontos dos 6 especiais em `pontuacaoEspeciais`; marca `palpitesEspeciaisCalculados: true`. Botão CALCULAR sempre salva resultados antes de chamar a função. |
-| `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos |
+| `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos; tira UIDs órfãos dos arrays `membros` dos grupos (deleta grupos que ficarem vazios; transfere a posse se o dono era órfão) |
 | `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times de eliminatórias, classificação, resultados especiais, `pontuacaoClassica`, `pontuacaoCopa`, `pontuacaoEliminatorias`, `pontuacaoEspeciais`, flags e os campos da API (`statusApi`, `placarAoVivo1/2`, `placarDecisao1/2` — `apiId` é preservado). Palpites preservados. |
 | `recalcularCopa` | HTTPS Callable (admin only) | Calcula pontos da fase de grupos Copa (SET em `pontuacaoCopa`); marca `copaGruposCalculado: true`. Executar após inserir todos os placares da fase de grupos. |
 | `buscarPalpitesJogo` | HTTPS Callable | Retorna palpites de um jogo encerrado filtrados pelos membros dos grupos do solicitante (união de todos os grupos). Usado pelo dialog da `tela_tabela`. |

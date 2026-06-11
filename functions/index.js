@@ -632,7 +632,10 @@ exports.recalcularCopa = onCall(
 
 // ─── limparUsuariosOrfaos ─────────────────────────────────────────────────────
 // Remove documentos de `usuarios` e `palpites` cujas contas Firebase Auth
-// foram deletadas.
+// foram deletadas. Também tira esses UIDs dos arrays `membros` dos grupos
+// (a exclusão de conta não dispara o fluxo "sair do grupo"): grupos que
+// ficarem vazios são deletados e, se o dono era órfão, a posse passa para
+// o primeiro membro restante.
 
 exports.limparUsuariosOrfaos = onCall(
   { region: 'southamerica-east1' },
@@ -678,9 +681,34 @@ exports.limparUsuariosOrfaos = onCall(
       await batch.commit();
     }
 
+    // Grupos: remove UIDs órfãos de `membros`; deleta grupos que ficarem
+    // vazios; transfere a posse quando o dono era órfão.
+    const gruposSnap = await db.collection('grupos').get();
+    let gruposAtualizados = 0;
+    let gruposRemovidos = 0;
+    const batchGrupos = db.batch();
+    gruposSnap.docs.forEach((doc) => {
+      const g = doc.data();
+      const membros = g.membros || [];
+      const membrosValidos = membros.filter((uid) => uidsAuth.has(uid));
+      if (membrosValidos.length === membros.length) return;
+      if (membrosValidos.length === 0) {
+        batchGrupos.delete(doc.ref);
+        gruposRemovidos++;
+      } else {
+        const updates = { membros: membrosValidos };
+        if (!uidsAuth.has(g.donoUid)) updates.donoUid = membrosValidos[0];
+        batchGrupos.update(doc.ref, updates);
+        gruposAtualizados++;
+      }
+    });
+    if (gruposAtualizados + gruposRemovidos > 0) await batchGrupos.commit();
+
     return {
       usuariosRemovidos: usuariosOrfaos.length,
       palpitesRemovidos: palpitesOrfaos.length,
+      gruposAtualizados,
+      gruposRemovidos,
     };
   }
 );
