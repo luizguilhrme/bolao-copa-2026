@@ -1061,6 +1061,24 @@ async function _buscarApi(caminho) {
   return resp.json();
 }
 
+// Grava um documento de log na coleção `logs`, lida pela tela admin Ver Logs.
+// `linhas` vira uma mensagem multi-linha. O campo expiraEm alimenta a política
+// de TTL do Firestore (logs somem sozinhos após 7 dias). Nunca propaga erro:
+// log é diagnóstico, não pode derrubar a sincronização.
+async function _logar(db, origem, linhas) {
+  try {
+    const agora = Date.now();
+    await db.collection('logs').add({
+      origem,
+      mensagem: linhas.join('\n'),
+      criadoEm: Timestamp.fromMillis(agora),
+      expiraEm: Timestamp.fromMillis(agora + 7 * 24 * 60 * 60 * 1000),
+    });
+  } catch (e) {
+    console.error('Falha ao gravar log:', e);
+  }
+}
+
 // Encontra o jogo da API correspondente a um documento nosso.
 // Critério primário: mesmo horário UTC + mesma fase (+ mesmo grupo na Fase de
 // Grupos). Quando há mais de um candidato (a última rodada de cada grupo tem
@@ -1248,6 +1266,11 @@ exports.mapearJogosApi = onCall(
 
     await _atualizarStandingsEArtilharia(db);
 
+    await _logar(db, 'mapearJogosApi', [
+      `${mapeados} jogo(s) mapeado(s)` +
+        (pendentes.length > 0 ? `; pendentes: ${pendentes.join(', ')}` : ''),
+    ]);
+
     return { mapeados, pendentes };
   }
 );
@@ -1310,8 +1333,13 @@ exports.sincronizarApi = onSchedule(
     });
 
     if (pendentes.length === 0 && indefinidos.length === 0) {
-      return null; // fora da janela: zero requisições
+      return null; // fora da janela: zero requisições (e zero logs)
     }
+
+    // Tudo que acontece a partir daqui vira UM documento de log por execução
+    // (tela admin Ver Logs); execuções fora da janela não geram log.
+    const linhas = [];
+    try {
 
     // dateFrom/dateTo cobrindo todos os jogos relevantes, com 1 dia de margem UTC
     const tempos = [...pendentes, ...indefinidos]
@@ -1326,6 +1354,12 @@ exports.sincronizarApi = onSchedule(
     const matches = resposta.matches || [];
     const porId = new Map(matches.map((m) => [m.id, m]));
 
+    linhas.push(
+      `${pendentes.length} jogo(s) na janela ativa, ${indefinidos.length} ` +
+      `confronto(s) a definir — API retornou ${matches.length} jogo(s) ` +
+      `(${dateFrom} a ${dateTo})`
+    );
+
     // Define os confrontos das eliminatórias: preenche team1/team2 apenas
     // onde ainda há placeholder — nunca sobrescreve time já definido (pela
     // propagação da chave, pela tela Admin Copa ou por ajuste manual).
@@ -1338,12 +1372,24 @@ exports.sincronizarApi = onSchedule(
         m = _encontrarJogoApi(j, matches);
         if (m) updates.apiId = m.id;
       }
-      if (!m) continue;
+      if (!m) {
+        linhas.push(`Jogo ${j.id}: sem correspondência na API`);
+        continue;
+      }
 
       const nome1 = _nomeRealDeTime(m.homeTeam?.name);
       const nome2 = _nomeRealDeTime(m.awayTeam?.name);
       if (_ehPlaceholder(j.team1) && nome1) updates.team1 = nome1;
       if (_ehPlaceholder(j.team2) && nome2) updates.team2 = nome2;
+
+      if (updates.team1 || updates.team2) {
+        linhas.push(
+          `Jogo ${j.id}: confronto definido — ` +
+          `${updates.team1 ?? j.team1} x ${updates.team2 ?? j.team2}`
+        );
+      } else {
+        linhas.push(`Jogo ${j.id}: times ainda não definidos na API`);
+      }
 
       if (Object.keys(updates).length > 0) await doc.ref.update(updates);
     }
@@ -1361,7 +1407,10 @@ exports.sincronizarApi = onSchedule(
         m = _encontrarJogoApi(j, matches);
         if (m) updates.apiId = m.id;
       }
-      if (!m) continue;
+      if (!m) {
+        linhas.push(`Jogo ${j.id} ${j.team1} x ${j.team2}: sem correspondência na API`);
+        continue;
+      }
 
       if (j.statusApi !== m.status) updates.statusApi = m.status;
 
@@ -1375,7 +1424,17 @@ exports.sincronizarApi = onSchedule(
         if (finalizou) finalizouAlgum = true;
       }
 
-      if (Object.keys(updates).length > 0) {
+      // Placar na orientação home/away da API (pode estar invertido em
+      // relação a team1/team2 — a inversão é tratada antes de gravar).
+      const ft = (m.score || {}).fullTime || {};
+      const mudou = Object.keys(updates).length > 0;
+      linhas.push(
+        `Jogo ${j.id} ${j.team1} x ${j.team2}: ${m.status}, ` +
+        `placar API ${ft.home ?? '-'}x${ft.away ?? '-'}` +
+        (mudou ? ` → gravou ${Object.keys(updates).join(', ')}` : ' (sem mudanças)')
+      );
+
+      if (mudou) {
         // Um update por documento (sem batch): cada placar final dispara o
         // trigger calcularPontuacao individualmente, como a inserção manual.
         await doc.ref.update(updates);
@@ -1383,7 +1442,17 @@ exports.sincronizarApi = onSchedule(
     }
 
     // Classificação e artilharia só mudam quando algum jogo termina
-    if (finalizouAlgum) await _atualizarStandingsEArtilharia(db);
+    if (finalizouAlgum) {
+      await _atualizarStandingsEArtilharia(db);
+      linhas.push('Classificação e artilharia atualizadas');
+    }
+
+    await _logar(db, 'sincronizarApi', linhas);
+    } catch (e) {
+      linhas.push(`ERRO: ${e.message}`);
+      await _logar(db, 'erro', linhas);
+      throw e;
+    }
 
     return null;
   }

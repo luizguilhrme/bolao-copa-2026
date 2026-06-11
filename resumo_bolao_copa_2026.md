@@ -148,9 +148,14 @@ C:\bolao\
                                  (dialogos.dart, cor: verdePrincipal); seletor de time via
                                  _DialogSeletorTime (interno); botão SALVAR + botão CALCULAR
       tela_admin_definicoes.dart ← popular jogos, mapear jogos com a API (mapearJogosApi;
-                                 rodar após popular), recalcular regras, limpar dados de
-                                 teste, limpar órfãos; botão Travar/Destravar Palpites
-                                 (grava palpitesTravados em config/copa2026)
+                                 rodar após popular), Ver Logs (abre TelaAdminLogs),
+                                 recalcular regras, limpar dados de teste, limpar órfãos;
+                                 botão Travar/Destravar Palpites (grava palpitesTravados
+                                 em config/copa2026)
+      tela_admin_logs.dart    ← lista a coleção `logs` (StreamBuilder, criadoEm desc,
+                                 limit 100): execuções da sincronizarApi/mapearJogosApi
+                                 com badge colorida por origem (erro=vermelho) e
+                                 mensagem multi-linha; somente leitura
       tela_admin_teste_api.dart ← simulação visual da integração football-data.org com dados
                                  fictícios no formato JSON real da API (status TIMED/IN_PLAY/
                                  PAUSED/FINISHED, prorrogação e pênaltis com check no
@@ -541,6 +546,23 @@ api/artilharia
   atualizadoEm : Timestamp
 ```
 
+### `logs`
+Logs de execução das Cloud Functions, escritos pelo helper `_logar()` e exibidos na
+tela admin Ver Logs (ADMIN → Outras Definições). Um documento por execução da
+`sincronizarApi` que chamou a API (execuções fora da janela não geram log) e por
+execução da `mapearJogosApi`. Apagados automaticamente por política de TTL do
+Firestore no campo `expiraEm` (setup único:
+`gcloud firestore fields ttls update expiraEm --collection-group=logs --enable-ttl --project=bolaodasoci2026`).
+
+```
+logs/{autoId}
+  origem    : String    — 'sincronizarApi' | 'mapearJogosApi' | 'erro'
+  mensagem  : String    — multi-linha: resumo da janela + 1 linha por jogo com o
+                          status/placar retornado pela API e os campos gravados
+  criadoEm  : Timestamp
+  expiraEm  : Timestamp — criadoEm + 7 dias (alvo da política de TTL)
+```
+
 ---
 
 ## Regras de pontuação
@@ -906,8 +928,8 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 | `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times eliminatórias, classificação, `pontuacaoClassica`, `pontuacaoCopa`, `pontuacaoEliminatorias`, `pontuacaoEspeciais`, `placaresExatos`, `palpitesPerdidos`, flags e os campos da API (`statusApi`, `placarAoVivo1/2`, `placarDecisao1/2` — `apiId` é preservado); palpites preservados |
 | `buscarPalpitesJogo` | HTTPS Callable | Retorna palpites de um jogo encerrado filtrados pelos membros dos grupos do solicitante (união). Usado pelo dialog da `tela_tabela`. |
 | `buscarPalpitesUsuario` | HTTPS Callable | Retorna palpites clássicos + Copa de um usuário, validando grupo em comum com o solicitante. Usado pelo dialog do `tela_ranking`. |
-| `sincronizarApi` | Schedule (`*/2 * * * *`, secret FOOTBALL_DATA_KEY) | Janela inteligente: só chama a football-data.org quando há jogo ativo (início −20 min a +5h, sem placar final) ou eliminatória com placeholder nas próximas 72h. Grava `statusApi` + `placarAoVivo1/2` durante o jogo; no FINISHED grava `placar1/2` (`score.regularTime` — regra dos 90 min) + `vencedor` (`score.winner` em empate nos 90) + `placarDecisao1/2` (pênaltis ou placar final da prorrogação), disparando o trigger `calcularPontuacao`. Define os confrontos das eliminatórias preenchendo `team1/team2` onde ainda há placeholder (nunca sobrescreve time definido). Compara antes de escrever; não sobrescreve placar inserido pelo admin. Quando algum jogo termina, atualiza `api/classificacao` e `api/artilharia`. Mapeia `apiId` pendentes quando os times ficam definidos. |
-| `mapearJogosApi` | HTTPS Callable (admin only, secret FOOTBALL_DATA_KEY) | De-para permanente jogo↔API: grava `apiId` em cada doc de `jogos` cruzando data/hora UTC + fase + grupo (nomes de time como desempate, com aliases para grafias divergentes). Retorna `{mapeados, pendentes}`. Também grava a primeira foto de `api/classificacao` e `api/artilharia`. Rodar uma vez — e novamente após Popular Jogos. |
+| `sincronizarApi` | Schedule (`*/2 * * * *`, secret FOOTBALL_DATA_KEY) | Janela inteligente: só chama a football-data.org quando há jogo ativo (início −20 min a +5h, sem placar final) ou eliminatória com placeholder nas próximas 72h. Grava `statusApi` + `placarAoVivo1/2` durante o jogo; no FINISHED grava `placar1/2` (`score.regularTime` — regra dos 90 min) + `vencedor` (`score.winner` em empate nos 90) + `placarDecisao1/2` (pênaltis ou placar final da prorrogação), disparando o trigger `calcularPontuacao`. Define os confrontos das eliminatórias preenchendo `team1/team2` onde ainda há placeholder (nunca sobrescreve time definido). Compara antes de escrever; não sobrescreve placar inserido pelo admin. Quando algum jogo termina, atualiza `api/classificacao` e `api/artilharia`. Mapeia `apiId` pendentes quando os times ficam definidos. Cada execução que chamou a API grava um doc na coleção `logs` (helper `_logar`) com o que a API retornou por jogo e o que foi gravado; erros geram log com `origem: 'erro'` antes do rethrow. |
+| `mapearJogosApi` | HTTPS Callable (admin only, secret FOOTBALL_DATA_KEY) | De-para permanente jogo↔API: grava `apiId` em cada doc de `jogos` cruzando data/hora UTC + fase + grupo (nomes de time como desempate, com aliases para grafias divergentes). Retorna `{mapeados, pendentes}`. Também grava a primeira foto de `api/classificacao` e `api/artilharia`. Rodar uma vez — e novamente após Popular Jogos. Grava log do resultado na coleção `logs`. |
 
 **FCM token management:** token salvo em `usuarios/{uid}.fcmToken`. Tokens inválidos são removidos automaticamente (`messaging/registration-token-not-registered`).
 
@@ -952,6 +974,10 @@ Regras em `firestore.rules`, índice composto em `firestore.indexes.json`. Deplo
 **`api`**
 - `read`: qualquer autenticado
 - `write`: bloqueado (`if false`) — só as Cloud Functions escrevem, via Admin SDK
+
+**`logs`**
+- `read`: só admin (tela Ver Logs)
+- `write`: bloqueado (`if false`) — só as Cloud Functions escrevem, via Admin SDK; limpeza automática por TTL (`expiraEm`)
 
 **Decisões conscientes:**
 - Email visível a todos os autenticados: aceitável para bolão de amigos; mudar exigiria refatoração de arquitetura
@@ -1000,6 +1026,7 @@ Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regene
 - **Endpoints usados:** `/competitions/WC/matches?dateFrom&dateTo`, `/competitions/WC/standings`, `/competitions/WC/scorers?limit=100`.
 - **Free tier:** placares com delay de alguns minutos — irrelevante para o fluxo (aviso exibido na Home).
 - **FINISHED sem placar (bug corrigido 2026-06-11, jogo de abertura):** a API pode mudar `status` para `FINISHED` e só confirmar o `score.fullTime` minutos depois (chega `{home: null, away: null}`). O filtro de pendentes excluía jogos com `statusApi == FINISHED`, então o jogo ficava travado para sempre sem `placar1/2` (o admin teve que inserir manualmente o placar do jogo 1). Correção: o filtro agora considera apenas `placar1 == null` — jogo finalizado sem placar continua sendo sincronizado até a API confirmar (a janela de 5h limita as tentativas). Também corrigido bug latente em `_aplicarPlacarFinal`: `score.regularTime || fullTime` escolhia o `regularTime` mesmo vindo como `{home: null, away: null}`; agora só usa `regularTime` se `home`/`away` forem não-nulos.
+- **Logs (Ver Logs):** toda execução da `sincronizarApi` que chamou a API grava um doc na coleção `logs` (resumo da janela + status/placar retornado pela API por jogo + campos gravados; erros com `origem: 'erro'`). Visível em ADMIN → Outras Definições → Ver Logs; retenção de 7 dias via TTL no campo `expiraEm` (setup único: `gcloud firestore fields ttls update expiraEm --collection-group=logs --enable-ttl --project=bolaodasoci2026`). Diagnostica delays da API (ex.: gol que demora ~10 min para aparecer no free tier — dá pra ver em qual execução a API passou a informar o placar novo).
 - A tela ADMIN → Teste de API continua como simulação visual (formato JSON real da API), sem requisições.
 
 ## Próximos passos (na ordem recomendada)

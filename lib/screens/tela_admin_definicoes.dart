@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/jogo_service.dart';
 import '../utils/avatares.dart';
+import 'tela_admin_logs.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 import '../utils/dialogos.dart';
@@ -485,6 +486,19 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
                 'sincronização automática). Rodar após "Popular Jogos".',
             carregando: _mapeandoApi,
             onTap: _mapearJogosApi,
+          ),
+          const SizedBox(height: 12),
+          _CardOpcao(
+            icone: Icons.receipt_long_rounded,
+            corIcone: Cores.azulTerciario,
+            titulo: 'Ver Logs',
+            descricao:
+                'Histórico das execuções da sincronização com a API '
+                '(últimos 7 dias).',
+            carregando: false,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const TelaAdminLogs()),
+            ),
           ),
           const SizedBox(height: 12),
           _CardOpcao(
