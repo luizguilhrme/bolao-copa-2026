@@ -1,13 +1,33 @@
-﻿import 'package:cloud_functions/cloud_functions.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/jogo.dart';
 import '../models/palpite.dart';
 import '../models/usuario.dart';
 import '../services/jogo_service.dart';
+import '../utils/artilharia.dart';
 import '../utils/avatares.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
+import '../utils/dialogos.dart';
+
+// Cards brancos com sombra suave sobre Cores.background.
+const _sombraCard = [
+  BoxShadow(color: Color(0x14000000), blurRadius: 16, offset: Offset(0, 4)),
+];
+
+// Ordem canônica das rodadas/fases para o filtro "Por rodada".
+const _ordemRodadas = [
+  'Rodada 1',
+  'Rodada 2',
+  'Rodada 3',
+  '16 avos de Final',
+  'Oitavas de Final',
+  'Quartas de Final',
+  'Semifinal',
+  'Disputa de 3º Lugar',
+  'Final',
+];
 
 // =============================================================================
 // TelaTabela
@@ -18,23 +38,32 @@ import '../utils/cores.dart';
 // Conceitos novos introduzidos aqui:
 //   - CustomScrollView + Slivers: permite misturar cabeçalhos e listas de
 //     forma eficiente, sem precisar de um ListView "gigante" com ifs no meio.
-//   - AnimationController: usado no chip "AO VIVO" para fazer o ponto pulsar.
-//   - SingleTickerProviderStateMixin: o "motor" necessário para rodar animações.
 // =============================================================================
 
 class TelaTabela extends StatefulWidget {
-  const TelaTabela({super.key});
+  const TelaTabela({super.key, this.sinalAbrirArtilharia});
+
+  /// Disparado pelo MenuPrincipal quando a Home pede a aba ARTILHARIA.
+  final Sinal? sinalAbrirArtilharia;
 
   @override
   State<TelaTabela> createState() => _TelaTabelaState();
 }
 
 class _TelaTabelaState extends State<TelaTabela> {
+  // Aba superior: 0 = JOGOS | 1 = CLASSIFICAÇÃO | 2 = ARTILHARIA
+  int _abaSuperior = 0;
+
   // 0 = Próximos  |  1 = Resultados
   int _abaAtiva = 0;
 
-  // null = Todos; preenchido = filtra pelo grupo da Copa (ex: "Grupo A")
-  String? _filtroGrupo;
+  // Filtro de jogos: 0 = Por data | 1 = Por rodada | 2 = Por grupo
+  int _filtroJogos = 0;
+  String? _rodadaSelecionada;
+  String? _grupoSelecionado;
+
+  // Filtro da aba CLASSIFICAÇÃO: null = todos os grupos
+  String? _grupoClassificacao;
 
   late Future<List<Jogo>> _futureJogos;
 
@@ -42,6 +71,17 @@ class _TelaTabelaState extends State<TelaTabela> {
   void initState() {
     super.initState();
     _futureJogos = JogoService().buscarTodos();
+    widget.sinalAbrirArtilharia?.addListener(_abrirArtilharia);
+  }
+
+  @override
+  void dispose() {
+    widget.sinalAbrirArtilharia?.removeListener(_abrirArtilharia);
+    super.dispose();
+  }
+
+  void _abrirArtilharia() {
+    if (mounted) setState(() => _abaSuperior = 2);
   }
 
   Future<void> _recarregar() async {
@@ -77,134 +117,266 @@ class _TelaTabelaState extends State<TelaTabela> {
         final todos = snapshot.data ?? [];
 
         // Extrai grupos únicos da Copa presentes nos dados, em ordem alfabética
-        final gruposCopa = todos
-            .map((j) => j.group)
-            .whereType<String>()
-            .toSet()
-            .toList()
-          ..sort();
+        final gruposCopa =
+            todos.map((j) => j.group).whereType<String>().toSet().toList()
+              ..sort();
 
-        return Column(
-          children: [
-            _buildTabs(),
-            _buildFiltroGrupos(gruposCopa),
-            Expanded(child: _buildLista(todos)),
-          ],
+        return Container(
+          color: Cores.background,
+          child: Column(
+            children: [
+              _SeletorModo(
+                indice: _abaSuperior,
+                onChanged: (i) => setState(() => _abaSuperior = i),
+              ),
+              if (_abaSuperior == 1)
+                // CLASSIFICAÇÃO: seletor de grupo (Todos os grupos / A–L)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: _CampoSeletorFiltro(
+                    valor: _grupoClassificacao ?? 'Todos os grupos',
+                    onTap: () => _abrirSeletorGrupoClassificacao(gruposCopa),
+                  ),
+                )
+              else if (_abaSuperior == 0) ...[
+                // Chips de filtro (Por data / Por rodada / Por grupo)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                  child: _ChipsFiltroJogos(
+                    filtro: _filtroJogos,
+                    onChanged:
+                        (f) => setState(() {
+                          _filtroJogos = f;
+                          // Pré-seleciona a primeira opção ao entrar no filtro
+                          if (f == 1 && _rodadaSelecionada == null) {
+                            final ops = _opcoesRodada(todos);
+                            if (ops.isNotEmpty) _rodadaSelecionada = ops.first;
+                          }
+                          if (f == 2 &&
+                              _grupoSelecionado == null &&
+                              gruposCopa.isNotEmpty) {
+                            _grupoSelecionado = gruposCopa.first;
+                          }
+                        }),
+                  ),
+                ),
+                if (_filtroJogos == 0)
+                  _buildSubAbas(todos)
+                else
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    child: _CampoSeletorFiltro(
+                      valor:
+                          _filtroJogos == 1
+                              ? _rodadaSelecionada
+                              : _grupoSelecionado,
+                      onTap: () => _abrirSeletorFiltro(todos, gruposCopa),
+                    ),
+                  ),
+              ],
+              Expanded(
+                child: switch (_abaSuperior) {
+                  1 => _buildClassificacao(todos),
+                  2 => _buildArtilharia(),
+                  _ => _buildLista(todos),
+                },
+              ),
+            ],
+          ),
         );
       },
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Seletor de abas (Próximos / Resultados)
+  // ARTILHARIA — classificação completa (dados simulados até a API entrar)
   // ---------------------------------------------------------------------------
 
-  Widget _buildTabs() {
+  Widget _buildArtilharia() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+            boxShadow: _sombraCard,
+          ),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.sports_soccer_rounded,
+                    color: Cores.verdePrincipal,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'CHUTEIRA DE OURO',
+                    style: GoogleFonts.anybody(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      color: Cores.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Jogadores com pelo menos um gol.',
+                style: GoogleFonts.hankenGrotesk(
+                  fontSize: 11,
+                  color: Cores.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 10),
+              for (var i = 0; i < kArtilhariaSimulada.length; i++) ...[
+                LinhaArtilheiro(
+                  posicao: i + 1,
+                  artilheiro: kArtilhariaSimulada[i],
+                ),
+                if (i < kArtilhariaSimulada.length - 1)
+                  const Divider(height: 14, color: Cores.surfaceVariant),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sub-abas Próximos / Encerrados — mesmo visual da tela de Palpites
+  // ---------------------------------------------------------------------------
+
+  Widget _buildSubAbas(List<Jogo> todos) {
+    final countProximos = todos.where((j) => j.placar1 == null).length;
+    final countEncerrados = todos.where((j) => j.placar1 != null).length;
+
+    // Card único segmentado (mesmo aspecto do campo seletor de rodada/grupo):
+    // seleção em branco suave, sem verde — a tela já tem verde nas abas e chips.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      // Container externo: o "trilho" cinza arredondado
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: Cores.surfaceContainer,
+          color: Cores.verdeSuave,
+          border: Border.all(color: Cores.outlineVariant),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
-            _buildBotaoTab(indice: 0, rotulo: 'Próximos'),
-            _buildBotaoTab(indice: 1, rotulo: 'Encerrados'),
+            Expanded(
+              child: _SegmentoAba(
+                label: 'Próximos',
+                count: countProximos,
+                ativo: _abaAtiva == 0,
+                onTap: () => setState(() => _abaAtiva = 0),
+              ),
+            ),
+            // Divisão central do card
+            Container(
+              width: 1,
+              height: 20,
+              color: Cores.outlineVariant,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+            ),
+            Expanded(
+              child: _SegmentoAba(
+                label: 'Encerrados',
+                count: countEncerrados,
+                ativo: _abaAtiva == 1,
+                onTap: () => setState(() => _abaAtiva = 1),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBotaoTab({required int indice, required String rotulo}) {
-    final ativo = _abaAtiva == indice;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _abaAtiva = indice),
-        child: AnimatedContainer(
-          // AnimatedContainer anima automaticamente qualquer mudança de
-          // propriedade (cor, sombra) ao longo da duration informada.
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: ativo ? Cores.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: ativo
-                ? [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 4,
-                offset: const Offset(0, 1),
-              ),
-            ]
-                : [],
-          ),
-          child: Text(
-            rotulo,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.hankenGrotesk(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-              color: ativo ? Cores.onSurface : Cores.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   // ---------------------------------------------------------------------------
-  // Chips de filtro por grupo da Copa
+  // MODO COPA — classificação dos grupos calculada dos placares inseridos
   // ---------------------------------------------------------------------------
 
-  Widget _buildFiltroGrupos(List<String> grupos) {
-    return SizedBox(
-      height: 44,
+  Widget _buildClassificacao(List<Jogo> todos) {
+    // Agrupa os jogos da Fase de Grupos pela letra do grupo
+    final porGrupo = <String, List<Jogo>>{};
+    for (final j in todos) {
+      if (j.group == null) continue;
+      if (_grupoClassificacao != null && j.group != _grupoClassificacao) {
+        continue;
+      }
+      porGrupo.putIfAbsent(j.group!, () => []).add(j);
+    }
+    final chaves = porGrupo.keys.toList()..sort();
+
+    return RefreshIndicator(
+      color: Cores.verdePrincipal,
+      onRefresh: _recarregar,
       child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
-          _buildChipFiltro(label: 'Todos', valor: null),
-          ...grupos.map((g) => Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: _buildChipFiltro(
-                  label: g.replaceFirst('Grupo ', ''),
-                  valor: g,
-                ),
-              )),
+          for (final g in chaves) ...[
+            _CardClassificacaoGrupo(
+              titulo: g,
+              linhas: _classificacaoDe(porGrupo[g]!),
+            ),
+            const SizedBox(height: 12),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildChipFiltro({required String label, required String? valor}) {
-    final selecionado = _filtroGrupo == valor;
-    return GestureDetector(
-      onTap: () => setState(() => _filtroGrupo = valor),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: selecionado ? Cores.verdePrincipal : Cores.surfaceContainer,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selecionado ? Cores.verdePrincipal : Cores.outlineVariant,
-          ),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.anybody(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: selecionado ? Colors.white : Cores.onSurfaceVariant,
-          ),
-        ),
-      ),
+  // ---------------------------------------------------------------------------
+  // Filtros Por rodada / Por grupo
+  // ---------------------------------------------------------------------------
+
+  /// Rodadas/fases presentes nos jogos, na ordem canônica do torneio.
+  List<String> _opcoesRodada(List<Jogo> todos) {
+    final presentes = todos.map((j) => j.matchday ?? j.round).toSet();
+    return [
+      for (final r in _ordemRodadas)
+        if (presentes.contains(r)) r,
+    ];
+  }
+
+  Future<void> _abrirSeletorFiltro(
+    List<Jogo> todos,
+    List<String> gruposCopa,
+  ) async {
+    final porRodada = _filtroJogos == 1;
+    final escolha = await mostrarSeletorOpcoes(
+      context,
+      titulo: porRodada ? 'Rodada / Fase' : 'Grupo',
+      opcoes: porRodada ? _opcoesRodada(todos) : gruposCopa,
+      selecionada: porRodada ? _rodadaSelecionada : _grupoSelecionado,
+    );
+    if (escolha == null || !mounted) return;
+    setState(() {
+      if (porRodada) {
+        _rodadaSelecionada = escolha;
+      } else {
+        _grupoSelecionado = escolha;
+      }
+    });
+  }
+
+  Future<void> _abrirSeletorGrupoClassificacao(List<String> gruposCopa) async {
+    final escolha = await mostrarSeletorOpcoes(
+      context,
+      titulo: 'Grupo',
+      opcoes: ['Todos os grupos', ...gruposCopa],
+      selecionada: _grupoClassificacao ?? 'Todos os grupos',
+    );
+    if (escolha == null || !mounted) return;
+    setState(
+      () => _grupoClassificacao = escolha == 'Todos os grupos' ? null : escolha,
     );
   }
 
@@ -213,18 +385,24 @@ class _TelaTabelaState extends State<TelaTabela> {
   // ---------------------------------------------------------------------------
 
   Widget _buildLista(List<Jogo> todos) {
-    final agora = DateTime.now();
-
-    // Aplica filtro de aba e de grupo da Copa
-    final filtrados = todos.where((j) {
-      final passaAba = _abaAtiva == 0
-          ? j.placar1 == null // Próximos: sem placar (inclui os ao vivo)
-          : j.placar1 != null; // Resultados: com placar
-      final passaGrupo =
-          _filtroGrupo == null || j.group == _filtroGrupo;
-      return passaAba && passaGrupo;
-    }).toList()
-      ..sort((a, b) => a.dataHora.compareTo(b.dataHora)); // ordena por horário
+    // Aplica o filtro ativo: Por data (sub-abas), Por rodada ou Por grupo
+    final filtrados =
+        todos.where((j) {
+            switch (_filtroJogos) {
+              case 1:
+                return (j.matchday ?? j.round) == _rodadaSelecionada;
+              case 2:
+                return j.group == _grupoSelecionado;
+              default:
+                return _abaAtiva == 0
+                    ? j.placar1 ==
+                        null // Próximos: sem placar
+                    : j.placar1 != null; // Encerrados: com placar
+            }
+          }).toList()
+          ..sort(
+            (a, b) => a.dataHora.compareTo(b.dataHora),
+          ); // ordena por horário
 
     if (filtrados.isEmpty) {
       return RefreshIndicator(
@@ -236,7 +414,9 @@ class _TelaTabelaState extends State<TelaTabela> {
               height: 300,
               child: Center(
                 child: Text(
-                  _abaAtiva == 0 ? 'Nenhum jogo futuro.' : 'Nenhum resultado ainda.',
+                  _abaAtiva == 0
+                      ? 'Nenhum jogo futuro.'
+                      : 'Nenhum resultado ainda.',
                   style: const TextStyle(color: Cores.onSurfaceVariant),
                 ),
               ),
@@ -254,8 +434,7 @@ class _TelaTabelaState extends State<TelaTabela> {
     // Chave: "Fase de Grupos — Rodada 1" ou "Oitavas de Final" (sem matchday)
     final Map<String, List<Jogo>> porSecao = {};
     for (final j in filtrados) {
-      final chave =
-      j.matchday != null ? '${j.round} — ${j.matchday}' : j.round;
+      final chave = j.matchday != null ? '${j.round} — ${j.matchday}' : j.round;
       porSecao.putIfAbsent(chave, () => []).add(j);
     }
 
@@ -269,28 +448,26 @@ class _TelaTabelaState extends State<TelaTabela> {
       color: Cores.verdePrincipal,
       onRefresh: _recarregar,
       child: CustomScrollView(
-      slivers: [
-        for (final entrada in porSecao.entries) ...[
-          SliverToBoxAdapter(
-            child: _buildCabecalhoSecao(entrada.key),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                    (context, i) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _CardJogo(jogo: entrada.value[i], agora: agora),
+        slivers: [
+          for (final entrada in porSecao.entries) ...[
+            SliverToBoxAdapter(child: _buildCabecalhoSecao(entrada.key)),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _CardJogo(jogo: entrada.value[i]),
+                  ),
+                  childCount: entrada.value.length,
                 ),
-                childCount: entrada.value.length,
               ),
             ),
-          ),
+          ],
+          // Espaço final para o card não ficar colado atrás da NavigationBar
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
-        // Espaço final para o card não ficar colado atrás da NavigationBar
-        const SliverToBoxAdapter(child: SizedBox(height: 24)),
-      ],
-    ),
+      ),
     );
   }
 
@@ -316,18 +493,14 @@ class _TelaTabelaState extends State<TelaTabela> {
 //
 // Widget separado para cada jogo. Isolá-lo aqui tem duas vantagens:
 //   1. O código fica mais organizado e fácil de ler.
-//   2. O Flutter pode reconstruir apenas os cards que mudaram, sem tocar nos
-//      outros — especialmente útil quando o chip "AO VIVO" anima.
+//   2. O Flutter pode reconstruir apenas os cards que mudaram, sem tocar
+//      nos outros.
 // =============================================================================
 
 class _CardJogo extends StatelessWidget {
-  const _CardJogo({required this.jogo, required this.agora});
+  const _CardJogo({required this.jogo});
 
   final Jogo jogo;
-  final DateTime agora;
-
-  // Ao vivo = já passou do horário de início, mas ainda não tem placar
-  bool get _aoVivo => jogo.placar1 == null && jogo.dataHora.isBefore(agora);
 
   bool get _encerrado => jogo.placar1 != null;
 
@@ -336,167 +509,105 @@ class _CardJogo extends StatelessWidget {
     return GestureDetector(
       onTap: _encerrado ? () => _mostrarPalpitesJogo(context, jogo) : null,
       child: Container(
-      decoration: BoxDecoration(
-        color: Cores.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Cores.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      // ClipRRect garante que a barra verde lateral não vaze para fora
-      // do arredondamento do container pai.
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Stack(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          boxShadow: _sombraCard,
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Barra verde na lateral esquerda — só aparece em jogos ao vivo
-            if (_aoVivo)
-              Positioned(
-                top: 0,
-                left: 0,
-                bottom: 0,
-                child: Container(width: 4, color: Cores.verdePrincipal),
-              ),
-
-            // Conteúdo principal (com padding extra à esquerda quando ao vivo)
-            Padding(
-              padding: EdgeInsets.fromLTRB(_aoVivo ? 20 : 16, 14, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildCabecalho(),
-                  const SizedBox(height: 14),
-                  _buildCorpo(),
-                ],
-              ),
-            ),
+            _buildCabecalho(),
+            const SizedBox(height: 14),
+            _buildCorpo(),
           ],
         ),
-      ), // ClipRRect
-      ), // Container
-    ); // GestureDetector
+      ),
+    );
   }
 
-  // ── Cabeçalho: chip do grupo + horário ou badge AO VIVO ──────────────────
+  // ── Cabeçalho: data e local (ou data de encerramento), centralizados ──────
 
   Widget _buildCabecalho() {
-    // Nas eliminatórias não existe group, então mostramos só o round
-    final labelEsquerda = jogo.group ?? jogo.round;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        // Chip esquerdo (grupo ou fase)
-        _Chip(
-          texto: labelEsquerda,
-          corFundo: Cores.surfaceVariant,
-          corTexto: Cores.onSurfaceVariant,
-        ),
-
-        // Direita: varia conforme o estado do jogo
-        if (_aoVivo)
-          const _ChipAoVivo()
-        else if (_encerrado)
-          Text(
-            'Encerrado · ${formatarData(jogo.dataHora)}',
-            style: GoogleFonts.hankenGrotesk(
-              fontSize: 11,
-              color: Cores.onSurfaceVariant,
-            ),
-          )
-        else
-          Text(
+    return Center(
+      child: Text(
+        _encerrado
+            ? 'Encerrado · ${formatarData(jogo.dataHora)}'
             // Horário já convertido para o fuso local do dispositivo
-            '${formatarData(jogo.dataHora)} · ${jogo.ground}',
-            style: GoogleFonts.hankenGrotesk(
-              fontSize: 11,
-              color: Cores.onSurfaceVariant,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-      ],
+            : '${formatarData(jogo.dataHora)} · ${jogo.ground}',
+        style: GoogleFonts.hankenGrotesk(
+          fontSize: 11,
+          color: Cores.onSurfaceVariant,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 
   // ── Corpo: time1 — [placar x placar] — time2 ─────────────────────────────
 
   Widget _buildCorpo() {
-    // As cores do placar mudam dependendo do estado
-    final corBorda = _aoVivo ? Cores.verdePrincipal : Cores.outline;
-    final corFundo = _aoVivo ? Cores.surfaceContainer : Colors.transparent;
-    final corTexto = _aoVivo ? Cores.verdePrincipal : Cores.onSurface;
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Time 1 (alinhado à esquerda)
-        Expanded(child: _buildTime(jogo.team1, TextAlign.left)),
+        Expanded(child: _buildTime(jogo.team1)),
 
         // Placar central
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _CaixaPlacar(
-                valor: jogo.placar1?.toString() ?? '—',
-                corBorda: corBorda,
-                corFundo: corFundo,
-                corTexto: corTexto,
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Text(
-                  'x',
-                  style: GoogleFonts.anybody(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Cores.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              _CaixaPlacar(
-                valor: jogo.placar2?.toString() ?? '—',
-                corBorda: corBorda,
-                corFundo: corFundo,
-                corTexto: corTexto,
-              ),
-            ],
-          ),
+          child: _buildPlacar(),
         ),
 
-        // Time 2 (alinhado à direita)
-        Expanded(child: _buildTime(jogo.team2, TextAlign.right)),
+        Expanded(child: _buildTime(jogo.team2)),
       ],
     );
   }
 
-  Widget _buildTime(String nome, TextAlign alinhamento) {
+  // Placar em texto puro — sem caixas, que pareciam campos editáveis como
+  // os da tela de palpites. Dois estados: encerrado (placar) ou não (— x —).
+  Widget _buildPlacar() {
+    if (_encerrado) {
+      return Text(
+        '${jogo.placar1}  x  ${jogo.placar2}',
+        style: GoogleFonts.anybody(
+          fontSize: 22,
+          fontWeight: FontWeight.w900,
+          color: Cores.onSurface,
+        ),
+      );
+    }
+    return Text(
+      '—  x  —',
+      style: GoogleFonts.anybody(
+        fontSize: 22,
+        fontWeight: FontWeight.w900,
+        color: Cores.outline,
+      ),
+    );
+  }
+
+  // Bandeira e nome centralizados no espaço lateral — mesmo padrão dos
+  // cards da tela de Palpites e da tela Teste de API.
+  Widget _buildTime(String nome) {
     return Column(
-      crossAxisAlignment: alinhamento == TextAlign.left
-          ? CrossAxisAlignment.start
-          : CrossAxisAlignment.end,
       children: [
         Container(
-          width: 32,
-          height: 32,
+          width: 36,
+          height: 36,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Cores.surfaceContainerHigh,
             border: Border.all(color: Cores.outlineVariant),
           ),
-          child: Bandeira(nome, tamanho: 32),
+          child: Bandeira(nome, tamanho: 36),
         ),
         const SizedBox(height: 4),
         Text(
           nomePtDe(nome),
-          textAlign: alinhamento,
+          textAlign: TextAlign.center,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: GoogleFonts.hankenGrotesk(
@@ -511,73 +622,73 @@ class _CardJogo extends StatelessWidget {
   }
 }
 
-// =============================================================================
-// Widgets auxiliares reutilizáveis dentro desta tela
-// =============================================================================
+// ─── Seletor de aba superior (JOGOS / CLASSIFICAÇÃO / ARTILHARIA) ────────────
+// Mesmo visual da tela de Palpites — faixa verde com abas brancas.
 
-class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.texto,
-    required this.corFundo,
-    required this.corTexto,
-  });
+class _SeletorModo extends StatelessWidget {
+  const _SeletorModo({required this.indice, required this.onChanged});
 
-  final String texto;
-  final Color corFundo;
-  final Color corTexto;
+  final int indice;
+  final void Function(int) onChanged;
+
+  static const _labels = ['JOGOS', 'CLASSIFICAÇÃO', 'ARTILHARIA'];
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: corFundo,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        texto,
-        style: GoogleFonts.hankenGrotesk(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: corTexto,
-          letterSpacing: 0.2,
-        ),
+      color: Cores.verdePrincipal,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      child: Row(
+        children: [
+          for (var i = 0; i < _labels.length; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            Expanded(
+              child: _BotaoModo(
+                label: _labels[i],
+                ativo: indice == i,
+                onTap: () => onChanged(i),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
 }
 
-class _CaixaPlacar extends StatelessWidget {
-  const _CaixaPlacar({
-    required this.valor,
-    required this.corBorda,
-    required this.corFundo,
-    required this.corTexto,
+class _BotaoModo extends StatelessWidget {
+  const _BotaoModo({
+    required this.label,
+    required this.ativo,
+    required this.onTap,
   });
-
-  final String valor;
-  final Color corBorda;
-  final Color corFundo;
-  final Color corTexto;
+  final String label;
+  final bool ativo;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: corFundo,
-        border: Border.all(color: corBorda, width: 2),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Center(
-        child: Text(
-          valor,
-          style: GoogleFonts.hankenGrotesk(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.5,
-            color: corTexto,
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: ativo ? Colors.white : Colors.transparent,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+        ),
+        // FittedBox encolhe o rótulo se faltar largura (ex: CLASSIFICAÇÃO
+        // em telas estreitas), mantendo as três abas com a mesma largura.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            style: GoogleFonts.anybody(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+              color: ativo ? Cores.verdePrincipal : Colors.white70,
+            ),
           ),
         ),
       ),
@@ -585,88 +696,374 @@ class _CaixaPlacar extends StatelessWidget {
   }
 }
 
-// =============================================================================
-// _ChipAoVivo
-//
-// O chip com ponto pulsante requer um StatefulWidget próprio porque precisa de
-// um AnimationController — e controllers são criados/destruídos junto com o
-// State, não com o Widget (que pode ser recriado a qualquer momento).
-//
-// SingleTickerProviderStateMixin: fornece o "tick" do relógio interno do
-// Flutter para o AnimationController. Sempre use isso quando tiver UMA animação.
-// Para múltiplas, use TickerProviderStateMixin (sem "Single").
-// =============================================================================
+// ─── Segmento de sub-aba (Próximos / Encerrados) ─────────────────────────────
+// Mesmo visual da tela de Palpites — seleção em branco suave, com contador.
 
-class _ChipAoVivo extends StatefulWidget {
-  const _ChipAoVivo();
+class _SegmentoAba extends StatelessWidget {
+  const _SegmentoAba({
+    required this.label,
+    required this.count,
+    required this.ativo,
+    required this.onTap,
+  });
 
-  @override
-  State<_ChipAoVivo> createState() => _ChipAoVivoState();
-}
-
-class _ChipAoVivoState extends State<_ChipAoVivo>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _fade;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this, // "vsync: this" liga o controller ao mixin acima
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true); // vai e volta em loop
-
-    // Tween define o intervalo da animação (0.3 → 1.0 de opacidade)
-    _fade = Tween<double>(begin: 0.3, end: 1.0).animate(_ctrl);
-  }
-
-  @override
-  void dispose() {
-    // SEMPRE chame dispose() no controller para liberar recursos.
-    // Esquecer isso causa memory leaks.
-    _ctrl.dispose();
-    super.dispose();
-  }
+  final String label;
+  final int count;
+  final bool ativo;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Cores.surfaceVariant,
-        borderRadius: BorderRadius.circular(999),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: ativo ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+          boxShadow:
+              ativo
+                  ? const [
+                    BoxShadow(
+                      color: Color(0x14000000),
+                      blurRadius: 6,
+                      offset: Offset(0, 2),
+                    ),
+                  ]
+                  : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.anybody(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: ativo ? Cores.onSurface : Cores.onSurfaceVariant,
+              ),
+            ),
+            if (count > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: ativo ? Cores.verdeSuave : Cores.outlineVariant,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$count',
+                  style: GoogleFonts.hankenGrotesk(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Cores.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // AnimatedBuilder escuta o controller e reconstrói só este trecho
-          // da árvore a cada frame — muito mais eficiente que chamar setState.
-          AnimatedBuilder(
-            animation: _fade,
-            builder: (_, __) => Opacity(
-              opacity: _fade.value,
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Cores.verdePrincipal,
-                  shape: BoxShape.circle,
+    );
+  }
+}
+
+// ─── Chips de filtro de jogos (Por data / Por rodada / Por grupo) ─────────────
+// Mesmo visual da tela de Palpites.
+
+class _ChipsFiltroJogos extends StatelessWidget {
+  const _ChipsFiltroJogos({required this.filtro, required this.onChanged});
+
+  final int filtro;
+  final void Function(int) onChanged;
+
+  static const _labels = ['Por data', 'Por rodada', 'Por grupo'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var i = 0; i < _labels.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          _buildChip(_labels[i], i),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildChip(String label, int indice) {
+    final selecionado = filtro == indice;
+    return GestureDetector(
+      onTap: () => onChanged(indice),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selecionado ? Cores.verdePrincipal : Cores.verdeSuave,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selecionado ? Cores.verdePrincipal : Cores.outlineVariant,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.anybody(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: selecionado ? Colors.white : Cores.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Campo seletor de rodada/grupo (abre bottom sheet de opções) ──────────────
+// Mesmo visual da tela de Palpites.
+
+class _CampoSeletorFiltro extends StatelessWidget {
+  const _CampoSeletorFiltro({required this.valor, required this.onTap});
+
+  final String? valor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: Cores.surfaceContainer,
+          border: Border.all(color: Cores.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.filter_list_rounded,
+              size: 20,
+              color: Cores.onSurfaceVariant,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                valor ?? 'Selecionar...',
+                style: GoogleFonts.hankenGrotesk(
+                  fontSize: 15,
+                  fontWeight: valor != null ? FontWeight.w600 : FontWeight.w400,
+                  color:
+                      valor != null ? Cores.onSurface : Cores.onSurfaceVariant,
                 ),
               ),
             ),
+            const Icon(
+              Icons.expand_more_rounded,
+              color: Cores.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Classificação dos grupos (CLASSIFICAÇÃO) ────────────────────────────────
+
+/// Estatísticas acumuladas de um time dentro do seu grupo.
+class _TimeClassificacao {
+  _TimeClassificacao(this.nome);
+
+  final String nome;
+  int jogos = 0;
+  int vitorias = 0;
+  int empates = 0;
+  int derrotas = 0;
+  int golsPro = 0;
+  int golsContra = 0;
+
+  int get pontos => vitorias * 3 + empates;
+  int get saldo => golsPro - golsContra;
+}
+
+/// Calcula a classificação de um grupo a partir dos placares já inseridos.
+/// Critérios de desempate FIFA: pontos > saldo de gols > gols pró > nome.
+List<_TimeClassificacao> _classificacaoDe(List<Jogo> jogosGrupo) {
+  final mapa = <String, _TimeClassificacao>{};
+  for (final j in jogosGrupo) {
+    final t1 = mapa.putIfAbsent(j.team1, () => _TimeClassificacao(j.team1));
+    final t2 = mapa.putIfAbsent(j.team2, () => _TimeClassificacao(j.team2));
+    if (j.placar1 == null || j.placar2 == null) continue;
+
+    t1.jogos++;
+    t2.jogos++;
+    t1.golsPro += j.placar1!;
+    t1.golsContra += j.placar2!;
+    t2.golsPro += j.placar2!;
+    t2.golsContra += j.placar1!;
+
+    if (j.placar1! > j.placar2!) {
+      t1.vitorias++;
+      t2.derrotas++;
+    } else if (j.placar1! < j.placar2!) {
+      t2.vitorias++;
+      t1.derrotas++;
+    } else {
+      t1.empates++;
+      t2.empates++;
+    }
+  }
+
+  return mapa.values.toList()..sort((a, b) {
+    if (b.pontos != a.pontos) return b.pontos - a.pontos;
+    if (b.saldo != a.saldo) return b.saldo - a.saldo;
+    if (b.golsPro != a.golsPro) return b.golsPro - a.golsPro;
+    return nomePtDe(a.nome).compareTo(nomePtDe(b.nome));
+  });
+}
+
+class _CardClassificacaoGrupo extends StatelessWidget {
+  const _CardClassificacaoGrupo({required this.titulo, required this.linhas});
+
+  final String titulo; // "Grupo A"
+  final List<_TimeClassificacao> linhas;
+
+  static const _larguraColuna = 30.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+        boxShadow: _sombraCard,
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Column(
+        children: [
+          // Título do grupo + cabeçalho das colunas
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  titulo.toUpperCase(),
+                  style: GoogleFonts.anybody(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    fontStyle: FontStyle.italic,
+                    letterSpacing: 0.8,
+                    color: Cores.onSurface,
+                  ),
+                ),
+              ),
+              for (final c in const ['J', 'SG', 'PTS'])
+                SizedBox(
+                  width: _larguraColuna,
+                  child: Text(
+                    c,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.hankenGrotesk(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Cores.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(width: 5),
-          Text(
-            'AO VIVO',
-            style: GoogleFonts.hankenGrotesk(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-              color: Cores.verdePrincipal,
+          const SizedBox(height: 6),
+          for (var i = 0; i < linhas.length; i++) _buildLinha(i + 1, linhas[i]),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLinha(int pos, _TimeClassificacao t) {
+    // 1º e 2º avançam direto — destaque verde sutil
+    final classificado = pos <= 2;
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      decoration: BoxDecoration(
+        color:
+            classificado
+                ? Cores.verdePrincipal.withValues(alpha: 0.06)
+                : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 18,
+            child: Text(
+              '$pos',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.anybody(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color:
+                    classificado
+                        ? Cores.verdePrincipal
+                        : Cores.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 24,
+            height: 24,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Cores.surfaceContainerHigh,
+              border: Border.all(color: Cores.outlineVariant),
+            ),
+            child: Bandeira(t.nome, tamanho: 24),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              nomePtDe(t.nome),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.hankenGrotesk(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Cores.onSurface,
+              ),
+            ),
+          ),
+          _celula('${t.jogos}'),
+          _celula('${t.saldo}'),
+          SizedBox(
+            width: _larguraColuna,
+            child: Text(
+              '${t.pontos}',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.anybody(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Cores.onSurface,
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _celula(String valor) {
+    return SizedBox(
+      width: _larguraColuna,
+      child: Text(
+        valor,
+        textAlign: TextAlign.center,
+        style: GoogleFonts.hankenGrotesk(
+          fontSize: 12,
+          color: Cores.onSurfaceVariant,
+        ),
       ),
     );
   }
@@ -682,8 +1079,11 @@ Future<void> _mostrarPalpitesJogo(BuildContext context, Jogo jogo) {
 }
 
 class _ItemPalpiteJogo {
-  const _ItemPalpiteJogo(
-      {required this.usuario, required this.palpite, required this.pontos});
+  const _ItemPalpiteJogo({
+    required this.usuario,
+    required this.palpite,
+    required this.pontos,
+  });
   final Usuario usuario;
   final Palpite palpite;
   final int pontos;
@@ -709,8 +1109,9 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
   Future<List<_ItemPalpiteJogo>> _carregar() async {
     // A Cloud Function verifica autenticação, filtra pelos membros dos grupos
     // do solicitante e retorna os dados prontos — sem leitura direta do Firestore.
-    final callable = FirebaseFunctions.instanceFor(region: 'southamerica-east1')
-        .httpsCallable('buscarPalpitesJogo');
+    final callable = FirebaseFunctions.instanceFor(
+      region: 'southamerica-east1',
+    ).httpsCallable('buscarPalpitesJogo');
     final result = await callable.call({'jogoId': widget.jogo.id});
     final data = Map<String, dynamic>.from(result.data as Map);
     final rawItens = (data['itens'] as List).cast<Map>();
@@ -859,7 +1260,8 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
                   child: Text(
                     'Nenhum palpite registrado.',
                     style: GoogleFonts.hankenGrotesk(
-                        color: Cores.onSurfaceVariant),
+                      color: Cores.onSurfaceVariant,
+                    ),
                   ),
                 );
               }
@@ -868,8 +1270,9 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: itens.length,
-                  separatorBuilder: (_, __) =>
-                      const Divider(height: 1, color: Cores.outlineVariant),
+                  separatorBuilder:
+                      (_, __) =>
+                          const Divider(height: 1, color: Cores.outlineVariant),
                   itemBuilder: (_, i) => _buildLinha(itens[i], i + 1),
                 ),
               );
@@ -887,8 +1290,10 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
                   foregroundColor: Cores.verdePrincipal,
                   side: const BorderSide(color: Cores.verdePrincipal),
                 ),
-                child: Text('FECHAR',
-                    style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+                child: Text(
+                  'FECHAR',
+                  style: GoogleFonts.anybody(fontWeight: FontWeight.w700),
+                ),
               ),
             ),
           ),

@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -41,8 +41,7 @@ class _TelaRankingState extends State<TelaRanking> {
   final Stream<List<Usuario>> _streamUsuarios = FirebaseFirestore.instance
       .collection('usuarios')
       .snapshots()
-      .map((snap) =>
-          snap.docs.map((d) => Usuario.fromMap(d.data())).toList());
+      .map((snap) => snap.docs.map((d) => Usuario.fromMap(d.data())).toList());
 
   @override
   void initState() {
@@ -58,10 +57,11 @@ class _TelaRankingState extends State<TelaRanking> {
   }
 
   Future<void> _carregarConfig() async {
-    final doc = await FirebaseFirestore.instance
-        .collection('config')
-        .doc('copa2026')
-        .get();
+    final doc =
+        await FirebaseFirestore.instance
+            .collection('config')
+            .doc('copa2026')
+            .get();
     if (!mounted) return;
     final data = doc.data();
     if (data == null) return;
@@ -75,10 +75,8 @@ class _TelaRankingState extends State<TelaRanking> {
     final campNorm = _campeaoReal?.toLowerCase().trim();
     final chutNorm = _chuteiradeOuroReal?.toLowerCase().trim();
     lista.sort((a, b) {
-      final ptA =
-          modoCopa ? a.pontuacaoCopaTotal : a.pontuacaoClassicaTotal;
-      final ptB =
-          modoCopa ? b.pontuacaoCopaTotal : b.pontuacaoClassicaTotal;
+      final ptA = modoCopa ? a.pontuacaoCopaTotal : a.pontuacaoClassicaTotal;
+      final ptB = modoCopa ? b.pontuacaoCopaTotal : b.pontuacaoClassicaTotal;
       if (ptB != ptA) return ptB.compareTo(ptA);
       // 1. Mais placares exatos
       if (b.placaresExatos != a.placaresExatos) {
@@ -91,24 +89,26 @@ class _TelaRankingState extends State<TelaRanking> {
       // 3. Acertou o campeão (case-insensitive, sem espaços extras)
       final aCamp =
           (campNorm != null &&
-              a.palpiteCampeao?.toLowerCase().trim() == campNorm)
+                  a.palpiteCampeao?.toLowerCase().trim() == campNorm)
               ? 1
               : 0;
       final bCamp =
           (campNorm != null &&
-              b.palpiteCampeao?.toLowerCase().trim() == campNorm)
+                  b.palpiteCampeao?.toLowerCase().trim() == campNorm)
               ? 1
               : 0;
       if (bCamp != aCamp) return bCamp.compareTo(aCamp);
       // 4. Acertou a Chuteira de Ouro (case-insensitive, sem espaços extras)
-      final aChut = (chutNorm != null &&
-              a.palpiteChuteiradeOuro?.toLowerCase().trim() == chutNorm)
-          ? 1
-          : 0;
-      final bChut = (chutNorm != null &&
-              b.palpiteChuteiradeOuro?.toLowerCase().trim() == chutNorm)
-          ? 1
-          : 0;
+      final aChut =
+          (chutNorm != null &&
+                  a.palpiteChuteiradeOuro?.toLowerCase().trim() == chutNorm)
+              ? 1
+              : 0;
+      final bChut =
+          (chutNorm != null &&
+                  b.palpiteChuteiradeOuro?.toLowerCase().trim() == chutNorm)
+              ? 1
+              : 0;
       return bChut.compareTo(aChut);
     });
     return lista;
@@ -134,8 +134,11 @@ class _TelaRankingState extends State<TelaRanking> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.group_outlined,
-                      size: 64, color: Cores.outlineVariant),
+                  Icon(
+                    Icons.group_outlined,
+                    size: 64,
+                    color: Cores.outlineVariant,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Você não está em nenhum grupo.',
@@ -163,10 +166,11 @@ class _TelaRankingState extends State<TelaRanking> {
 
         // Se o grupo selecionado foi removido da lista (ex: usuário saiu),
         // volta para o primeiro grupo disponível.
-        final grupoEfetivo = (_grupoSelecionado != null &&
-                grupos.any((g) => g.id == _grupoSelecionado!.id))
-            ? _grupoSelecionado!
-            : grupos.first;
+        final grupoEfetivo =
+            (_grupoSelecionado != null &&
+                    grupos.any((g) => g.id == _grupoSelecionado!.id))
+                ? _grupoSelecionado!
+                : grupos.first;
 
         final bool modoCopa = grupoEfetivo.regra == 'copa';
 
@@ -175,9 +179,12 @@ class _TelaRankingState extends State<TelaRanking> {
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               return Center(
-                child: Text('Erro ao carregar ranking.',
-                    style: GoogleFonts.hankenGrotesk(
-                        color: Cores.onSurfaceVariant)),
+                child: Text(
+                  'Erro ao carregar ranking.',
+                  style: GoogleFonts.hankenGrotesk(
+                    color: Cores.onSurfaceVariant,
+                  ),
+                ),
               );
             }
 
@@ -204,8 +211,8 @@ class _TelaRankingState extends State<TelaRanking> {
                       child: _SeletorGrupo(
                         grupos: grupos,
                         selecionado: grupoEfetivo,
-                        onSelecionar: (g) =>
-                            setState(() => _grupoSelecionado = g),
+                        onSelecionar:
+                            (g) => setState(() => _grupoSelecionado = g),
                       ),
                     ),
                   Expanded(
@@ -213,15 +220,19 @@ class _TelaRankingState extends State<TelaRanking> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.leaderboard_outlined,
-                              size: 64, color: Cores.outlineVariant),
+                          Icon(
+                            Icons.leaderboard_outlined,
+                            size: 64,
+                            color: Cores.outlineVariant,
+                          ),
                           const SizedBox(height: 16),
                           Text(
                             'Nenhum membro neste grupo ainda.',
                             style: GoogleFonts.anybody(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: Cores.onSurface),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Cores.onSurface,
+                            ),
                           ),
                         ],
                       ),
@@ -233,33 +244,6 @@ class _TelaRankingState extends State<TelaRanking> {
 
             return CustomScrollView(
               slivers: [
-                // Cabeçalho
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-                  sliver: SliverToBoxAdapter(
-                    child: Column(
-                      children: [
-                        Text(
-                          'CLASSIFICAÇÃO',
-                          style: GoogleFonts.anybody(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            color: Cores.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          grupoEfetivo.nome,
-                          style: GoogleFonts.hankenGrotesk(
-                            fontSize: 15,
-                            color: Cores.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
                 // Seletor de grupo (só aparece com 2 ou mais grupos)
                 if (grupos.length > 1)
                   SliverPadding(
@@ -268,8 +252,8 @@ class _TelaRankingState extends State<TelaRanking> {
                       child: _SeletorGrupo(
                         grupos: grupos,
                         selecionado: grupoEfetivo,
-                        onSelecionar: (g) =>
-                            setState(() => _grupoSelecionado = g),
+                        onSelecionar:
+                            (g) => setState(() => _grupoSelecionado = g),
                       ),
                     ),
                   ),
@@ -295,8 +279,7 @@ class _TelaRankingState extends State<TelaRanking> {
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, i) {
-                        final indiceReal =
-                            usuarios.length >= 3 ? i + 3 : i;
+                        final indiceReal = usuarios.length >= 3 ? i + 3 : i;
                         if (indiceReal >= usuarios.length) return null;
                         final usuario = usuarios[indiceReal];
                         return Padding(
@@ -309,9 +292,10 @@ class _TelaRankingState extends State<TelaRanking> {
                           ),
                         );
                       },
-                      childCount: usuarios.length >= 3
-                          ? usuarios.length - 3
-                          : usuarios.length,
+                      childCount:
+                          usuarios.length >= 3
+                              ? usuarios.length - 3
+                              : usuarios.length,
                     ),
                   ),
                 ),
@@ -342,17 +326,19 @@ class _SeletorGrupo extends StatelessWidget {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: grupos
-            .map((g) => Padding(
-                  padding: EdgeInsets.only(
-                      left: g == grupos.first ? 0 : 8),
-                  child: _Chip(
-                    label: g.nome,
-                    selecionado: selecionado.id == g.id,
-                    onTap: () => onSelecionar(g),
+        children:
+            grupos
+                .map(
+                  (g) => Padding(
+                    padding: EdgeInsets.only(left: g == grupos.first ? 0 : 8),
+                    child: _Chip(
+                      label: g.nome,
+                      selecionado: selecionado.id == g.id,
+                      onTap: () => onSelecionar(g),
+                    ),
                   ),
-                ))
-            .toList(),
+                )
+                .toList(),
       ),
     );
   }
@@ -380,8 +366,7 @@ class _Chip extends StatelessWidget {
           color: selecionado ? Cores.verdePrincipal : Cores.surfaceContainer,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color:
-                selecionado ? Cores.verdePrincipal : Cores.outlineVariant,
+            color: selecionado ? Cores.verdePrincipal : Cores.outlineVariant,
           ),
         ),
         child: Text(
@@ -491,159 +476,166 @@ class _ColunaPodio extends StatelessWidget {
     return GestureDetector(
       onTap: () => _mostrarPalpitesUsuario(context, usuario, modoCopa),
       child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Avatar com badge de posição
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: corBorda.withValues(alpha: 0.4),
-                    blurRadius: posicao == 1 ? 16 : 8,
-                  ),
-                ],
-              ),
-              child: WidgetAvatar(
-                avatarId: usuario.avatar,
-                nome: usuario.nome,
-                tamanho: _tamanhoAvatar,
-                corFundo: corBorda.withValues(alpha: 0.2),
-                borderColor: corBorda,
-                borderWidth: posicao == 1 ? 4 : 3,
-              ),
-            ),
-
-            // Badge: troféu para 1º, número para 2º e 3º
-            Positioned(
-              bottom: -4,
-              right: -4,
-              child: posicao == 1
-                  ? Container(
-                width: 28,
-                height: 28,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Avatar com badge de posição
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Cores.secondaryContainer,
-                  border: Border.all(
-                      color: Cores.surface, width: 2),
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.15),
-                        blurRadius: 4)
+                      color: corBorda.withValues(alpha: 0.4),
+                      blurRadius: posicao == 1 ? 16 : 8,
+                    ),
                   ],
                 ),
-                child: const Icon(Icons.military_tech_rounded,
-                    size: 16,
-                    color: Cores.onSecondaryContainer),
-              )
-                  : Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: corBorda,
-                  border: Border.all(
-                      color: Cores.surface, width: 2),
-                ),
-                child: Center(
-                  child: Text(
-                    '$posicao',
-                    style: GoogleFonts.anybody(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
+                child: WidgetAvatar(
+                  avatarId: usuario.avatar,
+                  nome: usuario.nome,
+                  tamanho: _tamanhoAvatar,
+                  corFundo: corBorda.withValues(alpha: 0.2),
+                  borderColor: corBorda,
+                  borderWidth: posicao == 1 ? 4 : 3,
                 ),
               ),
-            ),
-          ],
-        ),
 
-        const SizedBox(height: 8),
-
-        // Base do pódio
-        Container(
-          width: double.infinity,
-          height: alturaBase,
-          decoration: BoxDecoration(
-            color: corBorda,
-            borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(12)),
-            border: Border.all(
-              color: euSou ? Cores.verdePrincipal : Colors.transparent,
-              width: 2,
-            ),
-          ),
-          padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                usuario.nome,
-                style: GoogleFonts.anybody(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: posicao == 1
-                      ? Cores.onSecondaryContainer
-                      : Cores.onSurface,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              // Badge: troféu para 1º, número para 2º e 3º
+              Positioned(
+                bottom: -4,
+                right: -4,
+                child:
+                    posicao == 1
+                        ? Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Cores.secondaryContainer,
+                            border: Border.all(color: Cores.surface, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.15),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.military_tech_rounded,
+                            size: 16,
+                            color: Cores.onSecondaryContainer,
+                          ),
+                        )
+                        : Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: corBorda,
+                            border: Border.all(color: Cores.surface, width: 2),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '$posicao',
+                              style: GoogleFonts.anybody(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                '${modoCopa ? usuario.pontuacaoCopaTotal : usuario.pontuacaoClassicaTotal}',
-                style: GoogleFonts.anybody(
-                  fontSize: _fontePontos,
-                  fontWeight: FontWeight.w800,
-                  color: posicao == 1
-                      ? Cores.onSecondaryContainer
-                      : Cores.onSurface,
-                ),
-              ),
-              Text(
-                'pts',
-                style: GoogleFonts.hankenGrotesk(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: posicao == 1
-                      ? Cores.onSecondaryContainer
-                      : Cores.onSurfaceVariant,
-                ),
-              ),
-              if (euSou) ...[
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Cores.verdePrincipal,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    'VOCÊ',
-                    style: GoogleFonts.hankenGrotesk(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
-        ),
-      ],
-    ), // Column
+
+          const SizedBox(height: 8),
+
+          // Base do pódio
+          Container(
+            width: double.infinity,
+            height: alturaBase,
+            decoration: BoxDecoration(
+              color: corBorda,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
+              border: Border.all(
+                color: euSou ? Cores.verdePrincipal : Colors.transparent,
+                width: 2,
+              ),
+            ),
+            padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  usuario.nome,
+                  style: GoogleFonts.anybody(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color:
+                        posicao == 1
+                            ? Cores.onSecondaryContainer
+                            : Cores.onSurface,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${modoCopa ? usuario.pontuacaoCopaTotal : usuario.pontuacaoClassicaTotal}',
+                  style: GoogleFonts.anybody(
+                    fontSize: _fontePontos,
+                    fontWeight: FontWeight.w800,
+                    color:
+                        posicao == 1
+                            ? Cores.onSecondaryContainer
+                            : Cores.onSurface,
+                  ),
+                ),
+                Text(
+                  'pts',
+                  style: GoogleFonts.hankenGrotesk(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color:
+                        posicao == 1
+                            ? Cores.onSecondaryContainer
+                            : Cores.onSurfaceVariant,
+                  ),
+                ),
+                if (euSou) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Cores.verdePrincipal,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      'VOCÊ',
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ), // Column
     ); // GestureDetector
   }
-
 }
 
 // ─── Item da lista (4º em diante) ─────────────────────────────────────────────
@@ -666,89 +658,86 @@ class _ItemRanking extends StatelessWidget {
     return GestureDetector(
       onTap: () => _mostrarPalpitesUsuario(context, usuario, modoCopa),
       child: AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      decoration: BoxDecoration(
-        color: euSou ? Cores.primaryContainer : Cores.surface,
-        border: Border.all(
-          color: euSou ? Cores.verdePrincipal : Cores.outlineVariant,
-          width: euSou ? 2 : 1,
+        duration: const Duration(milliseconds: 300),
+        decoration: BoxDecoration(
+          color: euSou ? Cores.primaryContainer : Cores.surface,
+          border: Border.all(
+            color: euSou ? Cores.verdePrincipal : Cores.outlineVariant,
+            width: euSou ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color:
+                  euSou
+                      ? Cores.verdePrincipal.withValues(alpha: 0.15)
+                      : Colors.black.withValues(alpha: 0.05),
+              blurRadius: euSou ? 12 : 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: euSou
-                ? Cores.verdePrincipal.withValues(alpha: 0.15)
-                : Colors.black.withValues(alpha: 0.05),
-            blurRadius: euSou ? 12 : 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          // Posição
-          SizedBox(
-            width: 32,
-            child: Text(
-              '$posicao',
-              style: GoogleFonts.anybody(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: euSou
-                    ? Cores.verdePrincipal
-                    : Cores.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Avatar
-          WidgetAvatar(
-            avatarId: usuario.avatar,
-            nome: usuario.nome,
-            tamanho: euSou ? 48 : 44,
-            corFundo: euSou ? Cores.verdePrincipal : Cores.surfaceContainerHigh,
-            corTexto: euSou ? Colors.white : Cores.onSurface,
-            borderColor: euSou ? Cores.verdePrincipal : Cores.outlineVariant,
-          ),
-          const SizedBox(width: 12),
-
-          // Nome
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  euSou ? '${usuario.nome} (você)' : usuario.nome,
-                  style: GoogleFonts.hankenGrotesk(
-                    fontSize: 15,
-                    fontWeight:
-                    euSou ? FontWeight.w800 : FontWeight.w600,
-                    color: euSou
-                        ? Cores.verdePrincipal
-                        : Cores.onSurface,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            // Posição
+            SizedBox(
+              width: 32,
+              child: Text(
+                '$posicao',
+                style: GoogleFonts.anybody(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: euSou ? Cores.verdePrincipal : Cores.onSurfaceVariant,
                 ),
-              ],
+                textAlign: TextAlign.center,
+              ),
             ),
-          ),
+            const SizedBox(width: 12),
 
-          // Pontuação
-          Text(
-            '${modoCopa ? usuario.pontuacaoCopaTotal : usuario.pontuacaoClassicaTotal} pts',
-            style: GoogleFonts.anybody(
-              fontSize: euSou ? 18 : 16,
-              fontWeight: FontWeight.w700,
-              color: euSou ? Cores.verdePrincipal : Cores.onSurface,
+            // Avatar
+            WidgetAvatar(
+              avatarId: usuario.avatar,
+              nome: usuario.nome,
+              tamanho: euSou ? 48 : 44,
+              corFundo:
+                  euSou ? Cores.verdePrincipal : Cores.surfaceContainerHigh,
+              corTexto: euSou ? Colors.white : Cores.onSurface,
+              borderColor: euSou ? Cores.verdePrincipal : Cores.outlineVariant,
             ),
-          ),
-        ],
-      ),
-    ), // AnimatedContainer
+            const SizedBox(width: 12),
+
+            // Nome
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    euSou ? '${usuario.nome} (você)' : usuario.nome,
+                    style: GoogleFonts.hankenGrotesk(
+                      fontSize: 15,
+                      fontWeight: euSou ? FontWeight.w800 : FontWeight.w600,
+                      color: euSou ? Cores.verdePrincipal : Cores.onSurface,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+
+            // Pontuação
+            Text(
+              '${modoCopa ? usuario.pontuacaoCopaTotal : usuario.pontuacaoClassicaTotal} pts',
+              style: GoogleFonts.anybody(
+                fontSize: euSou ? 18 : 16,
+                fontWeight: FontWeight.w700,
+                color: euSou ? Cores.verdePrincipal : Cores.onSurface,
+              ),
+            ),
+          ],
+        ),
+      ), // AnimatedContainer
     ); // GestureDetector
   }
 }
@@ -756,11 +745,14 @@ class _ItemRanking extends StatelessWidget {
 // ─── Diálogo: palpites de um usuário ─────────────────────────────────────────
 
 Future<void> _mostrarPalpitesUsuario(
-    BuildContext context, Usuario usuario, bool modoCopa) {
+  BuildContext context,
+  Usuario usuario,
+  bool modoCopa,
+) {
   return showDialog(
     context: context,
-    builder: (_) =>
-        _DialogPalpitesUsuario(usuario: usuario, modoCopa: modoCopa),
+    builder:
+        (_) => _DialogPalpitesUsuario(usuario: usuario, modoCopa: modoCopa),
   );
 }
 
@@ -795,8 +787,12 @@ class _DadosDialog {
 }
 
 class _ItemPalpiteClassico {
-  const _ItemPalpiteClassico(
-      {required this.jogo, this.palpite, required this.pontos, this.semPalpite = false});
+  const _ItemPalpiteClassico({
+    required this.jogo,
+    this.palpite,
+    required this.pontos,
+    this.semPalpite = false,
+  });
   final Jogo jogo;
   final Palpite? palpite;
   final int pontos;
@@ -804,8 +800,13 @@ class _ItemPalpiteClassico {
 }
 
 class _ItemEspecial {
-  const _ItemEspecial(this.icone, this.label, this.valor,
-      {this.isTime = false, this.acertou});
+  const _ItemEspecial(
+    this.icone,
+    this.label,
+    this.valor, {
+    this.isTime = false,
+    this.acertou,
+  });
   final IconData icone;
   final String label;
   final String valor;
@@ -814,8 +815,7 @@ class _ItemEspecial {
 }
 
 class _DialogPalpitesUsuario extends StatefulWidget {
-  const _DialogPalpitesUsuario(
-      {required this.usuario, required this.modoCopa});
+  const _DialogPalpitesUsuario({required this.usuario, required this.modoCopa});
   final Usuario usuario;
   final bool modoCopa;
 
@@ -828,7 +828,18 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
   String _filtroGrupo = 'A';
 
   static const _grupos = [
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L',
+    'A',
+    'B',
+    'C',
+    'D',
+    'E',
+    'F',
+    'G',
+    'H',
+    'I',
+    'J',
+    'K',
+    'L',
   ];
 
   @override
@@ -842,8 +853,9 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
 
     // buscarPalpitesUsuario verifica que o solicitante compartilha um grupo
     // com o alvo antes de retornar os dados — sem leitura direta do Firestore.
-    final callable = FirebaseFunctions.instanceFor(region: 'southamerica-east1')
-        .httpsCallable('buscarPalpitesUsuario');
+    final callable = FirebaseFunctions.instanceFor(
+      region: 'southamerica-east1',
+    ).httpsCallable('buscarPalpitesUsuario');
 
     final results = await Future.wait([
       callable.call({'targetUid': uid}),
@@ -854,15 +866,16 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
     final funcResult = results[0] as HttpsCallableResult<dynamic>;
     final funcData = Map<String, dynamic>.from(funcResult.data as Map);
 
-    final palpites = (funcData['palpites'] as List).map((raw) {
-      final m = Map<String, dynamic>.from(raw as Map);
-      return Palpite(
-        uid: uid,
-        jogoId: (m['jogoId'] as num).toInt(),
-        palpite1: (m['palpite1'] as num).toInt(),
-        palpite2: (m['palpite2'] as num).toInt(),
-      );
-    }).toList();
+    final palpites =
+        (funcData['palpites'] as List).map((raw) {
+          final m = Map<String, dynamic>.from(raw as Map);
+          return Palpite(
+            uid: uid,
+            jogoId: (m['jogoId'] as num).toInt(),
+            palpite1: (m['palpite1'] as num).toInt(),
+            palpite2: (m['palpite2'] as num).toInt(),
+          );
+        }).toList();
 
     final rawCopa = funcData['palpitesCopa'] as Map? ?? {};
     final palpitesCopa = <String, Map<String, String?>>{};
@@ -881,19 +894,24 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
     Map<String, dynamic> classificacaoReal = {};
     bool palpitesTravados = false;
     bool especiaisCalculados = false;
-    String? campeaoReal, chuteiradeOuroReal, boladeOuroReal, luvadeOuroReal, melhorJovemReal;
+    String? campeaoReal,
+        chuteiradeOuroReal,
+        boladeOuroReal,
+        luvadeOuroReal,
+        melhorJovemReal;
     if (configSnap.exists) {
       final data = configSnap.data() as Map<String, dynamic>?;
       classificacaoReal =
           (data?['classificacao_real'] as Map<String, dynamic>?) ?? {};
       palpitesTravados = (data?['palpitesTravados'] as bool?) ?? false;
-      especiaisCalculados = (data?['palpitesEspeciaisCalculados'] as bool?) ?? false;
+      especiaisCalculados =
+          (data?['palpitesEspeciaisCalculados'] as bool?) ?? false;
       if (especiaisCalculados) {
-        campeaoReal       = data?['campeaoReal']        as String?;
+        campeaoReal = data?['campeaoReal'] as String?;
         chuteiradeOuroReal = data?['chuteiradeOuroReal'] as String?;
-        boladeOuroReal    = data?['boladeOuroReal']      as String?;
-        luvadeOuroReal    = data?['luvadeOuroReal']      as String?;
-        melhorJovemReal   = data?['melhorJovemReal']     as String?;
+        boladeOuroReal = data?['boladeOuroReal'] as String?;
+        luvadeOuroReal = data?['luvadeOuroReal'] as String?;
+        melhorJovemReal = data?['melhorJovemReal'] as String?;
       }
     }
 
@@ -923,21 +941,49 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
     final calc = dados.especiaisCalculados;
     return [
       if (u.palpiteCampeao != null)
-        _ItemEspecial(Icons.emoji_events, 'Campeão do Mundo', u.palpiteCampeao!,
-            isTime: true,
-            acertou: calc ? _acertou(u.palpiteCampeao, dados.campeaoReal) : null),
+        _ItemEspecial(
+          Icons.emoji_events,
+          'Campeão do Mundo',
+          u.palpiteCampeao!,
+          isTime: true,
+          acertou: calc ? _acertou(u.palpiteCampeao, dados.campeaoReal) : null,
+        ),
       if (u.palpiteChuteiradeOuro != null)
-        _ItemEspecial(Icons.sports_soccer, 'Chuteira de Ouro', u.palpiteChuteiradeOuro!,
-            acertou: calc ? _acertou(u.palpiteChuteiradeOuro, dados.chuteiradeOuroReal) : null),
+        _ItemEspecial(
+          Icons.sports_soccer,
+          'Chuteira de Ouro',
+          u.palpiteChuteiradeOuro!,
+          acertou:
+              calc
+                  ? _acertou(u.palpiteChuteiradeOuro, dados.chuteiradeOuroReal)
+                  : null,
+        ),
       if (u.palpiteBoladeOuro != null)
-        _ItemEspecial(Icons.star_rounded, 'Bola de Ouro', u.palpiteBoladeOuro!,
-            acertou: calc ? _acertou(u.palpiteBoladeOuro, dados.boladeOuroReal) : null),
+        _ItemEspecial(
+          Icons.star_rounded,
+          'Bola de Ouro',
+          u.palpiteBoladeOuro!,
+          acertou:
+              calc ? _acertou(u.palpiteBoladeOuro, dados.boladeOuroReal) : null,
+        ),
       if (u.palpiteLuvadeOuro != null)
-        _ItemEspecial(Icons.sports_handball, 'Luva de Ouro', u.palpiteLuvadeOuro!,
-            acertou: calc ? _acertou(u.palpiteLuvadeOuro, dados.luvadeOuroReal) : null),
+        _ItemEspecial(
+          Icons.sports_handball,
+          'Luva de Ouro',
+          u.palpiteLuvadeOuro!,
+          acertou:
+              calc ? _acertou(u.palpiteLuvadeOuro, dados.luvadeOuroReal) : null,
+        ),
       if (u.palpiteMelhorJovem != null)
-        _ItemEspecial(Icons.person_rounded, 'Melhor Jogador Jovem', u.palpiteMelhorJovem!,
-            acertou: calc ? _acertou(u.palpiteMelhorJovem, dados.melhorJovemReal) : null),
+        _ItemEspecial(
+          Icons.person_rounded,
+          'Melhor Jogador Jovem',
+          u.palpiteMelhorJovem!,
+          acertou:
+              calc
+                  ? _acertou(u.palpiteMelhorJovem, dados.melhorJovemReal)
+                  : null,
+        ),
     ];
   }
 
@@ -947,8 +993,7 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
         widget.modoCopa ? Cores.azulTerciario : Cores.verdePrincipal;
 
     return Dialog(
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -958,7 +1003,8 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
           future: _future,
           builder: (ctx, snap) {
             final dados = snap.data;
-            final especiais = dados != null ? _especiais(dados) : <_ItemEspecial>[];
+            final especiais =
+                dados != null ? _especiais(dados) : <_ItemEspecial>[];
             return Column(
               mainAxisSize: MainAxisSize.max,
               children: [
@@ -998,21 +1044,21 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
                         const SizedBox(height: 12),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
-                            color:
-                                Colors.white.withValues(alpha: 0.12),
+                            color: Colors.white.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Column(
                             children: [
-                              for (int i = 0;
-                                  i < especiais.length;
-                                  i++) ...[
+                              for (int i = 0; i < especiais.length; i++) ...[
                                 if (i > 0)
                                   const Divider(
-                                      color: Colors.white24,
-                                      height: 14),
+                                    color: Colors.white24,
+                                    height: 14,
+                                  ),
                                 _buildLinhaEspecial(especiais[i]),
                               ],
                             ],
@@ -1028,20 +1074,25 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
 
                 // ── Conteúdo ───────────────────────────────────────────
                 Expanded(
-                  child: snap.connectionState == ConnectionState.waiting
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(32),
-                            child: CircularProgressIndicator(
-                                color: Cores.verdePrincipal),
-                          ),
-                        )
-                      : snap.hasError
+                  child:
+                      snap.connectionState == ConnectionState.waiting
+                          ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(32),
+                              child: CircularProgressIndicator(
+                                color: Cores.verdePrincipal,
+                              ),
+                            ),
+                          )
+                          : snap.hasError
                           ? Center(
-                              child: Text('Erro ao carregar.',
-                                  style: GoogleFonts.hankenGrotesk(
-                                      color: Cores.onSurfaceVariant)),
-                            )
+                            child: Text(
+                              'Erro ao carregar.',
+                              style: GoogleFonts.hankenGrotesk(
+                                color: Cores.onSurfaceVariant,
+                              ),
+                            ),
+                          )
                           : _buildConteudo(dados!),
                 ),
 
@@ -1056,9 +1107,10 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
                         foregroundColor: corAcento,
                         side: BorderSide(color: corAcento),
                       ),
-                      child: Text('FECHAR',
-                          style: GoogleFonts.anybody(
-                              fontWeight: FontWeight.w700)),
+                      child: Text(
+                        'FECHAR',
+                        style: GoogleFonts.anybody(fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
                 ),
@@ -1075,9 +1127,10 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
       children: [
         Icon(e.icone, size: 15, color: Colors.white70),
         const SizedBox(width: 8),
-        Text(e.label,
-            style: GoogleFonts.hankenGrotesk(
-                fontSize: 12, color: Colors.white70)),
+        Text(
+          e.label,
+          style: GoogleFonts.hankenGrotesk(fontSize: 12, color: Colors.white70),
+        ),
         const Spacer(),
         if (e.isTime) ...[
           Container(
@@ -1102,7 +1155,8 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
           Icon(
             e.acertou! ? Icons.check_circle_rounded : Icons.cancel_rounded,
             size: 16,
-            color: e.acertou! ? const Color(0xFF69F0AE) : const Color(0xFFFF5252),
+            color:
+                e.acertou! ? const Color(0xFF69F0AE) : const Color(0xFFFF5252),
           ),
         ],
       ],
@@ -1110,10 +1164,7 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
   }
 
   Widget _buildFiltro(_DadosDialog dados, Color corAcento) {
-    final filtros = [
-      ..._grupos,
-      if (dados.temMataMata) 'MATA-MATA',
-    ];
+    final filtros = [..._grupos, if (dados.temMataMata) 'MATA-MATA'];
     return Container(
       color: Cores.surfaceContainer,
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1138,13 +1189,11 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
       onTap: () => setState(() => _filtroGrupo = label),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: sel ? corAcento : Cores.surface,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-              color: sel ? corAcento : Cores.outlineVariant),
+          border: Border.all(color: sel ? corAcento : Cores.outlineVariant),
         ),
         child: Text(
           label,
@@ -1199,13 +1248,14 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
     final palpitesMap = {for (final p in dados.palpites) p.jogoId: p};
     final criadoEm = widget.usuario.criadoEm;
 
-    final jogosRelevantes = dados.jogos.where((j) {
-      if (j.placar1 == null) return false;
-      return mataMata
-          ? j.id > 72
-          : j.id <= 72 && j.group == 'Grupo $_filtroGrupo';
-    }).toList()
-      ..sort((a, b) => a.dataHora.compareTo(b.dataHora));
+    final jogosRelevantes =
+        dados.jogos.where((j) {
+            if (j.placar1 == null) return false;
+            return mataMata
+                ? j.id > 72
+                : j.id <= 72 && j.group == 'Grupo $_filtroGrupo';
+          }).toList()
+          ..sort((a, b) => a.dataHora.compareTo(b.dataHora));
 
     if (jogosRelevantes.isEmpty) {
       return Center(
@@ -1219,28 +1269,34 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
       );
     }
 
-    final itens = jogosRelevantes.map((j) {
-      final p = palpitesMap[j.id];
-      if (p != null) {
-        return _ItemPalpiteClassico(
-          jogo: j,
-          palpite: p,
-          pontos: calcularPontosComFase(
-              p.palpite1, p.palpite2, j.placar1!, j.placar2!, j.round),
-        );
-      }
-      final deveMultar = j.dataHora.isAfter(criadoEm);
-      return _ItemPalpiteClassico(
-        jogo: j,
-        pontos: deveMultar ? -10 : 0,
-        semPalpite: true,
-      );
-    }).toList();
+    final itens =
+        jogosRelevantes.map((j) {
+          final p = palpitesMap[j.id];
+          if (p != null) {
+            return _ItemPalpiteClassico(
+              jogo: j,
+              palpite: p,
+              pontos: calcularPontosComFase(
+                p.palpite1,
+                p.palpite2,
+                j.placar1!,
+                j.placar2!,
+                j.round,
+              ),
+            );
+          }
+          final deveMultar = j.dataHora.isAfter(criadoEm);
+          return _ItemPalpiteClassico(
+            jogo: j,
+            pontos: deveMultar ? -10 : 0,
+            semPalpite: true,
+          );
+        }).toList();
 
     return ListView.separated(
       itemCount: itens.length,
-      separatorBuilder: (_, __) =>
-          const Divider(height: 1, color: Cores.outlineVariant),
+      separatorBuilder:
+          (_, __) => const Divider(height: 1, color: Cores.outlineVariant),
       itemBuilder: (_, i) => _buildLinhaClassico(itens[i]),
     );
   }
@@ -1252,26 +1308,33 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
         children: [
           Bandeira(item.jogo.team1, tamanho: 20),
           const SizedBox(width: 5),
-          Text(siglaDe(item.jogo.team1),
-              style: GoogleFonts.anybody(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Cores.onSurface)),
+          Text(
+            siglaDe(item.jogo.team1),
+            style: GoogleFonts.anybody(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Cores.onSurface,
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 5),
             child: Text(
               '${item.jogo.placar1}–${item.jogo.placar2}',
               style: GoogleFonts.anybody(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: Cores.verdePrincipal),
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Cores.verdePrincipal,
+              ),
             ),
           ),
-          Text(siglaDe(item.jogo.team2),
-              style: GoogleFonts.anybody(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Cores.onSurface)),
+          Text(
+            siglaDe(item.jogo.team2),
+            style: GoogleFonts.anybody(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Cores.onSurface,
+            ),
+          ),
           const SizedBox(width: 5),
           Bandeira(item.jogo.team2, tamanho: 20),
           const Spacer(),
@@ -1279,17 +1342,19 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
             Text(
               'Não palpitado',
               style: GoogleFonts.hankenGrotesk(
-                  fontSize: 12,
-                  fontStyle: FontStyle.italic,
-                  color: Cores.onSurfaceVariant),
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+                color: Cores.onSurfaceVariant,
+              ),
             )
           else
             Text(
               '${item.palpite!.palpite1}–${item.palpite!.palpite2}',
               style: GoogleFonts.hankenGrotesk(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Cores.onSurfaceVariant),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Cores.onSurfaceVariant,
+              ),
             ),
           const SizedBox(width: 8),
           _BadgePontos(item.pontos),
@@ -1311,8 +1376,7 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
           padding: const EdgeInsets.all(24),
           child: Text(
             'Sem palpite para o Grupo $_filtroGrupo.',
-            style: GoogleFonts.hankenGrotesk(
-                color: Cores.onSurfaceVariant),
+            style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
           ),
         ),
       );
@@ -1342,16 +1406,32 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
     }
 
     final posicoes = [
-      ('1º', palpitadoPrimeiro, primeiroReal, calcPts(palpitadoPrimeiro, primeiroReal)),
-      ('2º', palpitadoSegundo, segundoReal, calcPts(palpitadoSegundo, segundoReal)),
+      (
+        '1º',
+        palpitadoPrimeiro,
+        primeiroReal,
+        calcPts(palpitadoPrimeiro, primeiroReal),
+      ),
+      (
+        '2º',
+        palpitadoSegundo,
+        segundoReal,
+        calcPts(palpitadoSegundo, segundoReal),
+      ),
       if (palpitadoTerceiro != null || terceiroReal != null)
-        ('3º', palpitadoTerceiro, terceiroReal, calcPts(palpitadoTerceiro, terceiroReal)),
+        (
+          '3º',
+          palpitadoTerceiro,
+          terceiroReal,
+          calcPts(palpitadoTerceiro, terceiroReal),
+        ),
     ];
 
     // Bônus: todas as posições exatas
     int? bonus;
     if (temReal) {
-      final todasExatas = palpitadoPrimeiro == primeiroReal &&
+      final todasExatas =
+          palpitadoPrimeiro == primeiroReal &&
           palpitadoSegundo == segundoReal &&
           (terceiroReal == null || palpitadoTerceiro == terceiroReal);
       bonus = todasExatas ? 100 : 0;
@@ -1365,19 +1445,22 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
         if (bonus != null && bonus > 0) ...[
           const Divider(height: 1, color: Cores.outlineVariant),
           Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               children: [
-                const Icon(Icons.stars_rounded,
-                    size: 16, color: Cores.azulTerciario),
+                const Icon(
+                  Icons.stars_rounded,
+                  size: 16,
+                  color: Cores.azulTerciario,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Bônus — grupo perfeito',
                   style: GoogleFonts.hankenGrotesk(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Cores.onSurface),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Cores.onSurface,
+                  ),
                 ),
                 const Spacer(),
                 _BadgePontos(100),
@@ -1391,8 +1474,11 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
             child: Row(
               children: [
-                const Icon(Icons.schedule_rounded,
-                    size: 14, color: Cores.onSurfaceVariant),
+                const Icon(
+                  Icons.schedule_rounded,
+                  size: 14,
+                  color: Cores.onSurfaceVariant,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   'Resultado do grupo ainda não divulgado',
@@ -1410,18 +1496,25 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
   }
 
   Widget _buildLinhaCopa(
-      String posicao, String? palpitado, String? real, int? pontos) {
+    String posicao,
+    String? palpitado,
+    String? real,
+    int? pontos,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
           SizedBox(
             width: 24,
-            child: Text(posicao,
-                style: GoogleFonts.anybody(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: Cores.onSurfaceVariant)),
+            child: Text(
+              posicao,
+              style: GoogleFonts.anybody(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Cores.onSurfaceVariant,
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           if (palpitado != null) ...[
@@ -1437,24 +1530,29 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
               child: Text(
                 nomePtDe(palpitado),
                 style: GoogleFonts.hankenGrotesk(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Cores.onSurface),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Cores.onSurface,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
           ] else
             Expanded(
-              child: Text('—',
-                  style: GoogleFonts.hankenGrotesk(
-                      color: Cores.onSurfaceVariant)),
+              child: Text(
+                '—',
+                style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
+              ),
             ),
           // Resultado real (só quando diferente do palpitado)
           if (real != null && real != palpitado) ...[
             const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward_rounded,
-                size: 14, color: Cores.onSurfaceVariant),
+            const Icon(
+              Icons.arrow_forward_rounded,
+              size: 14,
+              color: Cores.onSurfaceVariant,
+            ),
             const SizedBox(width: 6),
             Container(
               width: 22,
@@ -1464,16 +1562,22 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
               child: Bandeira(real, tamanho: 22),
             ),
             const SizedBox(width: 4),
-            Text(siglaDe(real),
-                style: GoogleFonts.anybody(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Cores.onSurfaceVariant)),
+            Text(
+              siglaDe(real),
+              style: GoogleFonts.anybody(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Cores.onSurfaceVariant,
+              ),
+            ),
           ] else if (real != null)
             const Padding(
               padding: EdgeInsets.only(left: 8),
-              child: Icon(Icons.check_circle_rounded,
-                  size: 16, color: Cores.verdePrincipal),
+              child: Icon(
+                Icons.check_circle_rounded,
+                size: 16,
+                color: Cores.verdePrincipal,
+              ),
             ),
           if (pontos != null) ...[
             const SizedBox(width: 8),

@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:bolao/utils/biblioteca.dart';
 import 'package:flutter/material.dart';
@@ -9,15 +9,24 @@ import '../models/usuario.dart';
 import '../services/grupo_service.dart';
 import '../services/jogo_service.dart';
 import '../services/usuario_service.dart';
+import '../utils/artilharia.dart';
 import '../utils/cores.dart';
 import 'tela_palpites_especiais.dart';
 
 // ─── Tela Home ────────────────────────────────────────────────────────────────
 
 class TelaHome extends StatefulWidget {
-  const TelaHome({super.key, required this.onNavegar, this.sinalAtualizar});
+  const TelaHome({
+    super.key,
+    required this.onNavegar,
+    required this.onVerArtilharia,
+    this.sinalAtualizar,
+  });
 
   final void Function(int) onNavegar;
+
+  /// Navega para a tela Tabela já na aba superior ARTILHARIA.
+  final VoidCallback onVerArtilharia;
 
   /// Disparado pelo MenuPrincipal quando a tela precisa ressincronizar
   /// (aba selecionada ou retorno de rota do drawer).
@@ -74,25 +83,31 @@ class _TelaHomeState extends State<TelaHome> {
 
         // whereIn suporta até 30 itens no Firestore
         final ids = membros.length > 30 ? membros.sublist(0, 30) : membros;
-        final snap = await FirebaseFirestore.instance
-            .collection('usuarios')
-            .where(FieldPath.documentId, whereIn: ids)
-            .get();
+        final snap =
+            await FirebaseFirestore.instance
+                .collection('usuarios')
+                .where(FieldPath.documentId, whereIn: ids)
+                .get();
 
-        final todos = snap.docs
-            .map((d) => Usuario.fromMap(d.data()))
-            .toList()
-          ..sort((a, b) => grupo.regra == 'copa'
-              ? b.pontuacaoCopaTotal.compareTo(a.pontuacaoCopaTotal)
-              : b.pontuacaoClassicaTotal.compareTo(a.pontuacaoClassicaTotal));
+        final todos =
+            snap.docs.map((d) => Usuario.fromMap(d.data())).toList()..sort(
+              (a, b) =>
+                  grupo.regra == 'copa'
+                      ? b.pontuacaoCopaTotal.compareTo(a.pontuacaoCopaTotal)
+                      : b.pontuacaoClassicaTotal.compareTo(
+                        a.pontuacaoClassicaTotal,
+                      ),
+            );
 
         final idx = todos.indexWhere((u) => u.uid == _uid);
         if (idx >= 0) {
-          result.add(_GrupoRank(
-            posicao: idx + 1,
-            grupoNome: grupo.nome,
-            regra: grupo.regra,
-          ));
+          result.add(
+            _GrupoRank(
+              posicao: idx + 1,
+              grupoNome: grupo.nome,
+              regra: grupo.regra,
+            ),
+          );
         }
       }
       return result;
@@ -120,6 +135,8 @@ class _TelaHomeState extends State<TelaHome> {
                 const SizedBox(height: 20),
               ],
               _buildAcoes(),
+              const SizedBox(height: 20),
+              _buildArtilharia(),
             ],
           );
         },
@@ -179,8 +196,11 @@ class _TelaHomeState extends State<TelaHome> {
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.stars_rounded,
-                                      color: Color(0xFFFCD400), size: 20),
+                                  const Icon(
+                                    Icons.stars_rounded,
+                                    color: Color(0xFFFCD400),
+                                    size: 20,
+                                  ),
                                   const SizedBox(width: 5),
                                   Flexible(
                                     child: Text(
@@ -195,19 +215,23 @@ class _TelaHomeState extends State<TelaHome> {
                                     ),
                                   ),
                                   const SizedBox(width: 4),
-                                  const Text('pts',
-                                      style: TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.white70)),
+                                  const Text(
+                                    'pts',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 3),
                               const Text(
                                 'Clássico',
                                 style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.white60,
-                                    fontWeight: FontWeight.w500),
+                                  fontSize: 11,
+                                  color: Colors.white60,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ],
                           ),
@@ -215,18 +239,22 @@ class _TelaHomeState extends State<TelaHome> {
                       if (hasCopa)
                         Expanded(
                           child: Column(
-                            crossAxisAlignment: hasBoth
-                                ? CrossAxisAlignment.end
-                                : CrossAxisAlignment.start,
+                            crossAxisAlignment:
+                                hasBoth
+                                    ? CrossAxisAlignment.end
+                                    : CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Row(
-                                mainAxisAlignment: hasBoth
-                                    ? MainAxisAlignment.end
-                                    : MainAxisAlignment.start,
+                                mainAxisAlignment:
+                                    hasBoth
+                                        ? MainAxisAlignment.end
+                                        : MainAxisAlignment.start,
                                 children: [
-                                  const Text('🏆',
-                                      style: TextStyle(fontSize: 18)),
+                                  const Text(
+                                    '🏆',
+                                    style: TextStyle(fontSize: 18),
+                                  ),
                                   const SizedBox(width: 5),
                                   Flexible(
                                     child: Text(
@@ -241,19 +269,23 @@ class _TelaHomeState extends State<TelaHome> {
                                     ),
                                   ),
                                   const SizedBox(width: 4),
-                                  const Text('pts',
-                                      style: TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.white70)),
+                                  const Text(
+                                    'pts',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 3),
                               const Text(
                                 'Copa',
                                 style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.white60,
-                                    fontWeight: FontWeight.w500),
+                                  fontSize: 11,
+                                  color: Colors.white60,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ],
                           ),
@@ -272,13 +304,13 @@ class _TelaHomeState extends State<TelaHome> {
   // ── Jogos de hoje ──────────────────────────────────────────────────────────
 
   Widget _buildSecaoJogos(List<Jogo> jogos) {
-    final ordenados = jogos.toList()
-      ..sort((a, b) {
-        final aEnc = a.placar1 != null ? 1 : 0;
-        final bEnc = b.placar1 != null ? 1 : 0;
-        if (aEnc != bEnc) return aEnc - bEnc;
-        return a.dataHora.compareTo(b.dataHora);
-      });
+    final ordenados =
+        jogos.toList()..sort((a, b) {
+          final aEnc = a.placar1 != null ? 1 : 0;
+          final bEnc = b.placar1 != null ? 1 : 0;
+          if (aEnc != bEnc) return aEnc - bEnc;
+          return a.dataHora.compareTo(b.dataHora);
+        });
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -308,13 +340,15 @@ class _TelaHomeState extends State<TelaHome> {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.info_outline_rounded,
-                  size: 13, color: Cores.onSurfaceVariant),
+              const Icon(
+                Icons.info_outline_rounded,
+                size: 13,
+                color: Cores.onSurfaceVariant,
+              ),
               const SizedBox(width: 5),
               Text(
                 'O placar é atualizado somente ao final da partida.',
-                style:
-                    TextStyle(fontSize: 11.5, color: Cores.onSurfaceVariant),
+                style: TextStyle(fontSize: 11.5, color: Cores.onSurfaceVariant),
               ),
             ],
           ),
@@ -346,12 +380,89 @@ class _TelaHomeState extends State<TelaHome> {
           _CardAcao(
             titulo: 'PALPITES ESPECIAIS',
             imagemAsset: 'assets/background-cards/2022.png',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                  builder: (_) => const TelaPalpitesEspeciais()),
-            ),
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const TelaPalpitesEspeciais(),
+                  ),
+                ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Artilharia (top 5) ──────────────────────────────────────────────────────
+  // Tocar no card abre a tela Tabela já na aba ARTILHARIA.
+
+  Widget _buildArtilharia() {
+    final top5 = kArtilhariaSimulada.take(5).toList();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x14000000),
+              blurRadius: 16,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onVerArtilharia,
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.sports_soccer_rounded,
+                        color: Cores.verdePrincipal,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'ARTILHARIA',
+                        style: GoogleFonts.anybody(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                          color: Cores.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  for (var i = 0; i < top5.length; i++) ...[
+                    LinhaArtilheiro(posicao: i + 1, artilheiro: top5[i]),
+                    if (i < top5.length - 1)
+                      const Divider(height: 12, color: Cores.surfaceVariant),
+                  ],
+                  const SizedBox(height: 6),
+                  Center(
+                    child: Text(
+                      'Toque para ver a classificação completa',
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 11,
+                        color: Cores.outline,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -421,7 +532,8 @@ class _TickerRankingState extends State<_TickerRanking> {
         await _scroll.animateTo(
           target,
           duration: Duration(
-              milliseconds: (target * 25).clamp(3000, 15000).round()),
+            milliseconds: (target * 25).clamp(3000, 15000).round(),
+          ),
           curve: Curves.linear,
         );
         if (!mounted) break;
@@ -439,31 +551,34 @@ class _TickerRankingState extends State<_TickerRanking> {
   }
 
   Widget _buildRow({Key? key}) => Row(
-        key: key,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (int i = 0; i < widget.items.length; i++) ...[
-            if (i > 0)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 10),
-                child: Text(
-                  '|',
-                  style: TextStyle(
-                      color: Colors.white38, fontSize: 13, height: 1.2),
-                ),
-              ),
-            Text(
-              widget.items[i],
-              style: GoogleFonts.anybody(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                fontStyle: FontStyle.italic,
-                color: Colors.white,
+    key: key,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      for (int i = 0; i < widget.items.length; i++) ...[
+        if (i > 0)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              '|',
+              style: TextStyle(
+                color: Colors.white38,
+                fontSize: 13,
+                height: 1.2,
               ),
             ),
-          ],
-        ],
-      );
+          ),
+        Text(
+          widget.items[i],
+          style: GoogleFonts.anybody(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            fontStyle: FontStyle.italic,
+            color: Colors.white,
+          ),
+        ),
+      ],
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -510,8 +625,7 @@ class _CardJogo extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Cores.outlineVariant),
         boxShadow: const [
-          BoxShadow(
-              color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -522,12 +636,12 @@ class _CardJogo extends StatelessWidget {
             children: [
               _Chip(
                 texto: horarioLocal,
-                corFundo: aoVivo
-                    ? Cores.secondaryContainer
-                    : Cores.surfaceVariant,
-                corTexto: aoVivo
-                    ? Cores.onSecondaryContainer
-                    : Cores.onSurfaceVariant,
+                corFundo:
+                    aoVivo ? Cores.secondaryContainer : Cores.surfaceVariant,
+                corTexto:
+                    aoVivo
+                        ? Cores.onSecondaryContainer
+                        : Cores.onSurfaceVariant,
               ),
               const SizedBox(width: 8),
               if (aoVivo) const _ChipAoVivo(),
@@ -610,10 +724,11 @@ class _CardJogo extends StatelessWidget {
 // ─── Chips ────────────────────────────────────────────────────────────────────
 
 class _Chip extends StatelessWidget {
-  const _Chip(
-      {required this.texto,
-      required this.corFundo,
-      required this.corTexto});
+  const _Chip({
+    required this.texto,
+    required this.corFundo,
+    required this.corTexto,
+  });
 
   final String texto;
   final Color corFundo;
@@ -767,4 +882,3 @@ class _CardAcao extends StatelessWidget {
     );
   }
 }
-

@@ -15,36 +15,51 @@ import 'cores.dart';
 // -----------------------------------------------------------------------------
 
 /// Exibe um SnackBar de sucesso (fundo verde).
-void mostrarSnackBarSucesso(BuildContext context, String mensagem,
-    {Duration duration = const Duration(seconds: 3)}) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(mensagem, style: GoogleFonts.hankenGrotesk()),
-    backgroundColor: Cores.verdePrincipal,
-    behavior: SnackBarBehavior.floating,
-    duration: duration,
-  ));
+void mostrarSnackBarSucesso(
+  BuildContext context,
+  String mensagem, {
+  Duration duration = const Duration(seconds: 3),
+}) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(mensagem, style: GoogleFonts.hankenGrotesk()),
+      backgroundColor: Cores.verdePrincipal,
+      behavior: SnackBarBehavior.floating,
+      duration: duration,
+    ),
+  );
 }
 
 /// Exibe um SnackBar de erro (fundo vermelho).
-void mostrarSnackBarErro(BuildContext context, String mensagem,
-    {Duration duration = const Duration(seconds: 6)}) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(mensagem, style: GoogleFonts.hankenGrotesk()),
-    backgroundColor: Cores.error,
-    behavior: SnackBarBehavior.floating,
-    duration: duration,
-  ));
+void mostrarSnackBarErro(
+  BuildContext context,
+  String mensagem, {
+  Duration duration = const Duration(seconds: 6),
+}) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(mensagem, style: GoogleFonts.hankenGrotesk()),
+      backgroundColor: Cores.error,
+      behavior: SnackBarBehavior.floating,
+      duration: duration,
+    ),
+  );
 }
 
 /// Exibe um SnackBar informativo (fundo azul terciário).
-void mostrarSnackBarInfo(BuildContext context, String mensagem,
-    {Duration duration = const Duration(seconds: 3)}) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(mensagem, style: GoogleFonts.hankenGrotesk()),
-    backgroundColor: Cores.azulTerciario,
-    behavior: SnackBarBehavior.floating,
-    duration: duration,
-  ));
+void mostrarSnackBarInfo(
+  BuildContext context,
+  String mensagem, {
+  Duration duration = const Duration(seconds: 3),
+}) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(mensagem, style: GoogleFonts.hankenGrotesk()),
+      backgroundColor: Cores.azulTerciario,
+      behavior: SnackBarBehavior.floating,
+      duration: duration,
+    ),
+  );
 }
 
 // -----------------------------------------------------------------------------
@@ -109,9 +124,10 @@ class _BottomSheetJogadoresState extends State<BottomSheetJogadores> {
   @override
   void initState() {
     super.initState();
-    final base = widget.apenasGoleiros
-        ? widget.jogadores.where((j) => j.posicao == 'GOL').toList()
-        : widget.jogadores;
+    final base =
+        widget.apenasGoleiros
+            ? widget.jogadores.where((j) => j.posicao == 'GOL').toList()
+            : widget.jogadores;
     final vistas = <String>{};
     final list = <(String, String)>[];
     for (final j in base) {
@@ -138,176 +154,218 @@ class _BottomSheetJogadoresState extends State<BottomSheetJogadores> {
 
   @override
   Widget build(BuildContext context) {
-    final porPosicao = widget.apenasGoleiros
-        ? widget.jogadores.where((j) => j.posicao == 'GOL').toList()
-        : widget.jogadores;
-    final porSelecao = _filtroSelecao == null
-        ? porPosicao
-        : porPosicao.where((j) => j.selecaoNome == _filtroSelecao).toList();
+    final porPosicao =
+        widget.apenasGoleiros
+            ? widget.jogadores.where((j) => j.posicao == 'GOL').toList()
+            : widget.jogadores;
+    final porSelecao =
+        _filtroSelecao == null
+            ? porPosicao
+            : porPosicao.where((j) => j.selecaoNome == _filtroSelecao).toList();
     final buscaNorm = _norm(_busca);
-    final filtrados = buscaNorm.isEmpty
-        ? porSelecao
-        : porSelecao.where((j) => _norm(j.nome).contains(buscaNorm)).toList();
+    final filtrados =
+        buscaNorm.isEmpty
+            ? porSelecao
+            : porSelecao
+                .where((j) => _norm(j.nome).contains(buscaNorm))
+                .toList();
 
     return DraggableScrollableSheet(
       initialChildSize: 0.88,
       minChildSize: 0.5,
       maxChildSize: 0.95,
       expand: false,
-      builder: (_, scrollController) => Container(
-        decoration: const BoxDecoration(
-          color: Cores.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: 10, bottom: 4),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Cores.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
+      builder:
+          (_, scrollController) => Container(
+            decoration: const BoxDecoration(
+              color: Cores.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Text(
-                    widget.titulo.toUpperCase(),
-                    style: GoogleFonts.anybody(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: Cores.onSurface,
-                    ),
+            child: Column(
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 10, bottom: 4),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Cores.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  if (widget.apenasGoleiros) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: widget.cor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'GOLEIROS',
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        widget.titulo.toUpperCase(),
                         style: GoogleFonts.anybody(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: widget.cor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: Cores.onSurface,
                         ),
                       ),
-                    ),
-                  ],
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: TextField(
-                controller: _ctrlBusca,
-                autofocus: false,
-                onChanged: (v) => setState(() => _busca = v),
-                decoration: InputDecoration(
-                  hintText: 'Buscar por nome...',
-                  hintStyle: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
-                  prefixIcon: const Icon(Icons.search_rounded, color: Cores.onSurfaceVariant),
-                  filled: true,
-                  fillColor: Cores.surfaceContainer,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Cores.outlineVariant),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: widget.cor, width: 2),
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: _buildDropdownSelecao(),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '${filtrados.length} jogador${filtrados.length != 1 ? 'es' : ''}',
-                  style: GoogleFonts.hankenGrotesk(fontSize: 12, color: Cores.onSurfaceVariant),
-                ),
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: filtrados.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Nenhum resultado',
-                        style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
+                      if (widget.apenasGoleiros) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: widget.cor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            'GOLEIROS',
+                            style: GoogleFonts.anybody(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: widget.cor,
+                            ),
+                          ),
+                        ),
+                      ],
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.of(context).pop(),
                       ),
-                    )
-                  : ListView.builder(
-                      controller: scrollController,
-                      itemCount: filtrados.length,
-                      itemBuilder: (_, i) {
-                        final j = filtrados[i];
-                        final selecionado = widget.selecionadoAtual == j.nome;
-                        return ListTile(
-                          leading: Container(
-                            width: 36,
-                            height: 36,
-                            clipBehavior: Clip.antiAlias,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Cores.outlineVariant),
-                            ),
-                            child: Bandeira(j.selecaoNome, tamanho: 36),
-                          ),
-                          title: Text(
-                            j.nome,
-                            style: GoogleFonts.hankenGrotesk(
-                              fontSize: 15,
-                              fontWeight: selecionado ? FontWeight.w700 : FontWeight.w400,
-                              color: selecionado ? widget.cor : Cores.onSurface,
-                            ),
-                          ),
-                          subtitle: Text(
-                            j.clube != '-'
-                                ? '${j.selecaoNomePt} · ${j.clube}'
-                                : j.selecaoNomePt,
-                            style: GoogleFonts.hankenGrotesk(
-                              fontSize: 12,
-                              color: Cores.onSurfaceVariant,
-                            ),
-                          ),
-                          trailing: selecionado
-                              ? Icon(Icons.check_circle, color: widget.cor, size: 22)
-                              : null,
-                          tileColor: selecionado
-                              ? widget.cor.withValues(alpha: 0.08)
-                              : null,
-                          onTap: () => widget.onSelecionado(j.nome),
-                        );
-                      },
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: TextField(
+                    controller: _ctrlBusca,
+                    autofocus: false,
+                    onChanged: (v) => setState(() => _busca = v),
+                    decoration: InputDecoration(
+                      hintText: 'Buscar por nome...',
+                      hintStyle: GoogleFonts.hankenGrotesk(
+                        color: Cores.onSurfaceVariant,
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        color: Cores.onSurfaceVariant,
+                      ),
+                      filled: true,
+                      fillColor: Cores.surfaceContainer,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                          color: Cores.outlineVariant,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: widget.cor, width: 2),
+                      ),
                     ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _buildDropdownSelecao(),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${filtrados.length} jogador${filtrados.length != 1 ? 'es' : ''}',
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 12,
+                        color: Cores.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child:
+                      filtrados.isEmpty
+                          ? Center(
+                            child: Text(
+                              'Nenhum resultado',
+                              style: GoogleFonts.hankenGrotesk(
+                                color: Cores.onSurfaceVariant,
+                              ),
+                            ),
+                          )
+                          : ListView.builder(
+                            controller: scrollController,
+                            itemCount: filtrados.length,
+                            itemBuilder: (_, i) {
+                              final j = filtrados[i];
+                              final selecionado =
+                                  widget.selecionadoAtual == j.nome;
+                              return ListTile(
+                                leading: Container(
+                                  width: 36,
+                                  height: 36,
+                                  clipBehavior: Clip.antiAlias,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Cores.outlineVariant,
+                                    ),
+                                  ),
+                                  child: Bandeira(j.selecaoNome, tamanho: 36),
+                                ),
+                                title: Text(
+                                  j.nome,
+                                  style: GoogleFonts.hankenGrotesk(
+                                    fontSize: 15,
+                                    fontWeight:
+                                        selecionado
+                                            ? FontWeight.w700
+                                            : FontWeight.w400,
+                                    color:
+                                        selecionado
+                                            ? widget.cor
+                                            : Cores.onSurface,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  j.clube != '-'
+                                      ? '${j.selecaoNomePt} · ${j.clube}'
+                                      : j.selecaoNomePt,
+                                  style: GoogleFonts.hankenGrotesk(
+                                    fontSize: 12,
+                                    color: Cores.onSurfaceVariant,
+                                  ),
+                                ),
+                                trailing:
+                                    selecionado
+                                        ? Icon(
+                                          Icons.check_circle,
+                                          color: widget.cor,
+                                          size: 22,
+                                        )
+                                        : null,
+                                tileColor:
+                                    selecionado
+                                        ? widget.cor.withValues(alpha: 0.08)
+                                        : null,
+                                onTap: () => widget.onSelecionado(j.nome),
+                              );
+                            },
+                          ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 
@@ -320,45 +378,61 @@ class _BottomSheetJogadoresState extends State<BottomSheetJogadores> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       constraints: const BoxConstraints(maxHeight: 320),
       onSelected: (v) => setState(() => _filtroSelecao = v.isEmpty ? null : v),
-      itemBuilder: (ctx) => [
-        PopupMenuItem<String>(
-          value: '',
-          child: Row(
-            children: [
-              const Icon(Icons.public_rounded, size: 20, color: Cores.onSurfaceVariant),
-              const SizedBox(width: 10),
-              Text(
-                'Todos',
-                style: GoogleFonts.anybody(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Cores.onSurface,
-                ),
-              ),
-            ],
-          ),
-        ),
-        ..._selecoes.map((s) => PopupMenuItem<String>(
-              value: s.$1,
+      itemBuilder:
+          (ctx) => [
+            PopupMenuItem<String>(
+              value: '',
               child: Row(
                 children: [
-                  Container(
-                    width: 22,
-                    height: 22,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: const BoxDecoration(shape: BoxShape.circle),
-                    child: Bandeira(s.$1, tamanho: 22),
+                  const Icon(
+                    Icons.public_rounded,
+                    size: 20,
+                    color: Cores.onSurfaceVariant,
                   ),
                   const SizedBox(width: 10),
-                  Text(s.$2, style: GoogleFonts.hankenGrotesk(fontSize: 14, color: Cores.onSurface)),
+                  Text(
+                    'Todos',
+                    style: GoogleFonts.anybody(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Cores.onSurface,
+                    ),
+                  ),
                 ],
               ),
-            )),
-      ],
+            ),
+            ..._selecoes.map(
+              (s) => PopupMenuItem<String>(
+                value: s.$1,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 22,
+                      height: 22,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: const BoxDecoration(shape: BoxShape.circle),
+                      child: Bandeira(s.$1, tamanho: 22),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      s.$2,
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 14,
+                        color: Cores.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 7, 8, 7),
         decoration: BoxDecoration(
-          color: ativo ? widget.cor.withValues(alpha: 0.08) : Cores.surfaceContainer,
+          color:
+              ativo
+                  ? widget.cor.withValues(alpha: 0.08)
+                  : Cores.surfaceContainer,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: ativo ? widget.cor : Cores.outlineVariant),
         ),
@@ -460,8 +534,9 @@ class DialogAmbiente extends StatelessWidget {
           style: OutlinedButton.styleFrom(
             foregroundColor: Cores.azulTerciario,
             side: const BorderSide(color: Cores.azulTerciario),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
           onPressed: () => Navigator.of(context).pop('teste'),
         ),
@@ -473,12 +548,129 @@ class DialogAmbiente extends StatelessWidget {
           ),
           style: FilledButton.styleFrom(
             backgroundColor: Cores.verdePrincipal,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
           onPressed: () => Navigator.of(context).pop('producao'),
         ),
       ],
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Bottom sheet de seleção de opção única
+// -----------------------------------------------------------------------------
+
+/// Abre um bottom sheet simples para escolher uma opção em uma lista curta
+/// (sem campo de busca). Visual no mesmo padrão dos seletores de time/jogador
+/// dos palpites especiais. Retorna a opção escolhida ou null se fechado.
+Future<String?> mostrarSeletorOpcoes(
+  BuildContext context, {
+  required String titulo,
+  required List<String> opcoes,
+  String? selecionada,
+  Color cor = Cores.verdePrincipal,
+}) {
+  return showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder:
+        (_) => BottomSheetOpcoes(
+          titulo: titulo,
+          opcoes: opcoes,
+          selecionada: selecionada,
+          cor: cor,
+        ),
+  );
+}
+
+class BottomSheetOpcoes extends StatelessWidget {
+  const BottomSheetOpcoes({
+    super.key,
+    required this.titulo,
+    required this.opcoes,
+    this.selecionada,
+    this.cor = Cores.verdePrincipal,
+  });
+
+  final String titulo;
+  final List<String> opcoes;
+  final String? selecionada;
+  final Color cor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.7,
+      ),
+      decoration: const BoxDecoration(
+        color: Cores.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Alça de arrastar
+          Container(
+            margin: const EdgeInsets.only(top: 10, bottom: 4),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Cores.outlineVariant,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Row(
+              children: [
+                Text(
+                  titulo.toUpperCase(),
+                  style: GoogleFonts.anybody(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Cores.onSurface,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: opcoes.length,
+              itemBuilder: (_, i) {
+                final opcao = opcoes[i];
+                final sel = opcao == selecionada;
+                return ListTile(
+                  title: Text(
+                    opcao,
+                    style: GoogleFonts.hankenGrotesk(
+                      fontSize: 15,
+                      fontWeight: sel ? FontWeight.w700 : FontWeight.w400,
+                      color: sel ? cor : Cores.onSurface,
+                    ),
+                  ),
+                  trailing:
+                      sel ? Icon(Icons.check_circle_rounded, color: cor) : null,
+                  onTap: () => Navigator.of(context).pop(opcao),
+                );
+              },
+            ),
+          ),
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
+        ],
+      ),
     );
   }
 }

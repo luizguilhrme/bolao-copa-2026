@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -17,13 +17,36 @@ import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 import '../utils/dialogos.dart';
 
+// Cards brancos com sombra suave sobre Cores.background.
+const _sombraCard = [
+  BoxShadow(color: Color(0x14000000), blurRadius: 16, offset: Offset(0, 4)),
+];
+
+// Ordem canônica das rodadas/fases para o filtro "Por rodada".
+const _ordemRodadas = [
+  'Rodada 1',
+  'Rodada 2',
+  'Rodada 3',
+  '16 avos de Final',
+  'Oitavas de Final',
+  'Quartas de Final',
+  'Semifinal',
+  'Disputa de 3º Lugar',
+  'Final',
+];
+
 // ─── Modelo interno ───────────────────────────────────────────────────────────
 
 class _ItemResultado {
-  const _ItemResultado({required this.jogo, this.palpite, this.pontos, this.pontosBase});
+  const _ItemResultado({
+    required this.jogo,
+    this.palpite,
+    this.pontos,
+    this.pontosBase,
+  });
   final Jogo jogo;
   final Palpite? palpite;
-  final int? pontos;     // pontos reais exibidos (com multiplicador de fase)
+  final int? pontos; // pontos reais exibidos (com multiplicador de fase)
   final int? pontosBase; // pontos base sem multiplicador — define a cor do card
 }
 
@@ -39,8 +62,8 @@ _Status _statusDe(Jogo jogo) {
 }
 
 bool _estaBloqueado(Jogo jogo) => DateTime.now().isAfter(
-    jogo.dataHora.toLocal().subtract(const Duration(minutes: 5)));
-
+  jogo.dataHora.toLocal().subtract(const Duration(minutes: 5)),
+);
 
 // ─── Tela principal ───────────────────────────────────────────────────────────
 
@@ -74,6 +97,11 @@ class _TelaPalpitesState extends State<TelaPalpites> {
 
   // Modo ativo: 'classico' ou 'copa' (só relevante quando ambos os modos presentes)
   bool _modoClassico = true;
+
+  // Filtro de jogos do MODO CLÁSSICO: 0 = Por data | 1 = Por rodada | 2 = Por grupo
+  int _filtroJogos = 0;
+  String? _rodadaSelecionada;
+  String? _grupoSelecionado;
 
   // Rascunhos digitados mas ainda não salvos — vivem no pai para sobreviver
   // à troca de abas/modo (chave = jogoId)
@@ -119,7 +147,7 @@ class _TelaPalpitesState extends State<TelaPalpites> {
       ]);
       _todosJogos = results[0] as List<Jogo>;
       final palpites = results[1] as List<Palpite>;
-      _criadoEm   = (results[2] as Usuario?)?.criadoEm;
+      _criadoEm = (results[2] as Usuario?)?.criadoEm;
       _meusGrupos = results[3] as List<Grupo>;
       _palpitesMap = {for (final p in palpites) p.jogoId: p};
 
@@ -132,10 +160,11 @@ class _TelaPalpitesState extends State<TelaPalpites> {
       }
 
       try {
-        final doc = await FirebaseFirestore.instance
-            .collection('config')
-            .doc('copa2026')
-            .get();
+        final doc =
+            await FirebaseFirestore.instance
+                .collection('config')
+                .doc('copa2026')
+                .get();
         final data = doc.data();
         final cr = data?['classificacao_real'] as Map<String, dynamic>?;
         if (cr != null) {
@@ -143,7 +172,7 @@ class _TelaPalpitesState extends State<TelaPalpites> {
             final m = v as Map<String, dynamic>;
             return MapEntry(k, {
               'primeiro': m['primeiro'] as String?,
-              'segundo':  m['segundo']  as String?,
+              'segundo': m['segundo'] as String?,
               'terceiro': m['terceiro'] as String?,
             });
           });
@@ -169,8 +198,9 @@ class _TelaPalpitesState extends State<TelaPalpites> {
       // Pular jogos cujos times ainda não foram definidos (fase mata-mata)
       if (ehPlaceholder(jogo.team1) || ehPlaceholder(jogo.team2)) continue;
 
-      final cutoff =
-      jogo.dataHora.toLocal().subtract(const Duration(minutes: 5));
+      final cutoff = jogo.dataHora.toLocal().subtract(
+        const Duration(minutes: 5),
+      );
 
       if (agora.isBefore(cutoff) && jogo.placar1 == null) {
         // Disponível para palpite
@@ -180,27 +210,7 @@ class _TelaPalpitesState extends State<TelaPalpites> {
         proximos.putIfAbsent(chave, () => []).add(jogo);
       } else {
         // Bloqueado, ao vivo ou encerrado
-        final palpite = _palpitesMap[jogo.id];
-        int? pontos;
-        int? pontosBase;
-        if (jogo.placar1 != null && jogo.placar2 != null) {
-          if (palpite != null) {
-            pontosBase = calcularPontos(
-              palpite.palpite1, palpite.palpite2,
-              jogo.placar1!, jogo.placar2!,
-            );
-            pontos = calcularPontosComFase(
-              palpite.palpite1, palpite.palpite2,
-              jogo.placar1!, jogo.placar2!,
-              jogo.round,
-            );
-          } else if (_criadoEm != null && jogo.dataHora.isAfter(_criadoEm!)) {
-            pontos = -10;
-            pontosBase = -10;
-          }
-        }
-        resultados.add(_ItemResultado(
-            jogo: jogo, palpite: palpite, pontos: pontos, pontosBase: pontosBase));
+        resultados.add(_itemResultadoDe(jogo));
       }
     }
 
@@ -210,12 +220,47 @@ class _TelaPalpitesState extends State<TelaPalpites> {
 
     setState(() {
       _gruposProximos = proximos;
-      _datasVisiveis = preservarDatasVisiveis
-          ? _datasVisiveis.clamp(1, datas.isEmpty ? 1 : datas.length)
-          : 1;
+      _datasVisiveis =
+          preservarDatasVisiveis
+              ? _datasVisiveis.clamp(1, datas.isEmpty ? 1 : datas.length)
+              : 1;
       _resultados = resultados;
       _carregando = false;
     });
+  }
+
+  // Monta o item de resultado (palpite + pontos) de um jogo bloqueado,
+  // ao vivo ou encerrado. Usado pela aba Encerrados e pelas listas filtradas.
+  _ItemResultado _itemResultadoDe(Jogo jogo) {
+    final palpite = _palpitesMap[jogo.id];
+    int? pontos;
+    int? pontosBase;
+    if (jogo.placar1 != null && jogo.placar2 != null) {
+      if (palpite != null) {
+        pontosBase = calcularPontos(
+          palpite.palpite1,
+          palpite.palpite2,
+          jogo.placar1!,
+          jogo.placar2!,
+        );
+        pontos = calcularPontosComFase(
+          palpite.palpite1,
+          palpite.palpite2,
+          jogo.placar1!,
+          jogo.placar2!,
+          jogo.round,
+        );
+      } else if (_criadoEm != null && jogo.dataHora.isAfter(_criadoEm!)) {
+        pontos = -10;
+        pontosBase = -10;
+      }
+    }
+    return _ItemResultado(
+      jogo: jogo,
+      palpite: palpite,
+      pontos: pontos,
+      pontosBase: pontosBase,
+    );
   }
 
   // Chamado pelo card quando o usuário salva um palpite novo
@@ -224,7 +269,9 @@ class _TelaPalpitesState extends State<TelaPalpites> {
   }
 
   // Salva palpites do MODO COPA e atualiza estado local
-  Future<void> _salvarPalpitesCopa(Map<String, Map<String, String?>> palpites) async {
+  Future<void> _salvarPalpitesCopa(
+    Map<String, Map<String, String?>> palpites,
+  ) async {
     await PalpiteCopaService().salvar(_uid, palpites);
     if (mounted) setState(() => _palpitesCopa = palpites);
   }
@@ -245,7 +292,8 @@ class _TelaPalpitesState extends State<TelaPalpites> {
   /// True se o usuário tem ambos os modos E a Fase de Grupos ainda está ativa
   /// OU a classificação real já foi divulgada (para exibir resultados Copa).
   bool get _mostrarAbas =>
-      _temModoClassico && _temModoCopa &&
+      _temModoClassico &&
+      _temModoCopa &&
       (!_faseGruposEncerrada || _classificacaoReal.isNotEmpty);
 
   /// Palpites Copa bloqueados apenas quando admin trava.
@@ -261,26 +309,31 @@ class _TelaPalpitesState extends State<TelaPalpites> {
         ..add(jogo.team1)
         ..add(jogo.team2);
     }
-    const ordem = ['A','B','C','D','E','F','G','H','I','J','K','L'];
-    return {for (final k in ordem) if (mapa.containsKey(k)) k: mapa[k]!.toList()};
+    const ordem = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+    return {
+      for (final k in ordem)
+        if (mapa.containsKey(k)) k: mapa[k]!.toList(),
+    };
   }
 
   // Próximos filtrados por fase (Fase de Grupos ou Knockout)
   Map<String, List<Jogo>> get _proximosFiltrados {
     final result = <String, List<Jogo>>{};
     for (final entry in _gruposProximos.entries) {
-      final filtrado = _faseGruposEncerrada
-          ? entry.value.where((j) => j.group == null).toList()
-          : entry.value.where((j) => j.group != null).toList();
+      final filtrado =
+          _faseGruposEncerrada
+              ? entry.value.where((j) => j.group == null).toList()
+              : entry.value.where((j) => j.group != null).toList();
       if (filtrado.isNotEmpty) result[entry.key] = filtrado;
     }
     return result;
   }
 
   // Encerrados filtrados por fase
-  List<_ItemResultado> get _encerradosFiltrados => _faseGruposEncerrada
-      ? _resultados
-      : _resultados.where((r) => r.jogo.group != null).toList();
+  List<_ItemResultado> get _encerradosFiltrados =>
+      _faseGruposEncerrada
+          ? _resultados
+          : _resultados.where((r) => r.jogo.group != null).toList();
 
   bool get _temMaisProximos =>
       !_faseGruposEncerrada && _datasVisiveis < _proximosFiltrados.length;
@@ -289,6 +342,113 @@ class _TelaPalpitesState extends State<TelaPalpites> {
     final datas = _proximosFiltrados.keys.toList();
     if (_faseGruposEncerrada) return datas;
     return datas.take(_datasVisiveis).toList();
+  }
+
+  /// Rodadas/fases presentes nos jogos, na ordem canônica do torneio.
+  List<String> get _opcoesRodada {
+    final presentes = _todosJogos.map((j) => j.matchday ?? j.round).toSet();
+    return [
+      for (final r in _ordemRodadas)
+        if (presentes.contains(r)) r,
+    ];
+  }
+
+  List<String> get _opcoesGrupo =>
+      _todosJogos.map((j) => j.group).whereType<String>().toSet().toList()
+        ..sort();
+
+  Future<void> _abrirSeletorFiltro() async {
+    final porRodada = _filtroJogos == 1;
+    final escolha = await mostrarSeletorOpcoes(
+      context,
+      titulo: porRodada ? 'Rodada / Fase' : 'Grupo',
+      opcoes: porRodada ? _opcoesRodada : _opcoesGrupo,
+      selecionada: porRodada ? _rodadaSelecionada : _grupoSelecionado,
+    );
+    if (escolha == null || !mounted) return;
+    setState(() {
+      if (porRodada) {
+        _rodadaSelecionada = escolha;
+      } else {
+        _grupoSelecionado = escolha;
+      }
+    });
+  }
+
+  /// Lista mista (cards de palpite editáveis + cards de resultado) usada
+  /// pelos filtros "Por rodada" e "Por grupo", agrupada por data.
+  Widget _buildListaFiltrada() {
+    final porRodada = _filtroJogos == 1;
+    final selecao = porRodada ? _rodadaSelecionada : _grupoSelecionado;
+
+    final jogos =
+        _todosJogos.where((j) {
+            if (ehPlaceholder(j.team1) || ehPlaceholder(j.team2)) return false;
+            return porRodada
+                ? (j.matchday ?? j.round) == selecao
+                : j.group == selecao;
+          }).toList()
+          ..sort((a, b) => a.dataHora.compareTo(b.dataHora));
+
+    if (jogos.isEmpty) {
+      return Center(
+        child: Text(
+          'Nenhum jogo disponível para esta seleção.',
+          style: GoogleFonts.hankenGrotesk(
+            fontSize: 14,
+            color: Cores.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+
+    final agora = DateTime.now();
+    final filhos = <Widget>[];
+    String? dataAtual;
+    for (final jogo in jogos) {
+      final local = jogo.dataHora.toLocal();
+      final chave =
+          '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+      if (chave != dataAtual) {
+        dataAtual = chave;
+        filhos.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: _CabecalhoData(dataChave: chave),
+          ),
+        );
+      }
+
+      final cutoff = jogo.dataHora.toLocal().subtract(
+        const Duration(minutes: 5),
+      );
+      final disponivel = jogo.placar1 == null && agora.isBefore(cutoff);
+      filhos.add(
+        disponivel
+            // Card editável: o pill de horário flutua acima (top: -12),
+            // então precisa de respiro extra no topo
+            ? Padding(
+              padding: const EdgeInsets.only(top: 16, bottom: 4),
+              child: _CardPalpite(
+                key: ValueKey(jogo.id),
+                jogo: jogo,
+                palpiteInicial: _palpitesMap[jogo.id],
+                rascunhos: _rascunhos,
+                onPalpiteSalvo: _onPalpiteSalvo,
+              ),
+            )
+            : Padding(
+              padding: const EdgeInsets.only(top: 10, bottom: 4),
+              child: _CardResultado(item: _itemResultadoDe(jogo)),
+            ),
+      );
+    }
+
+    return ListView(
+      key: ValueKey('filtro-$_filtroJogos-$selecao'),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+      children: filhos,
+    );
   }
 
   @override
@@ -301,101 +461,156 @@ class _TelaPalpitesState extends State<TelaPalpites> {
     final bool exibirCopa =
         (!_faseGruposEncerrada || _classificacaoReal.isNotEmpty) &&
         ((_mostrarAbas && !_modoClassico) ||
-         (_temModoCopa && !_temModoClassico));
+            (_temModoCopa && !_temModoClassico));
 
-    final int countProximos = exibirCopa ? 0 : _proximosFiltrados.values
-        .fold(0, (s, l) => s + l.length);
+    final int countProximos =
+        exibirCopa
+            ? 0
+            : _proximosFiltrados.values.fold(0, (s, l) => s + l.length);
     final int countEncerrados = exibirCopa ? 0 : _encerradosFiltrados.length;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Banner informativo quando palpites Copa e Especiais estão travados
-        if (_palpitesTravados)
-          Container(
-            width: double.infinity,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: Cores.verdePrincipal.withValues(alpha: 0.10),
-            child: Row(
-              children: [
-                const Icon(Icons.lock_rounded,
-                    size: 16, color: Cores.verdePrincipal),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Palpites Especiais e Modo Copa estão travados e visíveis para todos.',
-                    style: GoogleFonts.hankenGrotesk(
-                      fontSize: 13,
-                      color: Cores.verdePrincipal,
-                      fontWeight: FontWeight.w600,
+    return Container(
+      color: Cores.background,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Banner informativo quando palpites Copa e Especiais estão travados
+          if (_palpitesTravados)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: Cores.verdePrincipal.withValues(alpha: 0.10),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.lock_rounded,
+                    size: 16,
+                    color: Cores.verdePrincipal,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Palpites Especiais e Modo Copa estão travados e visíveis para todos.',
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 13,
+                        color: Cores.verdePrincipal,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
+                ],
+              ),
+            ),
+
+          // Seletor de MODO (só quando ambos os modos presentes e fase de grupos ativa)
+          if (_mostrarAbas)
+            _SeletorModo(
+              modoClassico: _modoClassico,
+              onChanged:
+                  (v) => setState(() {
+                    _modoClassico = v;
+                    _abaProximos = true; // reset sub-aba ao trocar de modo
+                  }),
+            ),
+
+          // Copa: sub-abas direto. Clássico: título + chips de filtro
+          // (Por data / Por rodada / Por grupo) e o controle correspondente.
+          if (exibirCopa)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: _SeletorAbas(
+                abaProximos: _abaProximos,
+                countProximos: 0,
+                countEncerrados: 0,
+                modoCopa: true,
+                onChanged: (v) => setState(() => _abaProximos = v),
+              ),
+            )
+          else ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: _ChipsFiltroJogos(
+                filtro: _filtroJogos,
+                onChanged:
+                    (f) => setState(() {
+                      _filtroJogos = f;
+                      // Pré-seleciona a primeira opção ao entrar no filtro
+                      if (f == 1 && _rodadaSelecionada == null) {
+                        final ops = _opcoesRodada;
+                        if (ops.isNotEmpty) _rodadaSelecionada = ops.first;
+                      }
+                      if (f == 2 && _grupoSelecionado == null) {
+                        final ops = _opcoesGrupo;
+                        if (ops.isNotEmpty) _grupoSelecionado = ops.first;
+                      }
+                    }),
+              ),
+            ),
+            if (_filtroJogos == 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: _SeletorAbas(
+                  abaProximos: _abaProximos,
+                  countProximos: countProximos,
+                  countEncerrados: countEncerrados,
+                  onChanged: (v) => setState(() => _abaProximos = v),
                 ),
-              ],
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: _CampoSeletorFiltro(
+                  valor:
+                      _filtroJogos == 1
+                          ? _rodadaSelecionada
+                          : _grupoSelecionado,
+                  onTap: _abrirSeletorFiltro,
+                ),
+              ),
+          ],
+
+          // Conteúdo principal
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child:
+                  exibirCopa
+                      ? (_abaProximos
+                          ? _AbaCopaProximos(
+                            key: const ValueKey('copa-proximos'),
+                            timesPorGrupo: _timesPorGrupo,
+                            palpites: _palpitesCopa,
+                            rascunho: _copaRascunho,
+                            onRascunho: (m) => _copaRascunho = m,
+                            bloqueado: _copaBloqueada,
+                            onSalvar: _salvarPalpitesCopa,
+                          )
+                          : _AbaCopaEncerrados(
+                            key: const ValueKey('copa-encerrados'),
+                            palpites: _palpitesCopa,
+                            classificacaoReal: _classificacaoReal,
+                          ))
+                      : _filtroJogos != 0
+                      ? _buildListaFiltrada()
+                      : (_abaProximos
+                          ? _AbaProximos(
+                            key: const ValueKey('proximos'),
+                            grupos: _proximosFiltrados,
+                            datasAtivas: _datasAtivas,
+                            palpitesMap: _palpitesMap,
+                            rascunhos: _rascunhos,
+                            temMais: _temMaisProximos,
+                            onVerMais: () => setState(() => _datasVisiveis++),
+                            onPalpiteSalvo: _onPalpiteSalvo,
+                          )
+                          : _AbaEncerrados(
+                            key: const ValueKey('encerrados'),
+                            resultados: _encerradosFiltrados,
+                          )),
             ),
           ),
-
-        // Seletor de MODO (só quando ambos os modos presentes e fase de grupos ativa)
-        if (_mostrarAbas)
-          _SeletorModo(
-            modoClassico: _modoClassico,
-            onChanged: (v) => setState(() {
-              _modoClassico = v;
-              _abaProximos = true; // reset sub-aba ao trocar de modo
-            }),
-          ),
-
-        // Sub-abas Próximos / Encerrados
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-          child: _SeletorAbas(
-            abaProximos: _abaProximos,
-            countProximos: countProximos,
-            countEncerrados: countEncerrados,
-            modoCopa: exibirCopa,
-            onChanged: (v) => setState(() => _abaProximos = v),
-          ),
-        ),
-
-        // Conteúdo principal
-        Expanded(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: exibirCopa
-                ? (_abaProximos
-                    ? _AbaCopaProximos(
-                        key: const ValueKey('copa-proximos'),
-                        timesPorGrupo: _timesPorGrupo,
-                        palpites: _palpitesCopa,
-                        rascunho: _copaRascunho,
-                        onRascunho: (m) => _copaRascunho = m,
-                        bloqueado: _copaBloqueada,
-                        onSalvar: _salvarPalpitesCopa,
-                      )
-                    : _AbaCopaEncerrados(
-                        key: const ValueKey('copa-encerrados'),
-                        palpites: _palpitesCopa,
-                        classificacaoReal: _classificacaoReal,
-                      ))
-                : (_abaProximos
-                    ? _AbaProximos(
-                        key: const ValueKey('proximos'),
-                        grupos: _proximosFiltrados,
-                        datasAtivas: _datasAtivas,
-                        palpitesMap: _palpitesMap,
-                        rascunhos: _rascunhos,
-                        temMais: _temMaisProximos,
-                        onVerMais: () => setState(() => _datasVisiveis++),
-                        onPalpiteSalvo: _onPalpiteSalvo,
-                      )
-                    : _AbaEncerrados(
-                        key: const ValueKey('encerrados'),
-                        resultados: _encerradosFiltrados,
-                      )),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -415,37 +630,54 @@ class _SeletorAbas extends StatelessWidget {
   final int countProximos;
   final int countEncerrados;
   final void Function(bool) onChanged;
+
   /// No MODO COPA Próximos não há lista de jogos — esconde o contador
   final bool modoCopa;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _BotaoAba(
-            label: 'Próximos',
-            count: modoCopa ? 0 : countProximos,
-            ativo: abaProximos,
-            onTap: () => onChanged(true),
+    // Card único segmentado (mesmo aspecto do campo seletor de rodada/grupo):
+    // seleção em branco suave, sem verde — a tela já tem verde nas abas e chips.
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Cores.verdeSuave,
+        border: Border.all(color: Cores.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _SegmentoAba(
+              label: 'Próximos',
+              count: modoCopa ? 0 : countProximos,
+              ativo: abaProximos,
+              onTap: () => onChanged(true),
+            ),
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _BotaoAba(
-            label: 'Encerrados',
-            count: modoCopa ? 0 : countEncerrados,
-            ativo: !abaProximos,
-            onTap: () => onChanged(false),
+          // Divisão central do card
+          Container(
+            width: 1,
+            height: 20,
+            color: Cores.outlineVariant,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
           ),
-        ),
-      ],
+          Expanded(
+            child: _SegmentoAba(
+              label: 'Encerrados',
+              count: modoCopa ? 0 : countEncerrados,
+              ativo: !abaProximos,
+              onTap: () => onChanged(false),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _BotaoAba extends StatelessWidget {
-  const _BotaoAba({
+class _SegmentoAba extends StatelessWidget {
+  const _SegmentoAba({
     required this.label,
     required this.count,
     required this.ativo,
@@ -460,13 +692,24 @@ class _BotaoAba extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: ativo ? Cores.verdePrincipal : Cores.surfaceContainer,
-          borderRadius: BorderRadius.circular(10),
+          color: ativo ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+          boxShadow:
+              ativo
+                  ? const [
+                    BoxShadow(
+                      color: Color(0x14000000),
+                      blurRadius: 6,
+                      offset: Offset(0, 2),
+                    ),
+                  ]
+                  : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -476,18 +719,15 @@ class _BotaoAba extends StatelessWidget {
               style: GoogleFonts.anybody(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: ativo ? Colors.white : Cores.onSurfaceVariant,
+                color: ativo ? Cores.onSurface : Cores.onSurfaceVariant,
               ),
             ),
             if (count > 0) ...[
               const SizedBox(width: 6),
               Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: ativo
-                      ? Colors.white.withValues(alpha: 0.25)
-                      : Cores.outlineVariant,
+                  color: ativo ? Cores.verdeSuave : Cores.outlineVariant,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
@@ -495,11 +735,109 @@ class _BotaoAba extends StatelessWidget {
                   style: GoogleFonts.hankenGrotesk(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: ativo ? Colors.white : Cores.onSurfaceVariant,
+                    color: Cores.onSurfaceVariant,
                   ),
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Chips de filtro de jogos (Por data / Por rodada / Por grupo) ─────────────
+
+class _ChipsFiltroJogos extends StatelessWidget {
+  const _ChipsFiltroJogos({required this.filtro, required this.onChanged});
+
+  final int filtro;
+  final void Function(int) onChanged;
+
+  static const _labels = ['Por data', 'Por rodada', 'Por grupo'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var i = 0; i < _labels.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          _buildChip(_labels[i], i),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildChip(String label, int indice) {
+    final selecionado = filtro == indice;
+    return GestureDetector(
+      onTap: () => onChanged(indice),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selecionado ? Cores.verdePrincipal : Cores.verdeSuave,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selecionado ? Cores.verdePrincipal : Cores.outlineVariant,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.anybody(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: selecionado ? Colors.white : Cores.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Campo seletor de rodada/grupo (abre bottom sheet de opções) ──────────────
+
+class _CampoSeletorFiltro extends StatelessWidget {
+  const _CampoSeletorFiltro({required this.valor, required this.onTap});
+
+  final String? valor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: Cores.surfaceContainer,
+          border: Border.all(color: Cores.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.filter_list_rounded,
+              size: 20,
+              color: Cores.onSurfaceVariant,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                valor ?? 'Selecionar...',
+                style: GoogleFonts.hankenGrotesk(
+                  fontSize: 15,
+                  fontWeight: valor != null ? FontWeight.w600 : FontWeight.w400,
+                  color:
+                      valor != null ? Cores.onSurface : Cores.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.expand_more_rounded,
+              color: Cores.onSurfaceVariant,
+            ),
           ],
         ),
       ),
@@ -537,7 +875,9 @@ class _AbaProximosState extends State<_AbaProximos> {
   final List<FocusNode> _focusNodes = [];
 
   int get _totalCards => widget.datasAtivas.fold<int>(
-      0, (s, d) => s + (widget.grupos[d]?.length ?? 0));
+    0,
+    (s, d) => s + (widget.grupos[d]?.length ?? 0),
+  );
 
   @override
   void initState() {
@@ -553,7 +893,9 @@ class _AbaProximosState extends State<_AbaProximos> {
   }
 
   void _reconstruirFocusNodes(int count) {
-    for (final fn in _focusNodes) { fn.dispose(); }
+    for (final fn in _focusNodes) {
+      fn.dispose();
+    }
     _focusNodes
       ..clear()
       ..addAll(List.generate(count, (_) => FocusNode()));
@@ -561,7 +903,9 @@ class _AbaProximosState extends State<_AbaProximos> {
 
   @override
   void dispose() {
-    for (final fn in _focusNodes) { fn.dispose(); }
+    for (final fn in _focusNodes) {
+      fn.dispose();
+    }
     super.dispose();
   }
 
@@ -581,53 +925,53 @@ class _AbaProximosState extends State<_AbaProximos> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.sports_soccer_rounded,
-                size: 64, color: Cores.outlineVariant),
+            Icon(
+              Icons.sports_soccer_rounded,
+              size: 64,
+              color: Cores.outlineVariant,
+            ),
             const SizedBox(height: 16),
-            Text('Nenhum jogo disponível',
-                style: GoogleFonts.anybody(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Cores.onSurface)),
+            Text(
+              'Nenhum jogo disponível',
+              style: GoogleFonts.anybody(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Cores.onSurface,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text('Todos os jogos já foram encerrados\nou estão prestes a começar.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.hankenGrotesk(
-                    fontSize: 14,
-                    color: Cores.onSurfaceVariant,
-                    height: 1.5)),
+            Text(
+              'Todos os jogos já foram encerrados\nou estão prestes a começar.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.hankenGrotesk(
+                fontSize: 14,
+                color: Cores.onSurfaceVariant,
+                height: 1.5,
+              ),
+            ),
           ],
         ),
       );
     }
 
-    final slivers = <Widget>[
-      SliverPadding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-        sliver: SliverToBoxAdapter(
-          child: Text(
-            'Insira seus placares para os próximos jogos.',
-            style: GoogleFonts.hankenGrotesk(
-                fontSize: 15, color: Cores.onSurfaceVariant),
-          ),
-        ),
-      ),
-    ];
+    final slivers = <Widget>[];
 
     int cardIndex = 0;
     for (final chave in widget.datasAtivas) {
       final jogos = widget.grupos[chave]!;
       final baseIndex = cardIndex;
 
-      slivers.add(SliverPadding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-        sliver: SliverToBoxAdapter(child: _CabecalhoData(dataChave: chave)),
-      ));
-      slivers.add(SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        sliver: SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (_, i) {
+      slivers.add(
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          sliver: SliverToBoxAdapter(child: _CabecalhoData(dataChave: chave)),
+        ),
+      );
+      slivers.add(
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate((_, i) {
               final idx = baseIndex + i;
               return Padding(
                 padding: const EdgeInsets.only(top: 16, bottom: 4),
@@ -637,26 +981,29 @@ class _AbaProximosState extends State<_AbaProximos> {
                   palpiteInicial: widget.palpitesMap[jogos[i].id],
                   rascunhos: widget.rascunhos,
                   onPalpiteSalvo: widget.onPalpiteSalvo,
-                  focusCtrl1: idx < _focusNodes.length ? _focusNodes[idx] : null,
+                  focusCtrl1:
+                      idx < _focusNodes.length ? _focusNodes[idx] : null,
                   onSalvoComEnter: () => _onSalvoComEnter(idx),
                 ),
               );
-            },
-            childCount: jogos.length,
+            }, childCount: jogos.length),
           ),
         ),
-      ));
+      );
       cardIndex += jogos.length;
     }
 
-    slivers.add(SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
-      sliver: SliverToBoxAdapter(
-        child: widget.temMais
-            ? _BotaoVerMais(onTap: widget.onVerMais)
-            : const _FimDaLista(),
+    slivers.add(
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+        sliver: SliverToBoxAdapter(
+          child:
+              widget.temMais
+                  ? _BotaoVerMais(onTap: widget.onVerMais)
+                  : const _FimDaLista(),
+        ),
       ),
-    ));
+    );
 
     return CustomScrollView(slivers: slivers);
   }
@@ -676,21 +1023,30 @@ class _AbaEncerrados extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.hourglass_empty_rounded,
-                size: 64, color: Cores.outlineVariant),
+            Icon(
+              Icons.hourglass_empty_rounded,
+              size: 64,
+              color: Cores.outlineVariant,
+            ),
             const SizedBox(height: 16),
-            Text('Nenhum resultado ainda',
-                style: GoogleFonts.anybody(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Cores.onSurface)),
+            Text(
+              'Nenhum resultado ainda',
+              style: GoogleFonts.anybody(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Cores.onSurface,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text('Os jogos aparecerão aqui\nquando estiverem prestes a começar.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.hankenGrotesk(
-                    fontSize: 14,
-                    color: Cores.onSurfaceVariant,
-                    height: 1.5)),
+            Text(
+              'Os jogos aparecerão aqui\nquando estiverem prestes a começar.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.hankenGrotesk(
+                fontSize: 14,
+                color: Cores.onSurfaceVariant,
+                height: 1.5,
+              ),
+            ),
           ],
         ),
       );
@@ -762,9 +1118,11 @@ class _CardPalpiteState extends State<_CardPalpite> {
     final r = widget.rascunhos[widget.jogo.id];
     final p = widget.palpiteInicial;
     _ctrl1 = TextEditingController(
-        text: r?.p1 ?? (p != null ? '${p.palpite1}' : ''));
+      text: r?.p1 ?? (p != null ? '${p.palpite1}' : ''),
+    );
     _ctrl2 = TextEditingController(
-        text: r?.p2 ?? (p != null ? '${p.palpite2}' : ''));
+      text: r?.p2 ?? (p != null ? '${p.palpite2}' : ''),
+    );
     _txtAnterior1 = _ctrl1.text;
     _txtAnterior2 = _ctrl2.text;
     _ctrl1.addListener(_onTextoAlterado);
@@ -829,7 +1187,9 @@ class _CardPalpiteState extends State<_CardPalpite> {
 
     // Trava de segurança: impede salvar após o cutoff de 5 min
     if (_estaBloqueado(widget.jogo)) {
-      if (!auto) mostrarMensagem(context, 'Palpites encerrados para este jogo.');
+      if (!auto) {
+        mostrarMensagem(context, 'Palpites encerrados para este jogo.');
+      }
       return;
     }
 
@@ -907,34 +1267,38 @@ class _CardPalpiteState extends State<_CardPalpite> {
         AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            color: salvo ? Cores.surfaceContainer : Cores.surface,
+            // Branco + sombra; a borda só sinaliza estado: verde = salvo,
+            // amarela = digitado e não salvo, sem palpite = sem borda.
+            color: Colors.white,
             border: Border.all(
-              color: salvo
-                  ? Cores.verdePrincipal
-                  : pendente
+              color:
+                  salvo
+                      ? Cores.verdePrincipal
+                      : pendente
                       ? Cores.secondaryContainer
-                      : Cores.outlineVariant,
-              width: salvo || pendente ? 2 : 1,
+                      : Colors.transparent,
+              width: 2,
             ),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2))
-            ],
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: _sombraCard,
           ),
           padding: const EdgeInsets.fromLTRB(16, 28, 16, 16),
+          // Miolo com largura intrínseca (como no card da tela Teste de API):
+          // os lados dividem o espaço restante e bandeira/nome ficam
+          // centralizados, sem colar na lateral do card.
           child: Row(
             children: [
               Expanded(child: _Time(nome: widget.jogo.team1)),
-              Expanded(
-                  flex: 2,
-                  child: _InputsProximos(
-                      ctrl1: _ctrl1, ctrl2: _ctrl2, salvo: salvo,
-                      focusCtrl1: widget.focusCtrl1,
-                      focusCtrl2: _focusCtrl2,
-                      onSalvar: () => _salvar(fromEnter: true))),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: _InputsProximos(
+                  ctrl1: _ctrl1,
+                  ctrl2: _ctrl2,
+                  focusCtrl1: widget.focusCtrl1,
+                  focusCtrl2: _focusCtrl2,
+                  onSalvar: () => _salvar(fromEnter: true),
+                ),
+              ),
               Expanded(child: _Time(nome: widget.jogo.team2)),
             ],
           ),
@@ -947,8 +1311,7 @@ class _CardPalpiteState extends State<_CardPalpite> {
           right: 0,
           child: Center(
             child: Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
                 color: Cores.surfaceContainer,
                 borderRadius: BorderRadius.circular(999),
@@ -957,10 +1320,11 @@ class _CardPalpiteState extends State<_CardPalpite> {
               child: Text(
                 _horario,
                 style: GoogleFonts.hankenGrotesk(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Cores.onSurfaceVariant,
-                    letterSpacing: 0.5),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Cores.onSurfaceVariant,
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
           ),
@@ -973,30 +1337,33 @@ class _CardPalpiteState extends State<_CardPalpite> {
         Positioned(
           top: 8,
           right: 8,
-          child: _salvando
-              ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Cores.verdePrincipal))
-              : GestureDetector(
-            onTap: salvo ? null : () => _salvar(),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: Icon(
-                salvo
-                    ? Icons.lock_rounded
-                    : Icons.lock_open_rounded,
-                key: ValueKey('$salvo-$pendente'),
-                size: 20,
-                color: salvo
-                    ? Cores.verdePrincipal
-                    : pendente
-                        ? Cores.onSecondaryContainer
-                        : Cores.onSurfaceVariant,
-              ),
-            ),
-          ),
+          child:
+              _salvando
+                  ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Cores.verdePrincipal,
+                    ),
+                  )
+                  : GestureDetector(
+                    onTap: salvo ? null : () => _salvar(),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        salvo ? Icons.lock_rounded : Icons.lock_open_rounded,
+                        key: ValueKey('$salvo-$pendente'),
+                        size: 20,
+                        color:
+                            salvo
+                                ? Cores.verdePrincipal
+                                : pendente
+                                ? Cores.onSecondaryContainer
+                                : Cores.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
         ),
       ],
     );
@@ -1027,29 +1394,27 @@ class _CardResultado extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: encerrado ? corFundoPontuacao(pontosBase) : Cores.surface,
+        // Estilo novo (branco + sombra); cor de fundo/borda de pontuação
+        // permanece nos encerrados — é o indicador visual do acerto.
+        color: encerrado ? corFundoPontuacao(pontosBase) : Colors.white,
         border: Border.all(
-          color: encerrado ? corBordaPontuacao(pontosBase) : Cores.outlineVariant,
+          color:
+              encerrado ? corBordaPontuacao(pontosBase) : Cores.outlineVariant,
           width: encerrado && pontosBase != null ? 2 : 1,
         ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 6,
-              offset: const Offset(0, 2))
-        ],
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: _sombraCard,
       ),
       child: Column(
         children: [
           // Cabeçalho: grupo/fase + status
           Container(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: Cores.surfaceContainer,
-              borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(11)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(15),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1057,9 +1422,10 @@ class _CardResultado extends StatelessWidget {
                 Text(
                   jogo.group ?? jogo.round,
                   style: GoogleFonts.hankenGrotesk(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Cores.onSurfaceVariant),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Cores.onSurfaceVariant,
+                  ),
                 ),
                 _ChipStatus(status: status, horario: _horario),
               ],
@@ -1074,18 +1440,12 @@ class _CardResultado extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(child: _Time(nome: jogo.team1)),
-                    Expanded(
-                      flex: 2,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
                       child: _ScoreDisplay(
-                        valor1: palpite != null
-                            ? '${palpite!.palpite1}'
-                            : '—',
-                        valor2: palpite != null
-                            ? '${palpite!.palpite2}'
-                            : '—',
-                        label: palpite != null
-                            ? 'Seu palpite'
-                            : 'Sem palpite',
+                        valor1: palpite != null ? '${palpite!.palpite1}' : '—',
+                        valor2: palpite != null ? '${palpite!.palpite2}' : '—',
+                        label: palpite != null ? 'Seu palpite' : 'Sem palpite',
                         corTexto: Cores.onSurface,
                       ),
                     ),
@@ -1097,8 +1457,9 @@ class _CardResultado extends StatelessWidget {
                 if (encerrado && jogo.placar1 != null) ...[
                   const SizedBox(height: 8),
                   Divider(
-                      color: corBordaPontuacao(pontosBase).withValues(alpha: 0.3),
-                      height: 1),
+                    color: corBordaPontuacao(pontosBase).withValues(alpha: 0.3),
+                    height: 1,
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -1119,8 +1480,11 @@ class _CardResultado extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.emoji_events_rounded,
-                            size: 13, color: Cores.onSurfaceVariant),
+                        Icon(
+                          Icons.emoji_events_rounded,
+                          size: 13,
+                          color: Cores.onSurfaceVariant,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           'Avançou: ${nomePtDe(jogo.vencedor!)}',
@@ -1146,7 +1510,11 @@ class _CardResultado extends StatelessWidget {
               children: [
                 // Badge de pontos (só se encerrado)
                 if (encerrado)
-                  _BadgePontos(pontos: pontos, pontosBase: pontosBase, temPalpite: palpite != null)
+                  _BadgePontos(
+                    pontos: pontos,
+                    pontosBase: pontosBase,
+                    temPalpite: palpite != null,
+                  )
                 else
                   const SizedBox.shrink(),
 
@@ -1155,7 +1523,9 @@ class _CardResultado extends StatelessWidget {
                   Text(
                     'Registrado em ${formatarCriadoEm(palpite!.criadoEm)}',
                     style: GoogleFonts.hankenGrotesk(
-                        fontSize: 11, color: Cores.onSurfaceVariant),
+                      fontSize: 11,
+                      color: Cores.onSurfaceVariant,
+                    ),
                   ),
               ],
             ),
@@ -1181,29 +1551,31 @@ class _ChipStatus extends StatelessWidget {
         return const _ChipAoVivo();
       case _Status.prestesAComecar:
         return Container(
-          padding:
-          const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
             color: const Color(0xFFFCD400).withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-                color: const Color(0xFFFCD400).withValues(alpha: 0.6)),
+              color: const Color(0xFFFCD400).withValues(alpha: 0.6),
+            ),
           ),
           child: Text(
             'PRESTES A COMEÇAR',
             style: GoogleFonts.hankenGrotesk(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF6E5C00)),
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF6E5C00),
+            ),
           ),
         );
       case _Status.encerrado:
         return Text(
           horario,
           style: GoogleFonts.hankenGrotesk(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Cores.onSurfaceVariant),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Cores.onSurfaceVariant,
+          ),
         );
     }
   }
@@ -1224,8 +1596,9 @@ class _ChipAoVivoState extends State<_ChipAoVivo>
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 900))
-      ..repeat(reverse: true);
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
   }
 
   @override
@@ -1248,23 +1621,26 @@ class _ChipAoVivoState extends State<_ChipAoVivo>
         children: [
           AnimatedBuilder(
             animation: _ctrl,
-            builder: (_, __) => Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Cores.verdePrincipal
-                    .withValues(alpha: 0.4 + 0.6 * _ctrl.value),
-              ),
-            ),
+            builder:
+                (_, __) => Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Cores.verdePrincipal.withValues(
+                      alpha: 0.4 + 0.6 * _ctrl.value,
+                    ),
+                  ),
+                ),
           ),
           const SizedBox(width: 4),
           Text(
             'AO VIVO',
             style: GoogleFonts.hankenGrotesk(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: Cores.verdePrincipal),
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: Cores.verdePrincipal,
+            ),
           ),
         ],
       ),
@@ -1300,11 +1676,14 @@ class _ScoreDisplay extends StatelessWidget {
             _ScoreBox(valor: valor1, size: boxSize, fontSize: fontSize),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Text('×',
-                  style: GoogleFonts.anybody(
-                      fontSize: compacto ? 16 : 20,
-                      fontWeight: FontWeight.w600,
-                      color: Cores.onSurfaceVariant)),
+              child: Text(
+                '×',
+                style: GoogleFonts.anybody(
+                  fontSize: compacto ? 16 : 20,
+                  fontWeight: FontWeight.w600,
+                  color: Cores.onSurfaceVariant,
+                ),
+              ),
             ),
             _ScoreBox(valor: valor2, size: boxSize, fontSize: fontSize),
           ],
@@ -1313,9 +1692,10 @@ class _ScoreDisplay extends StatelessWidget {
         Text(
           label,
           style: GoogleFonts.hankenGrotesk(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: Cores.onSurfaceVariant),
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: Cores.onSurfaceVariant,
+          ),
         ),
       ],
     );
@@ -1323,8 +1703,11 @@ class _ScoreDisplay extends StatelessWidget {
 }
 
 class _ScoreBox extends StatelessWidget {
-  const _ScoreBox(
-      {required this.valor, required this.size, required this.fontSize});
+  const _ScoreBox({
+    required this.valor,
+    required this.size,
+    required this.fontSize,
+  });
 
   final String valor;
   final double size;
@@ -1344,9 +1727,10 @@ class _ScoreBox extends StatelessWidget {
         child: Text(
           valor,
           style: GoogleFonts.hankenGrotesk(
-              fontSize: fontSize,
-              fontWeight: FontWeight.w700,
-              color: Cores.onSurface),
+            fontSize: fontSize,
+            fontWeight: FontWeight.w700,
+            color: Cores.onSurface,
+          ),
         ),
       ),
     );
@@ -1360,8 +1744,8 @@ class _BadgePontos extends StatelessWidget {
     required this.temPalpite,
   });
 
-  final int? pontos;      // valor exibido (com multiplicador de fase)
-  final int? pontosBase;  // valor base (define a cor)
+  final int? pontos; // valor exibido (com multiplicador de fase)
+  final int? pontosBase; // valor base (define a cor)
   final bool temPalpite;
 
   @override
@@ -1377,9 +1761,10 @@ class _BadgePontos extends StatelessWidget {
         child: Text(
           '−10 pts',
           style: GoogleFonts.anybody(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: Colors.white),
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
         ),
       );
     }
@@ -1395,9 +1780,10 @@ class _BadgePontos extends StatelessWidget {
         child: Text(
           'Sem palpite',
           style: GoogleFonts.hankenGrotesk(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: Colors.white),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
         ),
       );
     }
@@ -1413,9 +1799,10 @@ class _BadgePontos extends StatelessWidget {
       child: Text(
         '$pts pts',
         style: GoogleFonts.anybody(
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            color: Colors.white),
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+        ),
       ),
     );
   }
@@ -1425,7 +1812,6 @@ class _InputsProximos extends StatelessWidget {
   const _InputsProximos({
     required this.ctrl1,
     required this.ctrl2,
-    required this.salvo,
     this.focusCtrl1,
     this.focusCtrl2,
     this.onSalvar,
@@ -1433,7 +1819,6 @@ class _InputsProximos extends StatelessWidget {
 
   final TextEditingController ctrl1;
   final TextEditingController ctrl2;
-  final bool salvo;
   final FocusNode? focusCtrl1;
   final FocusNode? focusCtrl2;
   final VoidCallback? onSalvar;
@@ -1445,24 +1830,24 @@ class _InputsProximos extends StatelessWidget {
       children: [
         _CampoGol(
           controller: ctrl1,
-          salvo: salvo,
           focusNode: focusCtrl1,
           textInputAction: TextInputAction.next,
-          onSubmitted: focusCtrl2 != null
-              ? (_) => focusCtrl2!.requestFocus()
-              : null,
+          onSubmitted:
+              focusCtrl2 != null ? (_) => focusCtrl2!.requestFocus() : null,
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Text('X',
-              style: GoogleFonts.anybody(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: Cores.onSurfaceVariant)),
+          child: Text(
+            'X',
+            style: GoogleFonts.anybody(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: Cores.onSurfaceVariant,
+            ),
+          ),
         ),
         _CampoGol(
           controller: ctrl2,
-          salvo: salvo,
           focusNode: focusCtrl2,
           textInputAction: TextInputAction.done,
           onSubmitted: onSalvar != null ? (_) => onSalvar!() : null,
@@ -1475,14 +1860,12 @@ class _InputsProximos extends StatelessWidget {
 class _CampoGol extends StatelessWidget {
   const _CampoGol({
     required this.controller,
-    required this.salvo,
     this.focusNode,
     this.textInputAction,
     this.onSubmitted,
   });
 
   final TextEditingController controller;
-  final bool salvo;
   final FocusNode? focusNode;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
@@ -1504,29 +1887,30 @@ class _CampoGol extends StatelessWidget {
           LengthLimitingTextInputFormatter(2),
         ],
         style: GoogleFonts.hankenGrotesk(
-            fontSize: 26,
-            fontWeight: FontWeight.w700,
-            color: Cores.onSurface,
-            letterSpacing: 1),
+          fontSize: 26,
+          fontWeight: FontWeight.w700,
+          color: Cores.onSurface,
+          letterSpacing: 1,
+        ),
         decoration: InputDecoration(
           hintText: '–',
           hintStyle: GoogleFonts.hankenGrotesk(
-              fontSize: 26,
-              fontWeight: FontWeight.w300,
-              color: Cores.outlineVariant),
+            fontSize: 26,
+            fontWeight: FontWeight.w300,
+            color: Cores.outlineVariant,
+          ),
           filled: true,
-          fillColor: salvo ? Cores.surfaceContainer : Cores.surface,
+          // Visual idêntico com ou sem palpite salvo — quem sinaliza o save
+          // são a borda verde do card e o cadeado.
+          fillColor: Cores.surface,
           contentPadding: EdgeInsets.zero,
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(
-                color: salvo ? Cores.verdePrincipal : Cores.outlineVariant,
-                width: salvo ? 2 : 1),
+            borderSide: const BorderSide(color: Cores.outlineVariant),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide:
-            const BorderSide(color: Cores.azulTerciario, width: 2),
+            borderSide: const BorderSide(color: Cores.azulTerciario, width: 2),
           ),
         ),
       ),
@@ -1545,23 +1929,26 @@ class _Time extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 48,
-          height: 48,
+          // 36px — mesmo tamanho dos cards da tela Tabela
+          width: 36,
+          height: 36,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Cores.surfaceContainerHigh,
             border: Border.all(color: Cores.outlineVariant),
           ),
-          child: Bandeira(nome, tamanho: 48),
+          child: Bandeira(nome, tamanho: 36),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text(
           nomePtDe(nome),
-          style: GoogleFonts.anybody(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Cores.onSurface),
+          style: GoogleFonts.hankenGrotesk(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Cores.onSurface,
+            height: 1.3,
+          ),
           textAlign: TextAlign.center,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
@@ -1577,12 +1964,27 @@ class _CabecalhoData extends StatelessWidget {
   final String dataChave;
 
   static const _meses = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+    'Janeiro',
+    'Fevereiro',
+    'Março',
+    'Abril',
+    'Maio',
+    'Junho',
+    'Julho',
+    'Agosto',
+    'Setembro',
+    'Outubro',
+    'Novembro',
+    'Dezembro',
   ];
   static const _dias = [
-    'Segunda-feira', 'Terça-feira', 'Quarta-feira',
-    'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo',
+    'Segunda-feira',
+    'Terça-feira',
+    'Quarta-feira',
+    'Quinta-feira',
+    'Sexta-feira',
+    'Sábado',
+    'Domingo',
   ];
 
   @override
@@ -1594,9 +1996,10 @@ class _CabecalhoData extends StatelessWidget {
         Text(
           '${data.day} de ${_meses[data.month - 1]} de ${data.year} · ${_dias[data.weekday - 1]}',
           style: GoogleFonts.anybody(
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-              color: Cores.onSurface),
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: Cores.onSurface,
+          ),
         ),
         const SizedBox(height: 8),
         const Divider(color: Cores.outlineVariant, height: 1),
@@ -1615,17 +2018,19 @@ class _BotaoVerMais extends StatelessWidget {
     return OutlinedButton.icon(
       onPressed: onTap,
       icon: const Icon(Icons.expand_more_rounded),
-      label: Text('VER MAIS',
-          style: GoogleFonts.anybody(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5)),
+      label: Text(
+        'VER MAIS',
+        style: GoogleFonts.anybody(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
+        ),
+      ),
       style: OutlinedButton.styleFrom(
         foregroundColor: Cores.verdePrincipal,
         side: const BorderSide(color: Cores.verdePrincipal),
         minimumSize: const Size(double.infinity, 48),
-        shape:
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -1641,9 +2046,13 @@ class _FimDaLista extends StatelessWidget {
         const Expanded(child: Divider(color: Cores.outlineVariant)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text('Todos os jogos exibidos',
-              style: GoogleFonts.hankenGrotesk(
-                  fontSize: 12, color: Cores.onSurfaceVariant)),
+          child: Text(
+            'Todos os jogos exibidos',
+            style: GoogleFonts.hankenGrotesk(
+              fontSize: 12,
+              color: Cores.onSurfaceVariant,
+            ),
+          ),
         ),
         const Expanded(child: Divider(color: Cores.outlineVariant)),
       ],
@@ -1683,7 +2092,11 @@ class _SeletorModo extends StatelessWidget {
 }
 
 class _BotaoModo extends StatelessWidget {
-  const _BotaoModo({required this.label, required this.ativo, required this.onTap});
+  const _BotaoModo({
+    required this.label,
+    required this.ativo,
+    required this.onTap,
+  });
   final String label;
   final bool ativo;
   final VoidCallback onTap;
@@ -1749,22 +2162,27 @@ class _AbaCopaProximosState extends State<_AbaCopaProximos> {
     final r = widget.rascunho;
     _local = {
       for (final k in widget.timesPorGrupo.keys)
-        k: Map<String, String?>.from(r?[k] ?? widget.palpites[k] ?? {
-          'primeiro': null, 'segundo': null, 'terceiro': null,
-        }),
+        k: Map<String, String?>.from(
+          r?[k] ??
+              widget.palpites[k] ??
+              {'primeiro': null, 'segundo': null, 'terceiro': null},
+        ),
     };
     // Registra a referência no pai — toda mutação de _local fica preservada
     widget.onRascunho(_local);
   }
 
-  int get _terceirosCount => _local.values
-      .where((m) => m['terceiro'] != null && m['terceiro']!.isNotEmpty)
-      .length;
+  int get _terceirosCount =>
+      _local.values
+          .where((m) => m['terceiro'] != null && m['terceiro']!.isNotEmpty)
+          .length;
 
   Future<void> _salvar() async {
     if (_terceirosCount > 8) {
-      mostrarMensagem(context,
-          'Máximo de 8 grupos com 3º colocado. Remova ${_terceirosCount - 8} antes de salvar.');
+      mostrarMensagem(
+        context,
+        'Máximo de 8 grupos com 3º colocado. Remova ${_terceirosCount - 8} antes de salvar.',
+      );
       return;
     }
     setState(() => _salvando = true);
@@ -1789,15 +2207,29 @@ class _AbaCopaProximosState extends State<_AbaCopaProximos> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.lock_outline_rounded, size: 56, color: Cores.azulTerciario),
+              const Icon(
+                Icons.lock_outline_rounded,
+                size: 56,
+                color: Cores.azulTerciario,
+              ),
               const SizedBox(height: 16),
-              Text('Palpites encerrados',
-                  style: GoogleFonts.anybody(fontSize: 20, fontWeight: FontWeight.w700)),
+              Text(
+                'Palpites encerrados',
+                style: GoogleFonts.anybody(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text('O primeiro jogo da Copa já começou.\nOs palpites de classificação estão bloqueados.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.hankenGrotesk(
-                      fontSize: 14, color: Cores.onSurfaceVariant, height: 1.5)),
+              Text(
+                'O primeiro jogo da Copa já começou.\nOs palpites de classificação estão bloqueados.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.hankenGrotesk(
+                  fontSize: 14,
+                  color: Cores.onSurfaceVariant,
+                  height: 1.5,
+                ),
+              ),
             ],
           ),
         ),
@@ -1813,7 +2245,9 @@ class _AbaCopaProximosState extends State<_AbaCopaProximos> {
             Text(
               'Palpite na classificação de cada grupo.',
               style: GoogleFonts.hankenGrotesk(
-                  fontSize: 15, color: Cores.onSurfaceVariant),
+                fontSize: 15,
+                color: Cores.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 4),
             Row(
@@ -1823,68 +2257,85 @@ class _AbaCopaProximosState extends State<_AbaCopaProximos> {
                   child: Text(
                     '1º e 2º classificam. 3º apenas nos 8 grupos que avançam.',
                     style: GoogleFonts.hankenGrotesk(
-                        fontSize: 13, color: Cores.onSurfaceVariant),
+                      fontSize: 13,
+                      color: Cores.onSurfaceVariant,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: _terceirosCount >= 8
-                        ? Cores.verdePrincipal
-                        : Cores.surfaceContainerHigh,
+                    color:
+                        _terceirosCount >= 8
+                            ? Cores.verdePrincipal
+                            : Cores.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
-                      color: _terceirosCount >= 8
-                          ? Cores.verdePrincipal
-                          : Cores.outlineVariant,
+                      color:
+                          _terceirosCount >= 8
+                              ? Cores.verdePrincipal
+                              : Cores.outlineVariant,
                     ),
                   ),
                   child: Text(
                     '3°: $_terceirosCount/8',
                     style: GoogleFonts.hankenGrotesk(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: _terceirosCount >= 8
-                            ? Colors.white
-                            : Cores.onSurfaceVariant),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color:
+                          _terceirosCount >= 8
+                              ? Colors.white
+                              : Cores.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 20),
-            ...widget.timesPorGrupo.entries.map((entry) =>
-                _CardGrupoClassificacao(
-                  grupo: entry.key,
-                  times: entry.value,
-                  palpite: _local[entry.key] ?? {},
-                  terceiroBloqueado: _local[entry.key]?['terceiro'] == null &&
-                      _terceirosCount >= 8,
-                  onChanged: (pos, time) {
-                    if (pos == 'terceiro' &&
-                        time != null &&
-                        _local[entry.key]?['terceiro'] == null &&
-                        _terceirosCount >= 8) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                              'Somente 8 grupos podem ter 3º colocado selecionado'),
-                          behavior: SnackBarBehavior.floating,
+            ...widget.timesPorGrupo.entries.map(
+              (entry) => _CardGrupoClassificacao(
+                grupo: entry.key,
+                times: entry.value,
+                palpite: _local[entry.key] ?? {},
+                terceiroBloqueado:
+                    _local[entry.key]?['terceiro'] == null &&
+                    _terceirosCount >= 8,
+                onChanged: (pos, time) {
+                  if (pos == 'terceiro' &&
+                      time != null &&
+                      _local[entry.key]?['terceiro'] == null &&
+                      _terceirosCount >= 8) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Somente 8 grupos podem ter 3º colocado selecionado',
                         ),
-                      );
-                      return;
-                    }
-                    setState(() {
-                      _local[entry.key] ??= {};
-                      _local[entry.key]![pos] = time;
-                      for (final outraPos in ['primeiro', 'segundo', 'terceiro']) {
-                        if (outraPos != pos && _local[entry.key]![outraPos] == time) {
-                          _local[entry.key]![outraPos] = null;
-                        }
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+                  setState(() {
+                    _local[entry.key] ??= {};
+                    _local[entry.key]![pos] = time;
+                    for (final outraPos in [
+                      'primeiro',
+                      'segundo',
+                      'terceiro',
+                    ]) {
+                      if (outraPos != pos &&
+                          _local[entry.key]![outraPos] == time) {
+                        _local[entry.key]![outraPos] = null;
                       }
-                    });
-                  },
-                )),
+                    }
+                  });
+                },
+              ),
+            ),
           ],
         ),
 
@@ -1922,14 +2373,10 @@ class _CardGrupoClassificacao extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Cores.surface,
-        border: Border.all(color: Cores.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6, offset: const Offset(0, 2)),
-        ],
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+        boxShadow: _sombraCard,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1940,13 +2387,16 @@ class _CardGrupoClassificacao extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: const BoxDecoration(
               color: Cores.surfaceContainer,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
             child: Text(
               'GRUPO $grupo',
               style: GoogleFonts.anybody(
-                  fontSize: 13, fontWeight: FontWeight.w800,
-                  color: Cores.verdePrincipal, letterSpacing: 0.5),
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Cores.verdePrincipal,
+                letterSpacing: 0.5,
+              ),
             ),
           ),
           Padding(
@@ -2008,50 +2458,81 @@ class _DropdownClassificacao extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final disponiveis = times.where((t) => !excluir.contains(t) || t == selecionado).toList();
+    final disponiveis =
+        times.where((t) => !excluir.contains(t) || t == selecionado).toList();
 
     return DropdownButtonFormField<String>(
       value: selecionado,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: GoogleFonts.hankenGrotesk(fontSize: 13, color: Cores.onSurfaceVariant),
+        labelStyle: GoogleFonts.hankenGrotesk(
+          fontSize: 13,
+          color: Cores.onSurfaceVariant,
+        ),
         filled: true,
         fillColor: Cores.surfaceContainer,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Cores.outlineVariant)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Cores.outlineVariant)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Cores.azulTerciario, width: 2)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Cores.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Cores.outlineVariant),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Cores.azulTerciario, width: 2),
+        ),
       ),
       hint: Text(
-          bloqueado ? 'Limite de 8 atingido' : (opcional ? 'Não palpitar' : 'Selecionar time'),
-          style: GoogleFonts.hankenGrotesk(fontSize: 14, color: Cores.outlineVariant)),
+        bloqueado
+            ? 'Limite de 8 atingido'
+            : (opcional ? 'Não palpitar' : 'Selecionar time'),
+        style: GoogleFonts.hankenGrotesk(
+          fontSize: 14,
+          color: Cores.outlineVariant,
+        ),
+      ),
       isExpanded: true,
       items: [
         if (opcional)
-          DropdownMenuItem<String>(value: null,
-              child: Text('Não palpitar',
-                  style: GoogleFonts.hankenGrotesk(fontSize: 14,
-                      color: Cores.onSurfaceVariant))),
-        ...disponiveis.map((t) => DropdownMenuItem<String>(
-          value: t,
-          child: Row(
-            children: [
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: ClipOval(child: Bandeira(t, tamanho: 24)),
+          DropdownMenuItem<String>(
+            value: null,
+            child: Text(
+              'Não palpitar',
+              style: GoogleFonts.hankenGrotesk(
+                fontSize: 14,
+                color: Cores.onSurfaceVariant,
               ),
-              const SizedBox(width: 8),
-              Text(nomePtDe(t),
-                  style: GoogleFonts.hankenGrotesk(
-                      fontSize: 14, fontWeight: FontWeight.w600)),
-            ],
+            ),
           ),
-        )),
+        ...disponiveis.map(
+          (t) => DropdownMenuItem<String>(
+            value: t,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: ClipOval(child: Bandeira(t, tamanho: 24)),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  nomePtDe(t),
+                  style: GoogleFonts.hankenGrotesk(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
       onChanged: bloqueado ? null : onChanged,
     );
@@ -2092,11 +2573,18 @@ class _BotaoSalvarCopa extends StatelessWidget {
               children: [
                 salvando
                     ? const SizedBox(
-                        width: 22, height: 22,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.5, color: Colors.white))
-                    : const Icon(Icons.save_rounded,
-                        color: Colors.white, size: 26),
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.white,
+                      ),
+                    )
+                    : const Icon(
+                      Icons.save_rounded,
+                      color: Colors.white,
+                      size: 26,
+                    ),
                 const SizedBox(height: 4),
                 Text(
                   'SALVAR',
@@ -2128,7 +2616,20 @@ class _AbaCopaEncerrados extends StatelessWidget {
   final Map<String, Map<String, String?>> palpites;
   final Map<String, Map<String, String?>> classificacaoReal;
 
-  static const _ordem = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+  static const _ordem = [
+    'A',
+    'B',
+    'C',
+    'D',
+    'E',
+    'F',
+    'G',
+    'H',
+    'I',
+    'J',
+    'K',
+    'L',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -2139,18 +2640,29 @@ class _AbaCopaEncerrados extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.bar_chart_rounded, size: 64, color: Cores.outlineVariant),
+              Icon(
+                Icons.bar_chart_rounded,
+                size: 64,
+                color: Cores.outlineVariant,
+              ),
               const SizedBox(height: 16),
-              Text('Classificação não divulgada',
-                  style: GoogleFonts.anybody(
-                      fontSize: 18, fontWeight: FontWeight.w700,
-                      color: Cores.onSurface)),
+              Text(
+                'Classificação não divulgada',
+                style: GoogleFonts.anybody(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Cores.onSurface,
+                ),
+              ),
               const SizedBox(height: 8),
               Text(
                 'Quando o admin confirmar a classificação dos grupos, seus pontos do MODO COPA aparecerão aqui.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.hankenGrotesk(
-                    fontSize: 14, color: Cores.onSurfaceVariant, height: 1.5),
+                  fontSize: 14,
+                  color: Cores.onSurfaceVariant,
+                  height: 1.5,
+                ),
               ),
             ],
           ),
@@ -2209,24 +2721,34 @@ class _BannerTotalCopa extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('MODO COPA — FASE DE GRUPOS',
-                    style: GoogleFonts.anybody(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white70,
-                        letterSpacing: 0.5)),
+                Text(
+                  'MODO COPA — FASE DE GRUPOS',
+                  style: GoogleFonts.anybody(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white70,
+                    letterSpacing: 0.5,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text('Total de pontos',
-                    style: GoogleFonts.hankenGrotesk(
-                        fontSize: 13, color: Colors.white70)),
+                Text(
+                  'Total de pontos',
+                  style: GoogleFonts.hankenGrotesk(
+                    fontSize: 13,
+                    color: Colors.white70,
+                  ),
+                ),
               ],
             ),
           ),
-          Text('$pontos pts',
-              style: GoogleFonts.anybody(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white)),
+          Text(
+            '$pontos pts',
+            style: GoogleFonts.anybody(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
         ],
       ),
     );
@@ -2248,21 +2770,18 @@ class _CardGrupoResultado extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pontos = calcularPontosCopaGrupo(palpite, real);
-    final classificadosReais = {real['primeiro'], real['segundo'], real['terceiro']}
-        .whereType<String>()
-        .toSet();
+    final classificadosReais =
+        {
+          real['primeiro'],
+          real['segundo'],
+          real['terceiro'],
+        }.whereType<String>().toSet();
 
     return Container(
-      decoration: BoxDecoration(
-        color: Cores.surface,
-        border: Border.all(color: Cores.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2)),
-        ],
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+        boxShadow: _sombraCard,
       ),
       child: Column(
         children: [
@@ -2271,17 +2790,20 @@ class _CardGrupoResultado extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: const BoxDecoration(
               color: Cores.surfaceContainer,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('GRUPO $letra',
-                    style: GoogleFonts.anybody(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: Cores.azulTerciario,
-                        letterSpacing: 0.5)),
+                Text(
+                  'GRUPO $letra',
+                  style: GoogleFonts.anybody(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Cores.azulTerciario,
+                    letterSpacing: 0.5,
+                  ),
+                ),
                 _BadgePontosGrupoCopa(pontos: pontos),
               ],
             ),
@@ -2319,22 +2841,28 @@ class _BadgePontosGrupoCopa extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cor = pontos >= 500
-        ? Cores.azulTerciario
-        : pontos >= 200
+    final cor =
+        pontos >= 500
+            ? Cores.azulTerciario
+            : pontos >= 200
             ? const Color(0xFF3B6FD4)
             : pontos > 0
-                ? const Color(0xFF7B9FE8)
-                : Cores.outlineVariant;
+            ? const Color(0xFF7B9FE8)
+            : Cores.outlineVariant;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-          color: cor, borderRadius: BorderRadius.circular(8)),
-      child: Text('$pontos pts',
-          style: GoogleFonts.anybody(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: Colors.white)),
+        color: cor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '$pontos pts',
+        style: GoogleFonts.anybody(
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+        ),
+      ),
     );
   }
 }
@@ -2356,8 +2884,12 @@ class _LinhaResultadoCopa extends StatelessWidget {
   // Retorna (ícone, cor, pontos) para o indicador do palpite
   (IconData, Color, int) get _indicador {
     if (timePalpite == null) return (Icons.remove, Cores.outlineVariant, 0);
-    if (timeReal != null && timePalpite == timeReal) return (Icons.check_rounded, Cores.verdePrincipal, 200);
-    if (classificadosReais.contains(timePalpite)) return (Icons.swap_horiz_rounded, Cores.ouro, 100);
+    if (timeReal != null && timePalpite == timeReal) {
+      return (Icons.check_rounded, Cores.verdePrincipal, 200);
+    }
+    if (classificadosReais.contains(timePalpite)) {
+      return (Icons.swap_horiz_rounded, Cores.ouro, 100);
+    }
     return (Icons.close_rounded, Cores.error, 0);
   }
 
@@ -2377,67 +2909,82 @@ class _LinhaResultadoCopa extends StatelessWidget {
           ),
           // Time real
           Expanded(
-            child: timeReal == null
-                ? Text('—',
-                    style: GoogleFonts.hankenGrotesk(
-                        fontSize: 13, color: Cores.outlineVariant))
-                : Row(
-                    children: [
-                      SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: ClipOval(child: Bandeira(timeReal!, tamanho: 22)),
+            child:
+                timeReal == null
+                    ? Text(
+                      '—',
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 13,
+                        color: Cores.outlineVariant,
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          nomePtDe(timeReal!),
-                          style: GoogleFonts.hankenGrotesk(
+                    )
+                    : Row(
+                      children: [
+                        SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: ClipOval(
+                            child: Bandeira(timeReal!, tamanho: 22),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            nomePtDe(timeReal!),
+                            style: GoogleFonts.hankenGrotesk(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: Cores.onSurface),
-                          overflow: TextOverflow.ellipsis,
+                              color: Cores.onSurface,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
           ),
           // Separador
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text('→',
-                style: TextStyle(
-                    fontSize: 13, color: Cores.outlineVariant)),
+            child: Text(
+              '→',
+              style: TextStyle(fontSize: 13, color: Cores.outlineVariant),
+            ),
           ),
           // Palpite do usuário
           Expanded(
-            child: semPalpite
-                ? Text('Sem palpite',
-                    style: GoogleFonts.hankenGrotesk(
+            child:
+                semPalpite
+                    ? Text(
+                      'Sem palpite',
+                      style: GoogleFonts.hankenGrotesk(
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
-                        color: Cores.outlineVariant))
-                : Row(
-                    children: [
-                      SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: ClipOval(
-                            child: Bandeira(timePalpite!, tamanho: 22)),
+                        color: Cores.outlineVariant,
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          nomePtDe(timePalpite!),
-                          style: GoogleFonts.hankenGrotesk(
+                    )
+                    : Row(
+                      children: [
+                        SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: ClipOval(
+                            child: Bandeira(timePalpite!, tamanho: 22),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            nomePtDe(timePalpite!),
+                            style: GoogleFonts.hankenGrotesk(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: Cores.onSurface),
-                          overflow: TextOverflow.ellipsis,
+                              color: Cores.onSurface,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
           ),
           // Indicador + pontos
           const SizedBox(width: 4),
@@ -2454,11 +3001,14 @@ class _LinhaResultadoCopa extends StatelessWidget {
                 Icon(icone, size: 12, color: cor),
                 if (!semPalpite && pts > 0) ...[
                   const SizedBox(width: 3),
-                  Text('+$pts',
-                      style: GoogleFonts.anybody(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: cor)),
+                  Text(
+                    '+$pts',
+                    style: GoogleFonts.anybody(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: cor,
+                    ),
+                  ),
                 ],
               ],
             ),
