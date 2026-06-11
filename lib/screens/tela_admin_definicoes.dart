@@ -384,7 +384,9 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
         title: Text('Limpar dados órfãos?',
             style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
         content: Text(
-          'Remove documentos de usuários e palpites de contas que foram deletadas do Firebase Auth.',
+          'Remove documentos de usuários e palpites de contas que foram deletadas '
+          'do Firebase Auth. Também tira essas contas dos grupos: grupos que '
+          'ficarem vazios são deletados.',
           style: GoogleFonts.hankenGrotesk(fontSize: 14, height: 1.5),
         ),
         actions: [
@@ -414,10 +416,14 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
           await fn.httpsCallable('limparUsuariosOrfaos').call();
       final usuarios = result.data['usuariosRemovidos'];
       final palpites = result.data['palpitesRemovidos'];
+      final gruposAtualizados = result.data['gruposAtualizados'] ?? 0;
+      final gruposRemovidos = result.data['gruposRemovidos'] ?? 0;
       if (mounted) {
         mostrarMensagem(
           context,
-          'Limpeza concluída: $usuarios usuário(s) e $palpites palpite(s) órfão(s) removido(s).',
+          'Limpeza concluída: $usuarios usuário(s), $palpites palpite(s), '
+          '$gruposAtualizados grupo(s) corrigido(s) e '
+          '$gruposRemovidos grupo(s) removido(s).',
         );
       }
     } catch (e) {
@@ -526,7 +532,8 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
             corIcone: Cores.error,
             titulo: 'Limpar Dados Órfãos',
             descricao:
-                'Remove documentos de usuários e palpites de contas deletadas do Firebase Auth.',
+                'Remove usuários e palpites de contas deletadas do Firebase Auth '
+                'e tira essas contas dos grupos (grupos vazios são deletados).',
             carregando: _limpando,
             onTap: _limparOrfaos,
           ),

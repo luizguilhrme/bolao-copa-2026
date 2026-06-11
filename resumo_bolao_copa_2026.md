@@ -876,7 +876,7 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 | `membroEntrou` | Firestore trigger (`grupos/{grupoId}`) | Detecta novo membro no array `membros` e envia FCM para o dono do grupo |
 | `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Grava resultados reais e aplica pontos em `pontuacaoEspeciais`; marca `palpitesEspeciaisCalculados: true`. Botão CALCULAR sempre salva antes de chamar. |
 | `recalcularCopa` | HTTPS Callable (admin only) | Calcula pontos Copa fase de grupos (SET em `pontuacaoCopa`); marca `copaGruposCalculado: true` |
-| `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos |
+| `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos; tira UIDs órfãos dos arrays `membros` dos grupos (deleta grupos que ficarem vazios; transfere a posse se o dono era órfão) |
 | `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times eliminatórias, classificação, `pontuacaoClassica`, `pontuacaoCopa`, `pontuacaoEliminatorias`, `pontuacaoEspeciais`, `placaresExatos`, `palpitesPerdidos`, flags e os campos da API (`statusApi`, `placarAoVivo1/2`, `placarDecisao1/2` — `apiId` é preservado); palpites preservados |
 | `buscarPalpitesJogo` | HTTPS Callable | Retorna palpites de um jogo encerrado filtrados pelos membros dos grupos do solicitante (união). Usado pelo dialog da `tela_tabela`. |
 | `buscarPalpitesUsuario` | HTTPS Callable | Retorna palpites clássicos + Copa de um usuário, validando grupo em comum com o solicitante. Usado pelo dialog do `tela_ranking`. |
