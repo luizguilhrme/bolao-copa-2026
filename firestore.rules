@@ -96,6 +96,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── api ───────────────────────────────────────────────────────────────────
+    // Dados vindos da football-data.org (docs: classificacao, artilharia).
+    // Escrita exclusiva das Cloud Functions (Admin SDK ignora estas regras).
+    match /api/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     // ── palpites_copa ─────────────────────────────────────────────────────────
     // Um documento por usuário (ID = UID). Leitura e escrita restritas ao
     // próprio usuário. Leitura por terceiros é feita exclusivamente pela

@@ -29,12 +29,15 @@ To populate Firestore with the 104 games, open the drawer → ADMIN → Outras D
 
 **Pattern:** screen → service → Firestore. No state management library — state is handled with `setState` and `StreamBuilder` directly.
 
-**Five Firestore collections:**
+**Six Firestore collections:**
 - `usuarios` — document ID = Firebase Auth UID
-- `jogos` — document ID = game integer ID (string-cast). Populated once from `assets/dados/jogos.json`. Elimination round games (73–104) have placeholder `team1`/`team2` values (`"1A"`, `"2B"`, `"3°"`, `"Vencedor 73"`, etc.) that are replaced automatically by the admin flow.
+- `jogos` — document ID = game integer ID (string-cast). Populated once from `assets/dados/jogos.json`. Elimination round games (73–104) have placeholder `team1`/`team2` values (`"1A"`, `"2B"`, `"3°"`, `"Vencedor 73"`, etc.) that are replaced automatically by the admin flow. Also carries the football-data.org sync fields (`apiId`, `statusApi`, `placarAoVivo1/2`) written only by Cloud Functions.
 - `palpites` — document ID = `{uid}_{jogoId}`
 - `grupos` — document ID = auto-ID. Stores bolão groups with a unique 6-char code.
 - `config` — single document `copa2026` with group standings, special results, terceiros allocation.
+- `api` — two documents (`classificacao`, `artilharia`) written exclusively by the Cloud Functions from football-data.org data; the app only reads (via `ApiDadosService`).
+
+**Integração football-data.org:** o app NUNCA chama a API (repositório público). Fluxo: API → Cloud Function agendada `sincronizarApi` (a cada 2 min, mas só faz requisições quando há jogo na janela ativa: início −20 min até +5h sem placar final) → Firestore → app. A chave fica no secret `FOOTBALL_DATA_KEY` (`firebase functions:secrets:set FOOTBALL_DATA_KEY`). O de-para jogo↔API é gravado no campo `apiId` pela callable admin `mapearJogosApi` (cruzamento por data/hora UTC + fase + grupo; nomes de time como desempate — aliases: "Czechia"→"Czech Republic", "Bosnia-Herzegovina"→"Bosnia & Herzegovina", "United States"→"USA"). Placar parcial vai em `placarAoVivo1/2` + `statusApi` (JAMAIS em `placar1/2`, que disparariam pontuação); o placar final (status FINISHED, `score.regularTime` — regra dos 90 min) é gravado em `placar1/2` e dispara o trigger `calcularPontuacao` como a inserção manual. A função compara antes de escrever e nunca sobrescreve placar já inserido pelo admin (a tela de placares segue como override manual). A partir dos 16 avos, a função também define os confrontos: preenche `team1/team2` dos jogos com placeholder nas próximas 72h assim que a API publica os times reais — sem nunca sobrescrever time já definido (pela propagação da chave, pela tela Admin Copa ou por ajuste manual).
 
 **Auth routing:** `main.dart` wraps the app in a `StreamBuilder<User?>` on `FirebaseAuth.instance.authStateChanges()`. Logged-in users go to `MenuPrincipal`; logged-out users go to `TelaLogin`.
 
@@ -60,7 +63,7 @@ Modo Clássico — base points per game, multiplied by phase:
 
 Phase multipliers: Fase de Grupos ×1.0 | 16 avos ×1.2 | Oitavas ×1.4 | Quartas ×1.6 | Semifinal/3º ×1.8 | Final ×2.0
 
-**Regra dos 90 minutos (eliminatórias):** para pontuação vale sempre o placar dos 90 minutos. Vitória na prorrogação ou nos pênaltis é registrada como empate nos 90 + campo `vencedor` (quem avançou). Na futura integração com a API football-data.org, usar `score.regularTime` (nunca `fullTime`, que inclui prorrogação).
+**Regra dos 90 minutos (eliminatórias):** para pontuação vale sempre o placar dos 90 minutos. Vitória na prorrogação ou nos pênaltis é registrada como empate nos 90 + campo `vencedor` (quem avançou). A `sincronizarApi` implementa isso usando `score.regularTime` (nunca `fullTime`, que inclui prorrogação) e preenchendo `vencedor` a partir de `score.winner` quando os 90 min empatam.
 
 Modo Copa — points per team in group classification:
 - Exact position: +200 | Qualified, wrong position: +100 | Did not qualify: 0
@@ -134,12 +137,18 @@ C:\bolao\
                                  calcularPontuacao, lembretesPalpite, recalcularTudo,
                                  membroEntrou, calcularPalpitesEspeciais,
                                  limparUsuariosOrfaos, limparDadosTeste, recalcularCopa,
-                                 buscarPalpitesJogo, buscarPalpitesUsuario
+                                 buscarPalpitesJogo, buscarPalpitesUsuario,
+                                 sincronizarApi (agendada */2 min, football-data.org),
+                                 mapearJogosApi (de-para apiId; admin); usa o secret
+                                 FOOTBALL_DATA_KEY (firebase functions:secrets:set)
   lib/
     main.dart                 ← Firebase init + FCM background handler + StreamBuilder de auth
     firebase_options.dart     ← gerado automaticamente pelo FlutterFire CLI
     models/
-      jogo.dart               ← model com fromJson, fromMap, toMap e getter dataHora; campo vencedor (String?, nullable)
+      jogo.dart               ← model com fromJson, fromMap, toMap e getter dataHora; campo vencedor (String?, nullable);
+                                 campos da API: apiId, statusApi, placarAoVivo1/2,
+                                 placarDecisao1/2 (só lidos pelo app; escritos pela
+                                 sincronizarApi) + getters aoVivoApi e placarDecisao
       usuario.dart            ← model com fromMap, toMap e copyWith; inclui campos de palpites especiais;
                                  copyWith cobre todos os 6 palpites especiais (campeão, artilheiro,
                                  goleiro, melhorJogador, maisGoleadora, menosVazada)
@@ -157,10 +166,18 @@ C:\bolao\
                                  (sem perder scroll/rascunhos), corrigindo dados congelados pelo
                                  IndexedStack (ex: grupo Copa criado não exibia aba MODO COPA)
       tela_home.dart          ← hero card verde com ranking/pontuação + carrossel de jogos
-                                 do dia + 3 cards de ação em coluna (Palpites, Ranking,
+                                 do dia no modelo da tela Teste de API com dados reais:
+                                 chip de status (AGENDADO azul / AO VIVO vermelho /
+                                 INTERVALO amarelo / ENCERRADO cinza), fase • horário,
+                                 placar parcial em vermelho (placarAoVivo), placar dos
+                                 90 min com decisão "(4 x 2)" embaixo e check verde em
+                                 quem avançou (vencedor); fallback por horário acende o
+                                 AO VIVO antes do 1º sync da API
+                                 + 3 cards de ação em coluna (Palpites, Ranking,
                                  Palpites Especiais) com imagem de fundo personalizada
-                                 + card ARTILHARIA (top 5; tocar abre a aba ARTILHARIA
-                                 da Tabela via callback onVerArtilharia + Sinal)
+                                 + card ARTILHARIA (top 5 de api/artilharia; oculto até os
+                                 primeiros gols; tocar abre a aba ARTILHARIA da Tabela
+                                 via callback onVerArtilharia + Sinal)
       tela_login.dart         ← login e cadastro com design do Stitch; ícone de olho na senha;
                                  botão "Fazer login com o Google" (GIS oficial na web via
                                  renderButton; OutlinedButton estilizado no Android) com
@@ -202,10 +219,13 @@ C:\bolao\
                                  ícone de lápis (só dono) edita o nome do grupo
       tela_tabela.dart        ← 3 abas superiores JOGOS / CLASSIFICAÇÃO / ARTILHARIA (sempre
                                  visíveis); JOGOS: 104 jogos com filtros Por data (sub-abas
-                                 Próximos/Encerrados) / Por rodada / Por grupo;
-                                 CLASSIFICAÇÃO: 12 tabelas calculadas dos placares (critérios
-                                 FIFA) com seletor de grupo; ARTILHARIA: lista completa
-                                 (dados simulados até a API); RefreshIndicator; tocar em jogo
+                                 Próximos/Encerrados) / Por rodada / Por grupo; cards exibem
+                                 placar parcial da API em vermelho quando ao vivo;
+                                 CLASSIFICAÇÃO: usa o standings oficial de api/classificacao
+                                 quando existe (critérios FIFA completos) com fallback no
+                                 cálculo local dos placares; ARTILHARIA: lista completa de
+                                 api/artilharia (estado vazio até os primeiros gols);
+                                 RefreshIndicator; tocar em jogo
                                  encerrado abre dialog via Cloud Function buscarPalpitesJogo
                                  (exibe palpites da união dos membros de todos os grupos do usuário)
       tela_admin_placares.dart ← inserção de placares com abas Próximos/Encerrados;
@@ -224,9 +244,11 @@ C:\bolao\
                                  equipe mais goleadora (seletor de time), equipe menos vazada
                                  (seletor de time), melhor jogador (seletor de jogador);
                                  botão CALCULAR chama calcularPalpitesEspeciais (irreversível)
-      tela_admin_definicoes.dart ← ações: popular jogos (Teste/Produção), recalcular Reg. Clássica,
-                                 recalcular Reg. Copa, limpar dados de teste, limpar órfãos;
-                                 botão Travar/Destravar Palpites (grava palpitesTravados em config/copa2026)
+      tela_admin_definicoes.dart ← ações: popular jogos (Teste/Produção), mapear jogos com a
+                                 API (mapearJogosApi; rodar após popular), recalcular Reg.
+                                 Clássica, recalcular Reg. Copa, limpar dados de teste,
+                                 limpar órfãos; botão Travar/Destravar Palpites
+                                 (grava palpitesTravados em config/copa2026)
       tela_admin_teste_api.dart ← simulação visual da integração football-data.org com dados
                                  fictícios no formato JSON real da API (status TIMED/IN_PLAY/
                                  PAUSED/FINISHED, prorrogação e pênaltis com check no
@@ -252,15 +274,20 @@ C:\bolao\
                                  código único gerado com loop anti-colisão
       palpite_copa_service.dart ← buscarPorUid, salvar; coleção palpites_copa/{uid} com
                                  palpites de classificação de grupos do MODO COPA
+      api_dados_service.dart  ← buscarArtilharia (api/artilharia → List<Artilheiro>),
+                                 buscarClassificacao (api/classificacao → mapa letra do
+                                 grupo → List<ClassificacaoApiTime>; null se doc ausente —
+                                 chamador usa fallback local)
     utils/
       cores.dart              ← constantes de cores (Cores.verdePrincipal etc)
       biblioteca.dart         ← funções utilitárias top-level (flagDe, siglaDe,
                                  formatarData, mostrarMensagem, ehPlaceholder,
                                  calcularPontos, multiplicadorFase, calcularPontosComFase)
-      artilharia.dart         ← model Artilheiro + kArtilhariaSimulada (placeholder até
-                                 a integração com a API) + widget LinhaArtilheiro (pódio
-                                 ouro/prata/bronze); usado na Home (top 5) e na aba
-                                 ARTILHARIA da Tabela
+      artilharia.dart         ← model Artilheiro (com fromMap do doc api/artilharia)
+                                 + widget LinhaArtilheiro (pódio ouro/prata/bronze);
+                                 usado na Home (top 5) e na aba ARTILHARIA da Tabela;
+                                 kArtilhariaSimulada foi removida — dados reais via
+                                 ApiDadosService.buscarArtilharia()
       avatares.dart           ← listas kJogadores (Principais) e kJogadoresBrasil2026
                                  (26 fotos oficiais FIFA: 25 jogadores + Ancelotti)
                                  + widgets WidgetAvatar, CardAvatar
@@ -294,6 +321,7 @@ C:\bolao\
 - Notificações via FCM: `lembretesPalpite` (scheduled `*/30min`) + `calcularPontuacao` envia ranking change. Token salvo no campo `fcmToken` do documento do usuário
 - Bandeiras exibidas como imagens reais via pacote `country_flags` (não emojis); mapeamento de nome → ISO em `isoDe()`
 - Telas admin separadas por responsabilidade (placares, classificação copa, palpites especiais, definições) em vez de uma tela única — cada tela tem foco claro e é navegada via drawer
+- Integração football-data.org server-side: `sincronizarApi` agendada a cada 2 min com "janela inteligente" — fora da janela de jogos (início −20 min até +5h sem placar final) encerra com uma única query ao Firestore, sem chamar a API; dentro dela faz no máx. 3 requisições (matches + standings + scorers, estes só quando algum jogo termina). Placar parcial em campos separados (`placarAoVivo1/2`); placar final dispara o trigger de pontuação como a inserção manual; admin segue como override (a função nunca sobrescreve placar já preenchido)
 - Ressincronização das telas do IndexedStack via `Sinal` (ChangeNotifier em `biblioteca.dart`): o `MenuPrincipal` dispara o sinal da aba ao selecioná-la no NavigationBar e ao voltar de qualquer rota do drawer (`_abrirRota` com `await`); Home, Palpites e Ranking escutam e recarregam dados silenciosamente — preserva scroll e rascunhos (que uma `Key` nova destruiria)
 
 ---
@@ -472,6 +500,10 @@ service cloud.firestore {
       allow update: if request.auth != null && request.auth.uid in resource.data.membros;
       allow delete: if request.auth != null && request.auth.uid == resource.data.donoUid;
     }
+    match /api/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;  // só as Cloud Functions escrevem (Admin SDK)
+    }
   }
 }
 ```
@@ -525,9 +557,16 @@ team1       : String
 team2       : String
 group       : String?  — "Grupo A"..."Grupo L" (null nas fases eliminatórias)
 ground      : String
-placar1     : Number?  — null até o admin inserir o resultado
-placar2     : Number?  — null até o admin inserir o resultado
+placar1     : Number?  — null até o resultado final (admin ou sincronizarApi)
+placar2     : Number?  — null até o resultado final (admin ou sincronizarApi)
 vencedor    : String?  — preenchido em eliminatórias com empate nos 90 min (pênaltis/prorrogação)
+apiId       : Number?  — id do jogo na football-data.org (de-para gravado por mapearJogosApi)
+statusApi   : String?  — TIMED | IN_PLAY | PAUSED | FINISHED (escrito pela sincronizarApi)
+placarAoVivo1 : Number? — placar parcial durante o jogo (removido quando FINISHED);
+placarAoVivo2 : Number?   NUNCA vai em placar1/placar2, que disparariam a pontuação
+placarDecisao1 : Number? — decisão quando os 90 min empataram: pênaltis se houve
+placarDecisao2 : Number?   disputa, senão o placar final da prorrogação; exibido
+                           pequeno sob o placar principal ("(4 x 2)")
 ```
 
 **Fases eliminatórias da Copa 2026 (48 seleções, 104 jogos):**
@@ -588,6 +627,24 @@ palpitesTravados             : Boolean   — admin aciona via Outras Definiçõe
                                              de palpites + exibe esses palpites no dialog do ranking;
                                            false: permite edição + oculta no dialog do ranking;
                                            Modo Clássico não é afetado; resetado para false por limparDadosTeste
+```
+
+### `api`
+Dois documentos escritos exclusivamente pelas Cloud Functions (football-data.org);
+o app só lê, via `ApiDadosService`.
+
+```
+api/classificacao
+  grupos       : Map  — { "A": [{posicao, time, jogos, vitorias, empates, derrotas,
+                          pontos, golsPro, golsContra, saldo}], ... "L": [...] }
+                        ordem das listas = classificação oficial (critérios FIFA
+                        completos); nomes de time já na grafia do jogos.json
+  atualizadoEm : Timestamp
+
+api/artilharia
+  artilheiros  : Array — [{nome, selecao, gols, assistencias}] já ordenado pela API
+                         (só jogadores com ≥1 gol; /scorers?limit=100)
+  atualizadoEm : Timestamp
 ```
 
 ---
@@ -926,10 +983,12 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 | `membroEntrou` | Firestore trigger (`grupos/{grupoId}`) | Detecta novo membro e envia FCM para o dono do grupo |
 | `calcularPalpitesEspeciais` | HTTPS Callable (admin only) | Aplica pontos dos 6 especiais em `pontuacaoEspeciais`; marca `palpitesEspeciaisCalculados: true`. Botão CALCULAR sempre salva resultados antes de chamar a função. |
 | `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos |
-| `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times de eliminatórias, classificação, resultados especiais, `pontuacaoClassica`, `pontuacaoCopa`, `pontuacaoEliminatorias`, `pontuacaoEspeciais` e flags. Palpites preservados. |
+| `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times de eliminatórias, classificação, resultados especiais, `pontuacaoClassica`, `pontuacaoCopa`, `pontuacaoEliminatorias`, `pontuacaoEspeciais`, flags e os campos da API (`statusApi`, `placarAoVivo1/2`, `placarDecisao1/2` — `apiId` é preservado). Palpites preservados. |
 | `recalcularCopa` | HTTPS Callable (admin only) | Calcula pontos da fase de grupos Copa (SET em `pontuacaoCopa`); marca `copaGruposCalculado: true`. Executar após inserir todos os placares da fase de grupos. |
 | `buscarPalpitesJogo` | HTTPS Callable | Retorna palpites de um jogo encerrado filtrados pelos membros dos grupos do solicitante (união de todos os grupos). Usado pelo dialog da `tela_tabela`. |
 | `buscarPalpitesUsuario` | HTTPS Callable | Retorna palpites clássicos + Copa de um usuário, validando que o solicitante compartilha pelo menos um grupo com o alvo. Usado pelo dialog do `tela_ranking`. |
+| `sincronizarApi` | Schedule (`*/2 * * * *`, secret FOOTBALL_DATA_KEY) | Janela inteligente: só chama a football-data.org quando há jogo ativo (início −20 min a +5h, sem placar final) ou eliminatória com placeholder nas próximas 72h. Grava `statusApi` + `placarAoVivo1/2` durante o jogo; no FINISHED grava `placar1/2` (`score.regularTime` — regra dos 90 min) + `vencedor` (`score.winner` em empate nos 90) + `placarDecisao1/2` (pênaltis ou placar final da prorrogação), disparando o trigger `calcularPontuacao`. Define os confrontos das eliminatórias preenchendo `team1/team2` onde ainda há placeholder (nunca sobrescreve time definido). Compara antes de escrever; não sobrescreve placar inserido pelo admin. Quando algum jogo termina, atualiza `api/classificacao` e `api/artilharia`. Mapeia `apiId` pendentes quando os times ficam definidos. |
+| `mapearJogosApi` | HTTPS Callable (admin only, secret FOOTBALL_DATA_KEY) | De-para permanente jogo↔API: grava `apiId` em cada doc de `jogos` cruzando data/hora UTC + fase + grupo (nomes de time como desempate, com aliases para grafias divergentes). Retorna `{mapeados, pendentes}`. Também grava a primeira foto de `api/classificacao` e `api/artilharia`. Rodar uma vez — e novamente após Popular Jogos. |
 
 **Deep linking via notificação:** `data: { tela: 'palpites' }`, `data: { tela: 'ranking' }`, `data: { tela: 'grupos' }`.
 
@@ -970,6 +1029,8 @@ Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regene
 
 **`grupos`** — `read/create`: autenticado; `update`: membro; `delete`: dono
 
+**`api`** — `read`: autenticado; `write`: bloqueado (só Cloud Functions via Admin SDK)
+
 ---
 
 ## Google Play — status de publicação
@@ -981,7 +1042,17 @@ Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regene
 - **Segurança dos dados, classificação, público-alvo, anúncios** — ✓ todos enviados
 - **Usuário de revisão** — `teste@teste.com` (isAdmin: true no Firestore)
 
+## Integração football-data.org — implementada
+
+- **Fluxo:** API → `sincronizarApi` (agendada `*/2 min`, southamerica-east1) → Firestore → app (streams/futures existentes). O app nunca chama a API (repositório público).
+- **Chave:** secret das Functions — `firebase functions:secrets:set FOOTBALL_DATA_KEY` (obrigatório antes do deploy; o deploy falha se o secret não existir).
+- **Setup (uma vez):** 1) criar o secret; 2) `firebase deploy --only functions,firestore:rules`; 3) no app, ADMIN → Outras Definições → **Mapear Jogos com a API** (grava `apiId` nos 104 jogos e a primeira foto de classificação/artilharia). Repetir o passo 3 sempre que rodar Popular Jogos (que recria os docs e perde o `apiId`).
+- **Janela inteligente:** fora da janela de jogos a função encerra com 1 query ao Firestore e zero requisições; dentro dela, no máximo 3 por execução (limite do free tier: 10/min).
+- **Confrontos das eliminatórias:** definidos automaticamente pela API — jogos com placeholder nas próximas 72h têm `team1/team2` preenchidos assim que a API publica os times (cobre o intervalo entre o fim da fase de grupos e os 16 avos, sem jogo na janela ativa). A tela Admin Copa segue necessária para a classificação real do Modo Copa (`recalcularCopa`) e vale como ajuste manual (a API nunca sobrescreve time já definido).
+- **Endpoints usados:** `/competitions/WC/matches?dateFrom&dateTo`, `/competitions/WC/standings`, `/competitions/WC/scorers?limit=100`.
+- **Free tier:** placares com delay de alguns minutos — irrelevante para o fluxo (aviso exibido na Home).
+- A tela ADMIN → Teste de API continua como simulação visual (formato JSON real da API), sem requisições.
+
 ## Próximos passos
 
-1. Integrar a API football-data.org (free tier; competição `WC`, temporada 2026 confirmada disponível): Cloud Function agendada busca os jogos do dia e grava no Firestore placares finais (`score.regularTime` — regra dos 90 min), campo `vencedor` (`score.winner` quando empate nos 90), status ao vivo, classificação (`/standings`) e artilharia (`/scorers`). O app nunca chama a API diretamente (chave fica em secret das Functions; repositório é público). A tela Teste de API valida o visual; `kArtilhariaSimulada` será substituída pelos dados reais.
-2. Publicar nova versão na Play Store quando o conjunto de features estiver estável.
+1. Publicar nova versão na Play Store quando o conjunto de features estiver estável.

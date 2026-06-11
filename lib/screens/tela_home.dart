@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../models/jogo.dart';
 import '../models/usuario.dart';
+import '../services/api_dados_service.dart';
 import '../services/grupo_service.dart';
 import '../services/jogo_service.dart';
 import '../services/usuario_service.dart';
@@ -40,12 +41,14 @@ class _TelaHomeState extends State<TelaHome> {
   final _uid = FirebaseAuth.instance.currentUser!.uid;
   late Future<List<Jogo>> _jogosDeHoje;
   late Future<List<_GrupoRank>> _rankInfo;
+  late Future<List<Artilheiro>> _artilharia;
 
   @override
   void initState() {
     super.initState();
     _jogosDeHoje = JogoService().buscarPorData(DateTime.now());
     _rankInfo = _carregarRankInfo();
+    _artilharia = ApiDadosService().buscarArtilharia();
     widget.sinalAtualizar?.addListener(_recarregarSilencioso);
   }
 
@@ -55,16 +58,18 @@ class _TelaHomeState extends State<TelaHome> {
     super.dispose();
   }
 
-  // Rebusca jogos do dia e posições no ranking sem flash de loading:
-  // os dados novos só substituem os antigos quando já estão prontos.
+  // Rebusca jogos do dia, posições no ranking e artilharia sem flash de
+  // loading: os dados novos só substituem os antigos quando já estão prontos.
   Future<void> _recarregarSilencioso() async {
     try {
       final jogos = await JogoService().buscarPorData(DateTime.now());
       final rank = await _carregarRankInfo();
+      final artilheiros = await ApiDadosService().buscarArtilharia();
       if (!mounted) return;
       setState(() {
         _jogosDeHoje = Future.value(jogos);
         _rankInfo = Future.value(rank);
+        _artilharia = Future.value(artilheiros);
       });
     } catch (_) {
       // Mantém os dados antigos em caso de erro
@@ -328,7 +333,7 @@ class _TelaHomeState extends State<TelaHome> {
           ),
           const SizedBox(height: 10),
           SizedBox(
-            height: 168,
+            height: 140,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               clipBehavior: Clip.none,
@@ -347,7 +352,7 @@ class _TelaHomeState extends State<TelaHome> {
               ),
               const SizedBox(width: 5),
               Text(
-                'O placar é atualizado somente ao final da partida.',
+                'Placar ao vivo com alguns minutos de atraso.',
                 style: TextStyle(fontSize: 11.5, color: Cores.onSurfaceVariant),
               ),
             ],
@@ -393,11 +398,21 @@ class _TelaHomeState extends State<TelaHome> {
   }
 
   // ── Artilharia (top 5) ──────────────────────────────────────────────────────
-  // Tocar no card abre a tela Tabela já na aba ARTILHARIA.
+  // Dados de api/artilharia (football-data.org). O card só aparece depois
+  // dos primeiros gols da Copa. Tocar abre a tela Tabela na aba ARTILHARIA.
 
   Widget _buildArtilharia() {
-    final top5 = kArtilhariaSimulada.take(5).toList();
+    return FutureBuilder<List<Artilheiro>>(
+      future: _artilharia,
+      builder: (context, snap) {
+        final artilheiros = snap.data ?? [];
+        if (artilheiros.isEmpty) return const SizedBox.shrink();
+        return _buildCardArtilharia(artilheiros.take(5).toList());
+      },
+    );
+  }
 
+  Widget _buildCardArtilharia(List<Artilheiro> top5) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -604,85 +619,90 @@ class _TickerRankingState extends State<_TickerRanking> {
 }
 
 // ─── Card de Jogo ─────────────────────────────────────────────────────────────
+// Mesmo modelo do card da tela Teste de API, alimentado pelos campos reais
+// gravados pela sincronizarApi (statusApi, placarAoVivo, vencedor,
+// placarDecisao): chip de status, fase • horário, placar dos 90 minutos com
+// a decisão embaixo e check verde em quem avançou.
+
+const _azulAgendado = Color(0xFF1A7AE8);
+const _sombraCard = [
+  BoxShadow(color: Color(0x14000000), blurRadius: 16, offset: Offset(0, 4)),
+];
 
 class _CardJogo extends StatelessWidget {
   const _CardJogo({required this.jogo});
 
   final Jogo jogo;
 
+  // Status efetivo: FINISHED encerra (placar gravado ou API); fallback por
+  // horário acende o AO VIVO enquanto o primeiro sync da API não chega.
+  String get _status {
+    if (jogo.placar1 != null || jogo.statusApi == 'FINISHED') return 'FINISHED';
+    if (jogo.statusApi == 'PAUSED') return 'PAUSED';
+    if (jogo.statusApi == 'IN_PLAY') return 'IN_PLAY';
+    if (jogo.dataHora.toLocal().isBefore(DateTime.now())) return 'IN_PLAY';
+    return 'TIMED';
+  }
+
+  bool get _aoVivo => _status == 'IN_PLAY' || _status == 'PAUSED';
+
   @override
   Widget build(BuildContext context) {
-    final horarioLocal = DateFormat('HH:mm').format(jogo.dataHora.toLocal());
-    final agora = DateTime.now();
-    final encerrado = jogo.placar1 != null;
-    final aoVivo = !encerrado && jogo.dataHora.toLocal().isBefore(agora);
+    final horarioLocal =
+        DateFormat("HH'h'mm").format(jogo.dataHora.toLocal());
+    final fase = jogo.group ?? jogo.round;
 
     return Container(
       width: 272,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Cores.outlineVariant),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
-        ],
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+        boxShadow: _sombraCard,
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Linha superior: chip de status à esquerda, fase e horário à direita
           Row(
             children: [
-              _Chip(
-                texto: horarioLocal,
-                corFundo:
-                    aoVivo ? Cores.secondaryContainer : Cores.surfaceVariant,
-                corTexto:
-                    aoVivo
-                        ? Cores.onSecondaryContainer
-                        : Cores.onSurfaceVariant,
-              ),
+              _ChipStatus(status: _status),
               const SizedBox(width: 8),
-              if (aoVivo) const _ChipAoVivo(),
-              if (encerrado) const _ChipEncerrado(),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildTime(jogo.team1),
-              if (encerrado)
-                Text(
-                  '${jogo.placar1}  –  ${jogo.placar2}',
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: Cores.onSurface,
-                    letterSpacing: 2,
-                  ),
-                )
-              else if (aoVivo)
-                const Text(
-                  '0  –  0',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: Cores.onSurface,
-                    letterSpacing: 2,
-                  ),
-                )
-              else
-                Text(
-                  'VS',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: Cores.onSurfaceVariant.withValues(alpha: 0.5),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '$fase • $horarioLocal',
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 11,
+                        color: Cores.onSurfaceVariant,
+                      ),
+                    ),
                   ),
                 ),
-              _buildTime(jogo.team2),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Linha principal: time1 — placar — time2; check verde na bandeira
+          // de quem avançou quando a decisão saiu fora dos 90 min.
+          Row(
+            children: [
+              Expanded(
+                child: _LadoTime(
+                  time: jogo.team1,
+                  avancou: jogo.vencedor == jogo.team1,
+                ),
+              ),
+              _buildPlacar(),
+              Expanded(
+                child: _LadoTime(
+                  time: jogo.team2,
+                  avancou: jogo.vencedor == jogo.team2,
+                ),
+              ),
             ],
           ),
         ],
@@ -690,29 +710,118 @@ class _CardJogo extends StatelessWidget {
     );
   }
 
-  Widget _buildTime(String nome) {
+  Widget _buildPlacar() {
+    // Encerrado: placar dos 90 minutos + decisão (pênaltis/prorrogação)
+    if (_status == 'FINISHED' && jogo.placar1 != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${jogo.placar1}  x  ${jogo.placar2}',
+              style: GoogleFonts.anybody(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: Cores.onSurface,
+              ),
+            ),
+            if (jogo.placarDecisao != null)
+              Text(
+                jogo.placarDecisao!,
+                style: GoogleFonts.hankenGrotesk(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Cores.onSurfaceVariant,
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+    // Ao vivo: placar parcial da API em vermelho (0 x 0 até o 1º sync)
+    if (_aoVivo) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Text(
+          '${jogo.placarAoVivo1 ?? 0}  x  ${jogo.placarAoVivo2 ?? 0}',
+          style: GoogleFonts.anybody(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: Cores.error,
+          ),
+        ),
+      );
+    }
+    // Agendado (ou encerrado sem placar gravado ainda)
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Text(
+        'VS',
+        style: GoogleFonts.anybody(
+          fontSize: 16,
+          fontWeight: FontWeight.w800,
+          color: Cores.outline,
+        ),
+      ),
+    );
+  }
+}
+
+class _LadoTime extends StatelessWidget {
+  const _LadoTime({required this.time, this.avancou = false});
+
+  final String time;
+
+  /// Check verde sobre a bandeira — time que avançou após empate nos 90 min
+  /// (decidido na prorrogação ou nos pênaltis).
+  final bool avancou;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       children: [
-        Container(
-          width: 48,
-          height: 48,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: Cores.outlineVariant),
-            color: Cores.surfaceVariant,
-          ),
-          child: Bandeira(nome, tamanho: 48),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Cores.surfaceContainerHigh,
+                border: Border.all(color: Cores.outlineVariant),
+              ),
+              child: Bandeira(time, tamanho: 36),
+            ),
+            if (avancou)
+              Positioned(
+                top: -5,
+                right: -5,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_circle_rounded,
+                    color: Cores.verdePrincipal,
+                    size: 17,
+                  ),
+                ),
+              ),
+          ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text(
-          nomePtDe(nome),
+          nomePtDe(time),
+          textAlign: TextAlign.center,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
+          style: GoogleFonts.anybody(
+            fontSize: 12,
             fontWeight: FontWeight.w700,
-            fontSize: 11,
             color: Cores.onSurface,
           ),
         ),
@@ -721,108 +830,54 @@ class _CardJogo extends StatelessWidget {
   }
 }
 
-// ─── Chips ────────────────────────────────────────────────────────────────────
+// ─── Chip de status (AGENDADO / AO VIVO / INTERVALO / ENCERRADO) ─────────────
 
-class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.texto,
-    required this.corFundo,
-    required this.corTexto,
-  });
+class _ChipStatus extends StatelessWidget {
+  const _ChipStatus({required this.status});
 
-  final String texto;
-  final Color corFundo;
-  final Color corTexto;
+  final String status;
 
   @override
   Widget build(BuildContext context) {
+    final (label, corFundo, corTexto, comPonto) = switch (status) {
+      'IN_PLAY' => ('AO VIVO', Cores.error, Colors.white, true),
+      'PAUSED' => (
+        'INTERVALO',
+        Cores.secondaryContainer,
+        Cores.onSecondaryContainer,
+        true,
+      ),
+      'FINISHED' => ('ENCERRADO', Cores.onSurfaceVariant, Colors.white, false),
+      _ => ('AGENDADO', _azulAgendado, Colors.white, false),
+    };
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: corFundo,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        texto,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.4,
-          color: corTexto,
-        ),
-      ),
-    );
-  }
-}
-
-class _ChipAoVivo extends StatelessWidget {
-  const _ChipAoVivo();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: Cores.surfaceVariant,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: Cores.verdePrincipal,
-              shape: BoxShape.circle,
+          if (comPonto) ...[
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: corTexto,
+                shape: BoxShape.circle,
+              ),
             ),
-          ),
-          const SizedBox(width: 5),
-          const Text(
-            'AO VIVO',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.4,
-              color: Cores.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ChipEncerrado extends StatelessWidget {
-  const _ChipEncerrado();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: Cores.surfaceVariant,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: Cores.outlineVariant,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 5),
-          const Text(
-            'ENCERRADO',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.4,
-              color: Cores.onSurfaceVariant,
+            const SizedBox(width: 5),
+          ],
+          Text(
+            label,
+            style: GoogleFonts.anybody(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+              color: corTexto,
             ),
           ),
         ],

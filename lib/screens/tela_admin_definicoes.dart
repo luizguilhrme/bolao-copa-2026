@@ -17,6 +17,7 @@ class TelaAdminDefinicoes extends StatefulWidget {
 
 class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
   bool _populando = false;
+  bool _mapeandoApi = false;
   bool _recalculando = false;
   // ignore: prefer_final_fields
   bool _recalculandoCopa = false;
@@ -126,6 +127,64 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
       if (mounted) mostrarMensagem(context, 'Erro: $e');
     } finally {
       if (mounted) setState(() => _populando = false);
+    }
+  }
+
+  Future<void> _mapearJogosApi() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Cores.surface,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Mapear jogos com a API?',
+            style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+        content: Text(
+          'Cruza os 104 jogos com a football-data.org (por data/hora UTC, fase e '
+          'grupo) e grava o id da API em cada jogo. Também grava a primeira foto '
+          'de classificação e artilharia.\n\n'
+          'Executar uma vez — e novamente sempre que rodar "Popular Jogos".',
+          style: GoogleFonts.hankenGrotesk(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('CANCELAR',
+                style: GoogleFonts.anybody(color: Cores.onSurfaceVariant)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(
+                backgroundColor: Cores.azulTerciario),
+            child: Text('MAPEAR',
+                style: GoogleFonts.anybody(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+
+    setState(() => _mapeandoApi = true);
+    try {
+      final fn = FirebaseFunctions.instanceFor(region: 'southamerica-east1');
+      final result = await fn.httpsCallable('mapearJogosApi').call();
+      final mapeados = result.data['mapeados'];
+      final pendentes = (result.data['pendentes'] as List?) ?? [];
+      if (mounted) {
+        mostrarMensagem(
+          context,
+          pendentes.isEmpty
+              ? '$mapeados jogos mapeados com a API.'
+              : '$mapeados jogos mapeados. Pendentes (mapeados depois, '
+                  'quando os times forem definidos): ${pendentes.join(', ')}.',
+        );
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) mostrarMensagem(context, e.message ?? 'Erro ao mapear.');
+    } catch (e) {
+      if (mounted) mostrarMensagem(context, 'Erro: $e');
+    } finally {
+      if (mounted) setState(() => _mapeandoApi = false);
     }
   }
 
@@ -409,6 +468,17 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
                 'Grava os 104 jogos no Firestore (sobrescreve os dados atuais).',
             carregando: _populando,
             onTap: _popularJogos,
+          ),
+          const SizedBox(height: 12),
+          _CardOpcao(
+            icone: Icons.link_rounded,
+            corIcone: Cores.azulTerciario,
+            titulo: 'Mapear Jogos com a API',
+            descricao:
+                'Grava o id da football-data.org em cada jogo (de-para da '
+                'sincronização automática). Rodar após "Popular Jogos".',
+            carregando: _mapeandoApi,
+            onTap: _mapearJogosApi,
           ),
           const SizedBox(height: 12),
           _CardOpcao(

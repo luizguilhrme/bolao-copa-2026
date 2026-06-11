@@ -14,6 +14,18 @@ class Jogo {
   int? placar2;
   // Preenchido pelo admin em eliminatórias com empate após 90min (prorrogação/pênaltis)
   String? vencedor;
+  // Campos da integração football-data.org (escritos pela Cloud Function
+  // sincronizarApi; nunca pelo app):
+  final int? apiId; // id do jogo na API (de-para gravado por mapearJogosApi)
+  final String? statusApi; // TIMED | IN_PLAY | PAUSED | FINISHED
+  // Placar parcial durante o jogo — NUNCA vai em placar1/placar2 (que só
+  // recebem o placar final, disparando o cálculo de pontuação).
+  final int? placarAoVivo1;
+  final int? placarAoVivo2;
+  // Placar da decisão quando os 90 min empataram: pênaltis se houve disputa,
+  // senão o placar final da prorrogação. Exibido pequeno sob o placar principal.
+  final int? placarDecisao1;
+  final int? placarDecisao2;
 
   Jogo({
     required this.id,
@@ -28,7 +40,21 @@ class Jogo {
     this.placar1,
     this.placar2,
     this.vencedor,
+    this.apiId,
+    this.statusApi,
+    this.placarAoVivo1,
+    this.placarAoVivo2,
+    this.placarDecisao1,
+    this.placarDecisao2,
   });
+
+  /// Em andamento segundo a API (placar parcial disponível).
+  bool get aoVivoApi => statusApi == 'IN_PLAY' || statusApi == 'PAUSED';
+
+  /// "(4 x 2)" — decisão nos pênaltis/prorrogação, ou null nos demais casos.
+  String? get placarDecisao => placarDecisao1 == null || placarDecisao2 == null
+      ? null
+      : '($placarDecisao1 x $placarDecisao2)';
 
   // fromJson original — continua funcionando para ler o jogos.json local
   factory Jogo.fromJson(Map<String, dynamic> json) {
@@ -118,6 +144,12 @@ class Jogo {
       placar1: map['placar1'] as int?,
       placar2: map['placar2'] as int?,
       vencedor: map['vencedor'] as String?,
+      apiId: map['apiId'] as int?,
+      statusApi: map['statusApi'] as String?,
+      placarAoVivo1: map['placarAoVivo1'] as int?,
+      placarAoVivo2: map['placarAoVivo2'] as int?,
+      placarDecisao1: map['placarDecisao1'] as int?,
+      placarDecisao2: map['placarDecisao2'] as int?,
     );
   }
 }
