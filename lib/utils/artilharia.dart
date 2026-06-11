@@ -4,12 +4,13 @@ import 'biblioteca.dart';
 import 'cores.dart';
 
 // =============================================================================
-// artilharia.dart — modelo, dados e widgets da classificação de artilharia
+// artilharia.dart — modelo e widgets da classificação de artilharia
 //
 // Compartilhado entre a tela Home (top 5) e a aba ARTILHARIA da tela Tabela
-// (lista completa). Os dados são SIMULADOS por enquanto; serão alimentados
-// pela integração com a football-data.org (GET /competitions/WC/scorers),
-// que retorna apenas jogadores com pelo menos um gol, já ordenados.
+// (lista completa). Os dados vêm do documento api/artilharia do Firestore,
+// alimentado pela Cloud Function sincronizarApi (GET /competitions/WC/scorers
+// da football-data.org), que retorna apenas jogadores com pelo menos um gol,
+// já ordenados. Leitura via ApiDadosService.buscarArtilharia().
 // =============================================================================
 
 /// Um jogador na classificação de artilharia.
@@ -28,46 +29,17 @@ class Artilheiro {
   final String selecao;
   final int gols;
   final int assistencias;
-}
 
-/// Dados simulados — substituir pela resposta da API quando integrarmos.
-const kArtilhariaSimulada = [
-  Artilheiro(
-    nome: 'Carlos Mendes',
-    selecao: 'Brazil',
-    gols: 7,
-    assistencias: 2,
-  ),
-  Artilheiro(
-    nome: 'Hans Zimmermann',
-    selecao: 'Germany',
-    gols: 6,
-    assistencias: 1,
-  ),
-  Artilheiro(nome: 'Yuki Tanaka', selecao: 'Japan', gols: 5, assistencias: 3),
-  Artilheiro(nome: 'Pierre Lefebvre', selecao: 'France', gols: 5),
-  Artilheiro(
-    nome: 'Diego Fernández',
-    selecao: 'Argentina',
-    gols: 4,
-    assistencias: 2,
-  ),
-  Artilheiro(
-    nome: 'Jan de Vries',
-    selecao: 'Netherlands',
-    gols: 3,
-    assistencias: 1,
-  ),
-  Artilheiro(nome: 'Min-jun Park', selecao: 'South Korea', gols: 3),
-  Artilheiro(nome: 'Ahmed Mansour', selecao: 'Egypt', gols: 2, assistencias: 2),
-  Artilheiro(nome: 'Tiago Costa', selecao: 'Portugal', gols: 2),
-  Artilheiro(
-    nome: 'James Whitmore',
-    selecao: 'England',
-    gols: 1,
-    assistencias: 1,
-  ),
-];
+  /// Reconstrói a partir de um item da lista `artilheiros` de api/artilharia.
+  factory Artilheiro.fromMap(Map<String, dynamic> map) {
+    return Artilheiro(
+      nome: map['nome'] as String? ?? '',
+      selecao: map['selecao'] as String? ?? '',
+      gols: (map['gols'] as num?)?.toInt() ?? 0,
+      assistencias: (map['assistencias'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
 
 /// Linha da classificação: posição (pódio colorido no top 3), bandeira,
 /// nome, seleção/assistências e gols.

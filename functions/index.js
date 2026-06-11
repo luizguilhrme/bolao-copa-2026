@@ -1,6 +1,7 @@
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { defineSecret } = require('firebase-functions/params');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
@@ -744,7 +745,18 @@ exports.limparDadosTeste = onCall(
     const jogosSnap = await db.collection('jogos').get();
     const opsJogos = jogosSnap.docs.map(doc => b => {
       const id = doc.data().id;
-      const updates = { placar1: null, placar2: null, vencedor: FieldValue.delete() };
+      const updates = {
+        placar1: null,
+        placar2: null,
+        vencedor: FieldValue.delete(),
+        // Campos da football-data.org (apiId é preservado — o de-para vale
+        // para o torneio inteiro e sobrevive ao reset de dados de teste)
+        statusApi: FieldValue.delete(),
+        placarAoVivo1: FieldValue.delete(),
+        placarAoVivo2: FieldValue.delete(),
+        placarDecisao1: FieldValue.delete(),
+        placarDecisao2: FieldValue.delete(),
+      };
       if (placeholders[id]) {
         updates.team1 = placeholders[id].team1;
         updates.team2 = placeholders[id].team2;
@@ -955,6 +967,385 @@ exports.adicionarTodosAoGrupo = onCall(
       adicionados: novosUids.length,
       grupo: grupoDoc.data().nome,
     };
+  }
+);
+
+// ─── Integração football-data.org ────────────────────────────────────────────
+// O app NUNCA chama a API diretamente (o repositório é público): a chave fica
+// no secret FOOTBALL_DATA_KEY (firebase functions:secrets:set FOOTBALL_DATA_KEY)
+// e somente as Functions falam com a API. Free tier: 10 requisições/minuto;
+// cada execução faz no máximo 3 (matches + standings + scorers).
+
+const FOOTBALL_DATA_KEY = defineSecret('FOOTBALL_DATA_KEY');
+const API_BASE = 'https://api.football-data.org/v4';
+
+// Nomes de time que divergem entre a API e o nosso jogos.json.
+const ALIAS_API = {
+  'Czechia': 'Czech Republic',
+  'Bosnia-Herzegovina': 'Bosnia & Herzegovina',
+  'United States': 'USA',
+};
+
+// round (nosso) → stage (API)
+const STAGE_POR_ROUND = {
+  'Fase de Grupos': 'GROUP_STAGE',
+  '16 avos de Final': 'LAST_32',
+  'Oitavas de Final': 'LAST_16',
+  'Quartas de Final': 'QUARTER_FINALS',
+  'Semifinal': 'SEMI_FINALS',
+  'Disputa de 3º Lugar': 'THIRD_PLACE',
+  'Final': 'FINAL',
+};
+
+// Converte um nome de time da API para a grafia do nosso jogos.json.
+function _nomeNosso(nomeApi) {
+  return ALIAS_API[nomeApi] || nomeApi || '';
+}
+
+// Comparação tolerante: ignora caixa e tudo que não for letra
+// ("Bosnia & Herzegovina" ≅ "Bosnia-Herzegovina").
+function _normalizarNome(nome) {
+  return (nome || '').toLowerCase().replace(/[^a-z]/g, '');
+}
+
+function _mesmoNome(nomeApi, nomeNosso) {
+  return _normalizarNome(_nomeNosso(nomeApi)) === _normalizarNome(nomeNosso);
+}
+
+// Nome de time da API válido para definir um confronto, já na nossa grafia.
+// Retorna null quando o time ainda não foi determinado (a API usa name null
+// ou textos tipo "Winner Group A" enquanto o confronto não está definido).
+function _nomeRealDeTime(nomeApi) {
+  const nome = _nomeNosso(nomeApi);
+  if (!nome) return null;
+  if (/winner|loser|group|\d/i.test(nome)) return null;
+  return nome;
+}
+
+async function _buscarApi(caminho) {
+  const resp = await fetch(`${API_BASE}${caminho}`, {
+    headers: { 'X-Auth-Token': FOOTBALL_DATA_KEY.value() },
+  });
+  if (!resp.ok) {
+    throw new Error(`football-data.org ${caminho} → HTTP ${resp.status}`);
+  }
+  return resp.json();
+}
+
+// Encontra o jogo da API correspondente a um documento nosso.
+// Critério primário: mesmo horário UTC + mesma fase (+ mesmo grupo na Fase de
+// Grupos). Quando há mais de um candidato (a última rodada de cada grupo tem
+// os dois jogos simultâneos), desempata pelos nomes dos times — em qualquer
+// ordem, pois a orientação home/away é tratada separadamente.
+function _encontrarJogoApi(jogo, matchesApi) {
+  const ts = jogo.dataHora?.toDate?.()?.getTime();
+  if (!ts) return null;
+  const stage = STAGE_POR_ROUND[jogo.round] || 'GROUP_STAGE';
+  const grupoApi = jogo.group ? `GROUP_${jogo.group.slice(-1)}` : null;
+
+  const candidatos = matchesApi.filter((m) =>
+    Date.parse(m.utcDate) === ts &&
+    m.stage === stage &&
+    (grupoApi == null || m.group === grupoApi)
+  );
+  if (candidatos.length === 1) return candidatos[0];
+
+  const porNome = candidatos.filter((m) =>
+    (_mesmoNome(m.homeTeam?.name, jogo.team1) && _mesmoNome(m.awayTeam?.name, jogo.team2)) ||
+    (_mesmoNome(m.homeTeam?.name, jogo.team2) && _mesmoNome(m.awayTeam?.name, jogo.team1))
+  );
+  return porNome.length === 1 ? porNome[0] : null;
+}
+
+// true quando o homeTeam da API corresponde ao nosso team2 (ordem invertida) —
+// nesse caso os placares home/away precisam ser trocados antes de gravar.
+function _ordemInvertida(jogo, m) {
+  return _mesmoNome(m.homeTeam?.name, jogo.team2) &&
+    _mesmoNome(m.awayTeam?.name, jogo.team1);
+}
+
+// Placar parcial (IN_PLAY/PAUSED) → placarAoVivo1/2. JAMAIS toca
+// placar1/placar2 — esses só recebem o placar final, que é o que dispara o
+// trigger calcularPontuacao. Retorna apenas o que mudou.
+function _verificarPlacaresParciais(jogo, m, invertido) {
+  const updates = {};
+  const ft = (m.score || {}).fullTime || {};
+  const live1 = invertido ? ft.away : ft.home;
+  const live2 = invertido ? ft.home : ft.away;
+  if (live1 != null && live2 != null &&
+      (jogo.placarAoVivo1 !== live1 || jogo.placarAoVivo2 !== live2)) {
+    updates.placarAoVivo1 = live1;
+    updates.placarAoVivo2 = live2;
+  }
+  return updates;
+}
+
+// Placar final (FINISHED) → placar1/2 pela regra dos 90 minutos
+// (score.regularTime; a API só o envia quando houve prorrogação — nos demais
+// casos o fullTime já é o placar dos 90). Em empate nos 90, grava `vencedor`
+// (score.winner) e o placar da decisão (pênaltis ou placar final da
+// prorrogação). Também remove o placar ao vivo. O chamador garante que
+// placar1 ainda é null (placar do admin nunca é sobrescrito).
+function _aplicarPlacarFinal(jogo, m, invertido) {
+  const updates = {};
+  let finalizou = false;
+
+  const score = m.score || {};
+  const ft = score.fullTime || {};
+  const rt = score.regularTime || ft;
+  const r1 = invertido ? rt.away : rt.home;
+  const r2 = invertido ? rt.home : rt.away;
+
+  if (r1 != null && r2 != null) {
+    updates.placar1 = r1;
+    updates.placar2 = r2;
+    if (r1 === r2 && score.winner && score.winner !== 'DRAW') {
+      const venceuHome = score.winner === 'HOME_TEAM';
+      updates.vencedor = (venceuHome !== invertido) ? jogo.team1 : jogo.team2;
+      const dec = score.duration === 'PENALTY_SHOOTOUT' ? score.penalties : ft;
+      const d1 = invertido ? dec?.away : dec?.home;
+      const d2 = invertido ? dec?.home : dec?.away;
+      if (d1 != null && d2 != null) {
+        updates.placarDecisao1 = d1;
+        updates.placarDecisao2 = d2;
+      }
+    }
+    finalizou = true;
+  }
+
+  if (jogo.placarAoVivo1 != null || jogo.placarAoVivo2 != null) {
+    updates.placarAoVivo1 = FieldValue.delete();
+    updates.placarAoVivo2 = FieldValue.delete();
+  }
+
+  return { updates, finalizou };
+}
+
+// Busca standings e artilharia na API e grava nos docs api/classificacao e
+// api/artilharia (consumidos pela aba CLASSIFICAÇÃO/ARTILHARIA da Tabela e
+// pelo card da Home). Nomes de time convertidos para a grafia do jogos.json.
+async function _atualizarStandingsEArtilharia(db) {
+  const standings = await _buscarApi('/competitions/WC/standings');
+  const grupos = {};
+  for (const s of standings.standings || []) {
+    if (s.type && s.type !== 'TOTAL') continue;
+    const letra = (s.group || '').replace('GROUP_', '');
+    if (!letra) continue;
+    grupos[letra] = (s.table || []).map((t) => ({
+      posicao: t.position ?? 0,
+      time: _nomeNosso(t.team?.name),
+      jogos: t.playedGames ?? 0,
+      vitorias: t.won ?? 0,
+      empates: t.draw ?? 0,
+      derrotas: t.lost ?? 0,
+      pontos: t.points ?? 0,
+      golsPro: t.goalsFor ?? 0,
+      golsContra: t.goalsAgainst ?? 0,
+      saldo: t.goalDifference ?? 0,
+    }));
+  }
+
+  const scorers = await _buscarApi('/competitions/WC/scorers?limit=100');
+  const artilheiros = (scorers.scorers || []).map((s) => ({
+    nome: s.player?.name || '',
+    selecao: _nomeNosso(s.team?.name),
+    gols: s.goals ?? 0,
+    assistencias: s.assists ?? 0,
+  }));
+
+  await db.collection('api').doc('classificacao').set({
+    grupos,
+    atualizadoEm: FieldValue.serverTimestamp(),
+  });
+  await db.collection('api').doc('artilharia').set({
+    artilheiros,
+    atualizadoEm: FieldValue.serverTimestamp(),
+  });
+}
+
+// ─── mapearJogosApi ───────────────────────────────────────────────────────────
+// De-para permanente: grava o id da API no campo apiId de cada documento de
+// `jogos`. Executar uma vez (e novamente após Popular Jogos, que recria os
+// docs). Jogos de eliminatória sem horário/fase únicos ficam pendentes e são
+// mapeados automaticamente pela sincronizarApi quando os times forem reais.
+// Também grava a primeira foto de classificação e artilharia.
+
+exports.mapearJogosApi = onCall(
+  { region: 'southamerica-east1', secrets: [FOOTBALL_DATA_KEY] },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Não autenticado.');
+
+    const db = getFirestore();
+    const userDoc = await db.collection('usuarios').doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data().isAdmin !== true) {
+      throw new HttpsError('permission-denied', 'Acesso restrito ao admin.');
+    }
+
+    const resposta = await _buscarApi('/competitions/WC/matches');
+    const matches = resposta.matches || [];
+    if (matches.length === 0) {
+      throw new HttpsError('unavailable', 'A API não retornou jogos.');
+    }
+
+    const jogosSnap = await db.collection('jogos').get();
+    const docsOrdenados = [...jogosSnap.docs]
+      .sort((a, b) => (a.data().id || 0) - (b.data().id || 0));
+
+    const batch = db.batch();
+    const usados = new Set();
+    let mapeados = 0;
+    const pendentes = [];
+
+    for (const doc of docsOrdenados) {
+      const jogo = doc.data();
+      const m = _encontrarJogoApi(jogo, matches.filter((x) => !usados.has(x.id)));
+      if (m) {
+        usados.add(m.id);
+        batch.update(doc.ref, { apiId: m.id });
+        mapeados++;
+      } else {
+        pendentes.push(jogo.id);
+      }
+    }
+    await batch.commit();
+
+    await _atualizarStandingsEArtilharia(db);
+
+    return { mapeados, pendentes };
+  }
+);
+
+// ─── sincronizarApi ───────────────────────────────────────────────────────────
+// Roda a cada 2 minutos, mas só chama a API quando existe jogo na "janela
+// ativa" (começou nas últimas 5h ou começa nos próximos 20 min e ainda não
+// terminou) OU jogo de eliminatória nas próximas 72h ainda com time
+// placeholder (confronto a definir) — fora desses casos, encerra com uma
+// única query barata ao Firestore.
+//
+// Regras de escrita:
+//   - Placar parcial JAMAIS vai em placar1/placar2 (dispararia a pontuação):
+//     vai em placarAoVivo1/placarAoVivo2 + statusApi.
+//   - Placar final (status FINISHED) segue a regra dos 90 minutos: grava
+//     score.regularTime (a API só o envia quando houve prorrogação; nos demais
+//     casos o fullTime já é o placar dos 90) e preenche `vencedor` quando os
+//     90 min empataram — isso dispara o trigger calcularPontuacao igual à
+//     inserção manual do admin.
+//   - Só grava o que mudou; e nunca sobrescreve placar1/placar2 já inseridos
+//     manualmente (a tela de admin continua valendo como override).
+
+exports.sincronizarApi = onSchedule(
+  {
+    schedule: '*/2 * * * *',
+    region: 'southamerica-east1',
+    timeZone: 'America/Sao_Paulo',
+    secrets: [FOOTBALL_DATA_KEY],
+  },
+  async () => {
+    const db = getFirestore();
+    const agora = Date.now();
+
+    // Uma única query cobre a janela ativa (placares) e as próximas 72h
+    // (confrontos de eliminatória ainda não definidos).
+    const limiteJanela = agora + 20 * 60 * 1000;
+    const jogosSnap = await db.collection('jogos')
+      .where('dataHora', '>=', Timestamp.fromMillis(agora - 5 * 60 * 60 * 1000))
+      .where('dataHora', '<=', Timestamp.fromMillis(agora + 72 * 60 * 60 * 1000))
+      .get();
+
+    // Janela ativa: sincronizar placar ao vivo / final
+    const pendentes = jogosSnap.docs.filter((d) => {
+      const j = d.data();
+      return j.dataHora.toMillis() <= limiteJanela &&
+        j.statusApi !== 'FINISHED' &&
+        j.placar1 == null &&
+        !_ehPlaceholder(j.team1) && !_ehPlaceholder(j.team2);
+    });
+
+    // Eliminatórias nas próximas 72h com time placeholder: definir confronto
+    // assim que a API publicar os times reais (importante entre o fim da fase
+    // de grupos e os 16 avos, quando não há jogo na janela ativa)
+    const indefinidos = jogosSnap.docs.filter((d) => {
+      const j = d.data();
+      return _ehPlaceholder(j.team1) || _ehPlaceholder(j.team2);
+    });
+
+    if (pendentes.length === 0 && indefinidos.length === 0) {
+      return null; // fora da janela: zero requisições
+    }
+
+    // dateFrom/dateTo cobrindo todos os jogos relevantes, com 1 dia de margem UTC
+    const tempos = [...pendentes, ...indefinidos]
+      .map((d) => d.data().dataHora.toDate().getTime());
+    const fmt = (t) => new Date(t).toISOString().slice(0, 10);
+    const dateFrom = fmt(Math.min(...tempos) - 24 * 60 * 60 * 1000);
+    const dateTo = fmt(Math.max(...tempos) + 24 * 60 * 60 * 1000);
+
+    const resposta = await _buscarApi(
+      `/competitions/WC/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`
+    );
+    const matches = resposta.matches || [];
+    const porId = new Map(matches.map((m) => [m.id, m]));
+
+    // Define os confrontos das eliminatórias: preenche team1/team2 apenas
+    // onde ainda há placeholder — nunca sobrescreve time já definido (pela
+    // propagação da chave, pela tela Admin Copa ou por ajuste manual).
+    for (const doc of indefinidos) {
+      const j = doc.data();
+      const updates = {};
+
+      let m = j.apiId != null ? porId.get(j.apiId) : null;
+      if (!m) {
+        m = _encontrarJogoApi(j, matches);
+        if (m) updates.apiId = m.id;
+      }
+      if (!m) continue;
+
+      const nome1 = _nomeRealDeTime(m.homeTeam?.name);
+      const nome2 = _nomeRealDeTime(m.awayTeam?.name);
+      if (_ehPlaceholder(j.team1) && nome1) updates.team1 = nome1;
+      if (_ehPlaceholder(j.team2) && nome2) updates.team2 = nome2;
+
+      if (Object.keys(updates).length > 0) await doc.ref.update(updates);
+    }
+
+    let finalizouAlgum = false;
+
+    for (const doc of pendentes) {
+      const j = doc.data();
+      const updates = {};
+
+      let m = j.apiId != null ? porId.get(j.apiId) : null;
+      if (!m) {
+        // De-para ainda não feito para este jogo (ex: eliminatória que ficou
+        // pendente no mapearJogosApi) — tenta mapear agora pelos times reais.
+        m = _encontrarJogoApi(j, matches);
+        if (m) updates.apiId = m.id;
+      }
+      if (!m) continue;
+
+      if (j.statusApi !== m.status) updates.statusApi = m.status;
+
+      const invertido = _ordemInvertida(j, m);
+
+      if (m.status === 'IN_PLAY' || m.status === 'PAUSED') {
+        Object.assign(updates, _verificarPlacaresParciais(j, m, invertido));
+      } else if (m.status === 'FINISHED') {
+        const { updates: finais, finalizou } = _aplicarPlacarFinal(j, m, invertido);
+        Object.assign(updates, finais);
+        if (finalizou) finalizouAlgum = true;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        // Um update por documento (sem batch): cada placar final dispara o
+        // trigger calcularPontuacao individualmente, como a inserção manual.
+        await doc.ref.update(updates);
+      }
+    }
+
+    // Classificação e artilharia só mudam quando algum jogo termina
+    if (finalizouAlgum) await _atualizarStandingsEArtilharia(db);
+
+    return null;
   }
 );
 

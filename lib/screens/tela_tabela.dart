@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/jogo.dart';
 import '../models/palpite.dart';
 import '../models/usuario.dart';
+import '../services/api_dados_service.dart';
 import '../services/jogo_service.dart';
 import '../utils/artilharia.dart';
 import '../utils/avatares.dart';
@@ -66,11 +67,15 @@ class _TelaTabelaState extends State<TelaTabela> {
   String? _grupoClassificacao;
 
   late Future<List<Jogo>> _futureJogos;
+  late Future<List<Artilheiro>> _futureArtilharia;
+  late Future<Map<String, List<ClassificacaoApiTime>>?> _futureClassificacaoApi;
 
   @override
   void initState() {
     super.initState();
     _futureJogos = JogoService().buscarTodos();
+    _futureArtilharia = ApiDadosService().buscarArtilharia();
+    _futureClassificacaoApi = ApiDadosService().buscarClassificacao();
     widget.sinalAbrirArtilharia?.addListener(_abrirArtilharia);
   }
 
@@ -85,7 +90,11 @@ class _TelaTabelaState extends State<TelaTabela> {
   }
 
   Future<void> _recarregar() async {
-    setState(() => _futureJogos = JogoService().buscarTodos());
+    setState(() {
+      _futureJogos = JogoService().buscarTodos();
+      _futureArtilharia = ApiDadosService().buscarArtilharia();
+      _futureClassificacaoApi = ApiDadosService().buscarClassificacao();
+    });
     await _futureJogos;
   }
 
@@ -189,63 +198,90 @@ class _TelaTabelaState extends State<TelaTabela> {
   }
 
   // ---------------------------------------------------------------------------
-  // ARTILHARIA — classificação completa (dados simulados até a API entrar)
+  // ARTILHARIA — classificação completa (api/artilharia, via football-data.org)
   // ---------------------------------------------------------------------------
 
   Widget _buildArtilharia() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.all(Radius.circular(16)),
-            boxShadow: _sombraCard,
-          ),
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return FutureBuilder<List<Artilheiro>>(
+      future: _futureArtilharia,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Cores.verdePrincipal),
+          );
+        }
+        final artilheiros = snap.data ?? [];
+
+        return RefreshIndicator(
+          color: Cores.verdePrincipal,
+          onRefresh: _recarregar,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.sports_soccer_rounded,
-                    color: Cores.verdePrincipal,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'CHUTEIRA DE OURO',
-                    style: GoogleFonts.anybody(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                      color: Cores.onSurface,
+              Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
+                  boxShadow: _sombraCard,
+                ),
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.sports_soccer_rounded,
+                          color: Cores.verdePrincipal,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'CHUTEIRA DE OURO',
+                          style: GoogleFonts.anybody(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                            color: Cores.onSurface,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Jogadores com pelo menos um gol.',
-                style: GoogleFonts.hankenGrotesk(
-                  fontSize: 11,
-                  color: Cores.onSurfaceVariant,
+                    const SizedBox(height: 2),
+                    Text(
+                      'Jogadores com pelo menos um gol.',
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 11,
+                        color: Cores.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (artilheiros.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Center(
+                          child: Text(
+                            'A artilharia aparece após os primeiros gols da Copa.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.hankenGrotesk(
+                              fontSize: 12,
+                              color: Cores.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                    for (var i = 0; i < artilheiros.length; i++) ...[
+                      LinhaArtilheiro(posicao: i + 1, artilheiro: artilheiros[i]),
+                      if (i < artilheiros.length - 1)
+                        const Divider(height: 14, color: Cores.surfaceVariant),
+                    ],
+                  ],
                 ),
               ),
-              const SizedBox(height: 10),
-              for (var i = 0; i < kArtilhariaSimulada.length; i++) ...[
-                LinhaArtilheiro(
-                  posicao: i + 1,
-                  artilheiro: kArtilhariaSimulada[i],
-                ),
-                if (i < kArtilhariaSimulada.length - 1)
-                  const Divider(height: 14, color: Cores.surfaceVariant),
-              ],
             ],
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -300,36 +336,63 @@ class _TelaTabelaState extends State<TelaTabela> {
   }
 
   // ---------------------------------------------------------------------------
-  // MODO COPA — classificação dos grupos calculada dos placares inseridos
+  // CLASSIFICAÇÃO — preferência pelo standings oficial da API (critérios FIFA
+  // completos, incluindo confronto direto e fair play); enquanto api/
+  // classificacao não existe, cai no cálculo local a partir dos placares.
   // ---------------------------------------------------------------------------
 
   Widget _buildClassificacao(List<Jogo> todos) {
-    // Agrupa os jogos da Fase de Grupos pela letra do grupo
-    final porGrupo = <String, List<Jogo>>{};
-    for (final j in todos) {
-      if (j.group == null) continue;
-      if (_grupoClassificacao != null && j.group != _grupoClassificacao) {
-        continue;
-      }
-      porGrupo.putIfAbsent(j.group!, () => []).add(j);
-    }
-    final chaves = porGrupo.keys.toList()..sort();
+    return FutureBuilder<Map<String, List<ClassificacaoApiTime>>?>(
+      future: _futureClassificacaoApi,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Cores.verdePrincipal),
+          );
+        }
 
-    return RefreshIndicator(
-      color: Cores.verdePrincipal,
-      onRefresh: _recarregar,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: [
-          for (final g in chaves) ...[
-            _CardClassificacaoGrupo(
-              titulo: g,
-              linhas: _classificacaoDe(porGrupo[g]!),
-            ),
-            const SizedBox(height: 12),
-          ],
-        ],
-      ),
+        // Monta "Grupo X" → linhas, da API quando disponível
+        final porGrupo = <String, List<_TimeClassificacao>>{};
+        final api = snap.data;
+        if (api != null) {
+          for (final entrada in api.entries) {
+            porGrupo['Grupo ${entrada.key}'] =
+                entrada.value.map(_TimeClassificacao.deApi).toList();
+          }
+        } else {
+          final jogosPorGrupo = <String, List<Jogo>>{};
+          for (final j in todos) {
+            if (j.group == null) continue;
+            jogosPorGrupo.putIfAbsent(j.group!, () => []).add(j);
+          }
+          for (final entrada in jogosPorGrupo.entries) {
+            porGrupo[entrada.key] = _classificacaoDe(entrada.value);
+          }
+        }
+
+        final chaves =
+            porGrupo.keys
+                .where(
+                  (g) =>
+                      _grupoClassificacao == null || g == _grupoClassificacao,
+                )
+                .toList()
+              ..sort();
+
+        return RefreshIndicator(
+          color: Cores.verdePrincipal,
+          onRefresh: _recarregar,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            children: [
+              for (final g in chaves) ...[
+                _CardClassificacaoGrupo(titulo: g, linhas: porGrupo[g]!),
+                const SizedBox(height: 12),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -566,7 +629,8 @@ class _CardJogo extends StatelessWidget {
   }
 
   // Placar em texto puro — sem caixas, que pareciam campos editáveis como
-  // os da tela de palpites. Dois estados: encerrado (placar) ou não (— x —).
+  // os da tela de palpites. Três estados: encerrado (placar definitivo),
+  // ao vivo pela API (placar parcial em vermelho) ou aguardando (— x —).
   Widget _buildPlacar() {
     if (_encerrado) {
       return Text(
@@ -575,6 +639,16 @@ class _CardJogo extends StatelessWidget {
           fontSize: 22,
           fontWeight: FontWeight.w900,
           color: Cores.onSurface,
+        ),
+      );
+    }
+    if (jogo.aoVivoApi && jogo.placarAoVivo1 != null) {
+      return Text(
+        '${jogo.placarAoVivo1}  x  ${jogo.placarAoVivo2}',
+        style: GoogleFonts.anybody(
+          fontSize: 22,
+          fontWeight: FontWeight.w900,
+          color: Cores.error,
         ),
       );
     }
@@ -875,6 +949,18 @@ class _CampoSeletorFiltro extends StatelessWidget {
 /// Estatísticas acumuladas de um time dentro do seu grupo.
 class _TimeClassificacao {
   _TimeClassificacao(this.nome);
+
+  /// Converte uma linha do standings oficial (api/classificacao) — a ordem
+  /// da lista da API já é a classificação oficial, então não reordenamos.
+  factory _TimeClassificacao.deApi(ClassificacaoApiTime l) {
+    return _TimeClassificacao(l.time)
+      ..jogos = l.jogos
+      ..vitorias = l.vitorias
+      ..empates = l.empates
+      ..derrotas = l.derrotas
+      ..golsPro = l.golsPro
+      ..golsContra = l.golsContra;
+  }
 
   final String nome;
   int jogos = 0;
