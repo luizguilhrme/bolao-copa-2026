@@ -1012,6 +1012,7 @@ const ALIAS_API = {
   'Czechia': 'Czech Republic',
   'Bosnia-Herzegovina': 'Bosnia & Herzegovina',
   'United States': 'USA',
+  'Cape Verde Islands': 'Cape Verde',
 };
 
 // round (nosso) → stage (API)
@@ -1069,12 +1070,15 @@ function _encontrarJogoApi(jogo, matchesApi) {
   const ts = jogo.dataHora?.toDate?.()?.getTime();
   if (!ts) return null;
   const stage = STAGE_POR_ROUND[jogo.round] || 'GROUP_STAGE';
-  const grupoApi = jogo.group ? `GROUP_${jogo.group.slice(-1)}` : null;
+  // Compara só a letra do grupo: o standings do WC 2026 já trocou "GROUP_A"
+  // por "Group A", então o matches pode mudar de formato a qualquer momento.
+  const letraGrupo = jogo.group ? jogo.group.slice(-1) : null;
 
   const candidatos = matchesApi.filter((m) =>
     Date.parse(m.utcDate) === ts &&
     m.stage === stage &&
-    (grupoApi == null || m.group === grupoApi)
+    (letraGrupo == null ||
+      (m.group || '').replace(/^GROUP[_ ]/i, '').trim() === letraGrupo)
   );
   if (candidatos.length === 1) return candidatos[0];
 
@@ -1157,7 +1161,9 @@ async function _atualizarStandingsEArtilharia(db) {
   const grupos = {};
   for (const s of standings.standings || []) {
     if (s.type && s.type !== 'TOTAL') continue;
-    const letra = (s.group || '').replace('GROUP_', '');
+    // Standings do WC 2026 enviam "Group A" (em 2022 era "GROUP_A") —
+    // aceita os dois formatos para a chave ficar sempre só com a letra.
+    const letra = (s.group || '').replace(/^GROUP[_ ]/i, '').trim();
     if (!letra) continue;
     grupos[letra] = (s.table || []).map((t) => ({
       posicao: t.position ?? 0,
