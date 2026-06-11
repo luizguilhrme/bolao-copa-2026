@@ -528,7 +528,11 @@ api/classificacao
   grupos       : Map  — { "A": [{posicao, time, jogos, vitorias, empates, derrotas,
                           pontos, golsPro, golsContra, saldo}], ... "L": [...] }
                         ordem das listas = classificação oficial (critérios FIFA
-                        completos); nomes de time já na grafia do jogos.json
+                        completos); nomes de time já na grafia do jogos.json.
+                        Chave = letra pura ("A".."L") — a function normaliza o
+                        formato do standings da API ("Group A" no WC 2026,
+                        "GROUP_A" em 2022) e o ApiDadosService normaliza de novo
+                        na leitura, por tolerância a docs antigos
   atualizadoEm : Timestamp
 
 api/artilharia
@@ -778,6 +782,14 @@ buscarTodosPorJogo(int jogoId)           // where(jogoId) — usado pelo admin
 ---
 
 ## Bugs corrigidos e decisões técnicas relevantes
+
+### Filtro por grupo vazio na aba CLASSIFICAÇÃO (jun/2026)
+O endpoint de standings da football-data passou a enviar `group: "Group A"` no WC 2026 (em 2022 era `"GROUP_A"`), então o `.replace('GROUP_', '')` de `_atualizarStandingsEArtilharia` não removia nada e o doc `api/classificacao` ficou com chaves `"Group A"`. Na tela Tabela isso virava título "Grupo Group A": com "Todos os grupos" tudo aparecia (título estranho), mas o filtro por grupo (que compara com `"Grupo A"` vindo do jogos.json) nunca batia e a lista ficava vazia. Corrigido nos dois lados: a function normaliza com `replace(/^GROUP[_ ]/i, '')` e `buscarClassificacao` no `ApiDadosService` normaliza a chave na leitura (cobre docs antigos até a próxima sincronização). O endpoint de **matches** ainda usava `"GROUP_A"` quando o mapeamento rodou (101/104 jogos com `apiId`), mas `_encontrarJogoApi` passou a comparar só a letra do grupo, aceitando os dois formatos, por precaução.
+
+### Jogos 16, 22 e 47 sem apiId (jun/2026)
+Três jogos da fase de grupos ficavam pendentes no `mapearJogosApi`, cada um por um motivo:
+- **16 (Brazil x Haiti)** e **22 (Turkey x Paraguay)**: a FIFA ajustou os kickoffs depois que o `jogos.json` foi montado (16: 21:00→**20:30** UTC-4; 22: 21:00→**20:00** UTC-7), e o critério primário do `_encontrarJogoApi` exige horário UTC exato. Corrigido em `jogos.json`/`jogos_teste.json` e nos campos `time`+`dataHora` dos docs de produção (sempre atualizar os dois campos — `dataHora` é o que a function e as queries usam).
+- **47 (Cape Verde x Saudi Arabia)**: horário batia, mas a Rodada 3 tem dois jogos simultâneos do grupo H e o desempate por nome falhava porque a API chama o time de `"Cape Verde Islands"`. Adicionado a `ALIAS_API` — isso também corrige o nome na classificação/artilharia e na definição dos confrontos eliminatórios caso Cabo Verde avance.
 
 ### Bug de fuso horário nos timestamps
 O getter `dataHora` no `Jogo` usava `DateTime(...)` (local) antes de subtrair o offset UTC, causando dupla conversão. Corrigido com `DateTime.utc(...)`.

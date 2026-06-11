@@ -70,8 +70,12 @@ class ApiDadosService {
     final grupos = doc.data()?['grupos'] as Map<String, dynamic>?;
     if (grupos == null || grupos.isEmpty) return null;
     return grupos.map(
-      (letra, lista) => MapEntry(
-        letra,
+      // Docs antigos podem ter a chave como "Group A" (formato do WC 2026 na
+      // football-data) em vez da letra pura — normaliza aqui para "A".
+      (grupo, lista) => MapEntry(
+        grupo
+            .replaceFirst(RegExp(r'^group[_ ]', caseSensitive: false), '')
+            .trim(),
         (lista as List)
             .map(
               (e) => ClassificacaoApiTime.fromMap(
