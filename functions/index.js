@@ -1124,7 +1124,10 @@ function _aplicarPlacarFinal(jogo, m, invertido) {
 
   const score = m.score || {};
   const ft = score.fullTime || {};
-  const rt = score.regularTime || ft;
+  // regularTime pode vir como {home: null, away: null} quando não houve
+  // prorrogação — só usa se tiver valores de fato.
+  const rt = (score.regularTime?.home != null && score.regularTime?.away != null)
+    ? score.regularTime : ft;
   const r1 = invertido ? rt.away : rt.home;
   const r2 = invertido ? rt.home : rt.away;
 
@@ -1251,8 +1254,9 @@ exports.mapearJogosApi = onCall(
 
 // ─── sincronizarApi ───────────────────────────────────────────────────────────
 // Roda a cada 2 minutos, mas só chama a API quando existe jogo na "janela
-// ativa" (começou nas últimas 5h ou começa nos próximos 20 min e ainda não
-// terminou) OU jogo de eliminatória nas próximas 72h ainda com time
+// ativa" (começou nas últimas 5h ou começa nos próximos 20 min e ainda sem
+// placar final — mesmo com statusApi FINISHED, pois a API pode confirmar o
+// placar com atraso) OU jogo de eliminatória nas próximas 72h ainda com time
 // placeholder (confronto a definir) — fora desses casos, encerra com uma
 // única query barata ao Firestore.
 //
@@ -1286,11 +1290,13 @@ exports.sincronizarApi = onSchedule(
       .where('dataHora', '<=', Timestamp.fromMillis(agora + 72 * 60 * 60 * 1000))
       .get();
 
-    // Janela ativa: sincronizar placar ao vivo / final
+    // Janela ativa: sincronizar placar ao vivo / final. Não filtra por
+    // statusApi: a API pode marcar FINISHED antes de confirmar o placar
+    // final (visto no jogo de abertura), então o jogo segue elegível
+    // enquanto placar1 for null — a janela de 5h limita as tentativas.
     const pendentes = jogosSnap.docs.filter((d) => {
       const j = d.data();
       return j.dataHora.toMillis() <= limiteJanela &&
-        j.statusApi !== 'FINISHED' &&
         j.placar1 == null &&
         !_ehPlaceholder(j.team1) && !_ehPlaceholder(j.team2);
     });
