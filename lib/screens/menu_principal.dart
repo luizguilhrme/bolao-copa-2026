@@ -1,4 +1,4 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -16,6 +16,7 @@ import 'tela_admin_copa.dart';
 import 'tela_admin_definicoes.dart';
 import 'tela_admin_especiais.dart';
 import 'tela_admin_placares.dart';
+import 'tela_admin_teste_api.dart';
 import 'tela_ajuda.dart';
 import 'tela_grupos.dart';
 import 'tela_home.dart';
@@ -47,6 +48,8 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
   final _sinalHome = Sinal();
   final _sinalPalpites = Sinal();
   final _sinalRanking = Sinal();
+  // Pede à TelaTabela para abrir a aba superior ARTILHARIA (atalho da Home)
+  final _sinalAbrirArtilharia = Sinal();
 
   @override
   void initState() {
@@ -61,14 +64,18 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
     _sinalHome.dispose();
     _sinalPalpites.dispose();
     _sinalRanking.dispose();
+    _sinalAbrirArtilharia.dispose();
     super.dispose();
   }
 
   void _sinalizarAba(int indice) {
     switch (indice) {
-      case 0: _sinalHome.disparar();
-      case 1: _sinalPalpites.disparar();
-      case 2: _sinalRanking.disparar();
+      case 0:
+        _sinalHome.disparar();
+      case 1:
+        _sinalPalpites.disparar();
+      case 2:
+        _sinalRanking.disparar();
       // Tabela (3) tem pull-to-refresh próprio
     }
   }
@@ -126,17 +133,21 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
                 ),
               Text(
                 corpo,
-                style: GoogleFonts.hankenGrotesk(fontSize: 13, color: Colors.white),
+                style: GoogleFonts.hankenGrotesk(
+                  fontSize: 13,
+                  color: Colors.white,
+                ),
               ),
             ],
           ),
-          action: tela != null
-              ? SnackBarAction(
-                  label: 'VER',
-                  textColor: Cores.secondaryContainer,
-                  onPressed: () => _navegarPorNotificacao(message.data),
-                )
-              : null,
+          action:
+              tela != null
+                  ? SnackBarAction(
+                    label: 'VER',
+                    textColor: Cores.secondaryContainer,
+                    onPressed: () => _navegarPorNotificacao(message.data),
+                  )
+                  : null,
         ),
       );
     });
@@ -145,10 +156,8 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
   // Lê isAdmin diretamente do Firestore — campo ausente equivale a false.
   // Executado uma única vez: isAdmin não muda durante a sessão.
   Future<void> _verificarAdmin() async {
-    final doc = await FirebaseFirestore.instance
-        .collection('usuarios')
-        .doc(_uid)
-        .get();
+    final doc =
+        await FirebaseFirestore.instance.collection('usuarios').doc(_uid).get();
     if (!mounted) return;
     if (doc.exists && doc.data()?['isAdmin'] == true) {
       setState(() => _isAdmin = true);
@@ -162,9 +171,7 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
   // sem precisar fechar e reabrir o app.
   Future<void> _abrirRota(Widget tela) async {
     Navigator.of(context).pop();
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => tela),
-    );
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => tela));
     _sinalizarAba(_indiceNav);
   }
 
@@ -184,6 +191,8 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
 
   void _abrirAdminDefinicoes() => _abrirRota(const TelaAdminDefinicoes());
 
+  void _abrirAdminTesteApi() => _abrirRota(const TelaAdminTesteApi());
+
   Future<void> _logout() async {
     Navigator.of(context).pop(); // fecha o drawer
     await AuthService().sair();
@@ -196,10 +205,14 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
       TelaHome(
         onNavegar: (i) => setState(() => _indiceNav = i),
         sinalAtualizar: _sinalHome,
+        onVerArtilharia: () {
+          setState(() => _indiceNav = 3);
+          _sinalAbrirArtilharia.disparar();
+        },
       ),
       TelaPalpites(sinalAtualizar: _sinalPalpites),
       TelaRanking(sinalAtualizar: _sinalRanking),
-      const TelaTabela(),
+      TelaTabela(sinalAbrirArtilharia: _sinalAbrirArtilharia),
     ];
 
     return Container(
@@ -208,26 +221,27 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
         stream: _streamUsuario,
         builder: (context, snapshot) {
           return Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: _buildAppBar(),
-          drawer: _DrawerNav(
-            usuario: snapshot.data,
-            isAdmin: _isAdmin,
-            onPerfil: _abrirPerfil,
-            onNotificacoes: _abrirNotificacoes,
-            onGrupos: _abrirGrupos,
-            onAjuda: _abrirAjuda,
-            onAdminPlacares: _abrirAdminPlacares,
-            onAdminCopa: _abrirAdminCopa,
-            onAdminEspeciais: _abrirAdminEspeciais,
-            onAdminDefinicoes: _abrirAdminDefinicoes,
-            onLogout: _logout,
-          ),
-          body: IndexedStack(index: _indiceNav, children: telas),
-          bottomNavigationBar: _buildBottomNav(),
-        );
-      },
-    ),
+            backgroundColor: Colors.transparent,
+            appBar: _buildAppBar(),
+            drawer: _DrawerNav(
+              usuario: snapshot.data,
+              isAdmin: _isAdmin,
+              onPerfil: _abrirPerfil,
+              onNotificacoes: _abrirNotificacoes,
+              onGrupos: _abrirGrupos,
+              onAjuda: _abrirAjuda,
+              onAdminPlacares: _abrirAdminPlacares,
+              onAdminCopa: _abrirAdminCopa,
+              onAdminEspeciais: _abrirAdminEspeciais,
+              onAdminDefinicoes: _abrirAdminDefinicoes,
+              onAdminTesteApi: _abrirAdminTesteApi,
+              onLogout: _logout,
+            ),
+            body: IndexedStack(index: _indiceNav, children: telas),
+            bottomNavigationBar: _buildBottomNav(),
+          );
+        },
+      ),
     );
   }
 
@@ -239,11 +253,12 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
       // Builder necessário: o leading precisa de um BuildContext que
       // contenha o Scaffold para chamar openDrawer().
       leading: Builder(
-        builder: (ctx) => IconButton(
-          icon: const Icon(Icons.menu, color: Cores.verdePrincipal),
-          tooltip: 'Menu',
-          onPressed: () => Scaffold.of(ctx).openDrawer(),
-        ),
+        builder:
+            (ctx) => IconButton(
+              icon: const Icon(Icons.menu, color: Cores.verdePrincipal),
+              tooltip: 'Menu',
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
+            ),
       ),
       title: AnimatedSwitcher(
         duration: const Duration(milliseconds: 200),
@@ -288,10 +303,7 @@ class _MenuPrincipalState extends State<MenuPrincipal> {
               fontSize: 12,
             );
           }
-          return GoogleFonts.hankenGrotesk(
-            color: Colors.white70,
-            fontSize: 12,
-          );
+          return GoogleFonts.hankenGrotesk(color: Colors.white70, fontSize: 12);
         }),
       ),
       child: NavigationBar(
@@ -343,6 +355,7 @@ class _DrawerNav extends StatelessWidget {
     required this.onAdminCopa,
     required this.onAdminEspeciais,
     required this.onAdminDefinicoes,
+    required this.onAdminTesteApi,
     required this.onLogout,
   });
 
@@ -356,6 +369,7 @@ class _DrawerNav extends StatelessWidget {
   final VoidCallback onAdminCopa;
   final VoidCallback onAdminEspeciais;
   final VoidCallback onAdminDefinicoes;
+  final VoidCallback onAdminTesteApi;
   final VoidCallback onLogout;
 
   @override
@@ -428,6 +442,12 @@ class _DrawerNav extends StatelessWidget {
                     cor: Cores.verdePrincipal,
                     onTap: onAdminDefinicoes,
                   ),
+                  _ItemDrawer(
+                    icone: Icons.sensors_rounded,
+                    label: 'Teste de API',
+                    cor: Cores.verdePrincipal,
+                    onTap: onAdminTesteApi,
+                  ),
                 ],
 
                 const Divider(
@@ -451,8 +471,7 @@ class _DrawerNav extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: ListTile(
-              leading: const Icon(Icons.logout_rounded,
-                  color: Cores.error),
+              leading: const Icon(Icons.logout_rounded, color: Cores.error),
               title: Text(
                 'Sair',
                 style: GoogleFonts.hankenGrotesk(
@@ -462,7 +481,8 @@ class _DrawerNav extends StatelessWidget {
                 ),
               ),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
               onTap: onLogout,
             ),
           ),
@@ -537,9 +557,14 @@ class _CabecalhoDrawer extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.stars_rounded,
-                            color: Color(0xFFFCD400), size: 18,
-                            shadows: [Shadow(color: Colors.black54, blurRadius: 6)]),
+                        const Icon(
+                          Icons.stars_rounded,
+                          color: Color(0xFFFCD400),
+                          size: 18,
+                          shadows: [
+                            Shadow(color: Colors.black54, blurRadius: 6),
+                          ],
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           '${usuario?.pontuacaoClassicaTotal ?? 0} pts',
@@ -616,11 +641,9 @@ class _ItemDrawer extends StatelessWidget {
             color: Cores.onSurface,
           ),
         ),
-        shape:
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         onTap: onTap,
       ),
     );
   }
 }
-

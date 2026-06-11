@@ -38,7 +38,7 @@ To populate Firestore with the 104 games, open the drawer → ADMIN → Outras D
 
 **Auth routing:** `main.dart` wraps the app in a `StreamBuilder<User?>` on `FirebaseAuth.instance.authStateChanges()`. Logged-in users go to `MenuPrincipal`; logged-out users go to `TelaLogin`.
 
-**Admin access:** Gated by `isAdmin: true` in the user's Firestore document. Checked once at session start in `MenuPrincipal._verificarAdmin()`. The drawer shows 4 admin items: Placares, Classificação Copa, Palpites Especiais, Outras Definições. There is a dedicated test admin account (`teste@teste.com`) with `isAdmin: true` in Firestore, used for Google Play Console review.
+**Admin access:** Gated by `isAdmin: true` in the user's Firestore document. Checked once at session start in `MenuPrincipal._verificarAdmin()`. The drawer shows 5 admin items: Placares, Classificação Copa, Palpites Especiais, Outras Definições, Teste de API. There is a dedicated test admin account (`teste@teste.com`) with `isAdmin: true` in Firestore, used for Google Play Console review.
 
 **Scoring — four separate Firestore fields on each `usuarios` document:**
 
@@ -60,6 +60,8 @@ Modo Clássico — base points per game, multiplied by phase:
 
 Phase multipliers: Fase de Grupos ×1.0 | 16 avos ×1.2 | Oitavas ×1.4 | Quartas ×1.6 | Semifinal/3º ×1.8 | Final ×2.0
 
+**Regra dos 90 minutos (eliminatórias):** para pontuação vale sempre o placar dos 90 minutos. Vitória na prorrogação ou nos pênaltis é registrada como empate nos 90 + campo `vencedor` (quem avançou). Na futura integração com a API football-data.org, usar `score.regularTime` (nunca `fullTime`, que inclui prorrogação).
+
 Modo Copa — points per team in group classification:
 - Exact position: +200 | Qualified, wrong position: +100 | Did not qualify: 0
 - Bonus for all palpited positions exact (≥2 valid): +100
@@ -73,9 +75,10 @@ Special bets: Campeão do Mundo +500 | Chuteira de Ouro +300 | Bola de Ouro +300
 
 - All identifiers, comments, and UI strings are in **Brazilian Portuguese**.
 - Utility functions in `lib/utils/biblioteca.dart` are top-level (no wrapping class): `flagDe()`, `siglaDe()`, `isoDe()`, `nomePtDe()`, `formatarData()`, `formatarCriadoEm()`, `mostrarMensagem()`, `mostrarRegras()`, `calcularPontos()`, `multiplicadorFase()`, `calcularPontosComFase()`, `corPontuacao()`, `corFundoPontuacao()`, `corBordaPontuacao()`. The `Bandeira` widget is also defined there.
-- Shared dialogs and SnackBar helpers live in `lib/utils/dialogos.dart`: `mostrarSnackBarSucesso()`, `mostrarSnackBarErro()`, `mostrarSnackBarInfo()`, `DialogAmbiente`, `JogadorData` (model), and `BottomSheetJogadores` (player-picker bottom sheet with `cor:` parameter). Import this file in any screen that needs colored SnackBars, the environment selector dialog, or the player picker.
+- Shared dialogs and SnackBar helpers live in `lib/utils/dialogos.dart`: `mostrarSnackBarSucesso()`, `mostrarSnackBarErro()`, `mostrarSnackBarInfo()`, `DialogAmbiente`, `JogadorData` (model), `BottomSheetJogadores` (player-picker bottom sheet with `cor:` parameter), and `mostrarSeletorOpcoes()`/`BottomSheetOpcoes` (single-option picker without search, used by the Por rodada/Por grupo filters). Import this file in any screen that needs colored SnackBars, the environment selector dialog, or the pickers.
 - Color palette is entirely in `lib/utils/cores.dart` (`Cores` class — never instantiated). Primary green is `Cores.verdePrincipal`. Error red is `Cores.error` — never use `Color(0xFFBA1A1A)` directly. Badge colors: `Cores.pontExato/pontVencedorSaldo/pontVencedorUmTime/pontVencedor/pontZero/pontNegativo`. Pódio: `Cores.ouro`, `Cores.prata`, `Cores.bronze`. Never use `Color(0xFFB8860B)` diretamente — use `Cores.ouro`.
 - Two fonts from `google_fonts`: `GoogleFonts.anybody()` for headings/labels, `GoogleFonts.hankenGrotesk()` for body text.
+- Visual padrão dos cards de jogo (Tabela, Palpites, Teste de API): fundo branco, sombra suave `Color(0x14000000)` blur 16 offset (0,4), raio 16, sem borda (exceto borda de estado nos cards de palpite: verde=salvo, amarela=pendente), sobre `Cores.background`; bandeiras 36px em círculo com nome centralizado; miolo (placar/inputs) com largura intrínseca e laterais em `Expanded`.
 - `Jogo.dataHora` is a computed getter that parses `date`+`time` strings (including UTC offset like `"15:00 UTC-4"`) into a UTC `DateTime`. Always call `.toLocal()` before displaying times to the user.
 - `Palpite.docId` is the compound key `{uid}_{jogoId}` used as the Firestore document ID.
 
@@ -148,7 +151,7 @@ C:\bolao\
       menu_principal.dart     ← shell com drawer lateral, AppBar, IndexedStack, NavigationBar;
                                  inicializa FCM; deep linking via notificação (onMessageOpenedApp,
                                  getInitialMessage); SnackBar com botão VER em foreground;
-                                 seção ADMIN com 4 itens separados; sinais de ressincronização
+                                 seção ADMIN com 5 itens separados; sinais de ressincronização
                                  (classe Sinal) disparados ao selecionar aba e ao voltar de rotas
                                  do drawer — Home/Palpites/Ranking recarregam dados silenciosamente
                                  (sem perder scroll/rascunhos), corrigindo dados congelados pelo
@@ -156,6 +159,8 @@ C:\bolao\
       tela_home.dart          ← hero card verde com ranking/pontuação + carrossel de jogos
                                  do dia + 3 cards de ação em coluna (Palpites, Ranking,
                                  Palpites Especiais) com imagem de fundo personalizada
+                                 + card ARTILHARIA (top 5; tocar abre a aba ARTILHARIA
+                                 da Tabela via callback onVerArtilharia + Sinal)
       tela_login.dart         ← login e cadastro com design do Stitch; ícone de olho na senha;
                                  botão "Fazer login com o Google" (GIS oficial na web via
                                  renderButton; OutlinedButton estilizado no Android) com
@@ -174,7 +179,10 @@ C:\bolao\
                                  preservados na troca de abas/modo (Clássico e Copa);
                                  MODO COPA: form de palpite de classificação (12 grupos, FAB SALVAR);
                                  detecção automática de fim da Fase de Grupos (jogos 73+ com times reais);
-                                 bloqueio do Modo Copa exclusivamente por palpitesTravados=true
+                                 bloqueio do Modo Copa exclusivamente por palpitesTravados=true;
+                                 filtros de jogos no Clássico: chips Por data (sub-abas) /
+                                 Por rodada / Por grupo (seletor via BottomSheetOpcoes);
+                                 rodada/grupo exibem lista mista (cards editáveis + resultados)
       tela_palpites_especiais.dart ← tela azul com 6 palpites especiais do usuário;
                                  Campeão/MaisGoleadora/MenosVazada: seletor de time;
                                  Artilheiro/MelhorGoleiro/MelhorJogador: seletor de
@@ -192,9 +200,13 @@ C:\bolao\
                                  de modo CLÁSSICO/COPA; entrar com código; sair;
                                  card exibe chip de modo; dialog de detalhes com membros e avatares;
                                  ícone de lápis (só dono) edita o nome do grupo
-      tela_tabela.dart        ← lista os 104 jogos com seções e tabs "Próximos"/"Encerrados";
-                                 RefreshIndicator (pull-to-refresh); tocar em jogo encerrado
-                                 abre dialog via Cloud Function buscarPalpitesJogo
+      tela_tabela.dart        ← 3 abas superiores JOGOS / CLASSIFICAÇÃO / ARTILHARIA (sempre
+                                 visíveis); JOGOS: 104 jogos com filtros Por data (sub-abas
+                                 Próximos/Encerrados) / Por rodada / Por grupo;
+                                 CLASSIFICAÇÃO: 12 tabelas calculadas dos placares (critérios
+                                 FIFA) com seletor de grupo; ARTILHARIA: lista completa
+                                 (dados simulados até a API); RefreshIndicator; tocar em jogo
+                                 encerrado abre dialog via Cloud Function buscarPalpitesJogo
                                  (exibe palpites da união dos membros de todos os grupos do usuário)
       tela_admin_placares.dart ← inserção de placares com abas Próximos/Encerrados;
                                  sem regra de 105 min; campos vazios no CORRIGIR limpam o placar
@@ -215,6 +227,10 @@ C:\bolao\
       tela_admin_definicoes.dart ← ações: popular jogos (Teste/Produção), recalcular Reg. Clássica,
                                  recalcular Reg. Copa, limpar dados de teste, limpar órfãos;
                                  botão Travar/Destravar Palpites (grava palpitesTravados em config/copa2026)
+      tela_admin_teste_api.dart ← simulação visual da integração football-data.org com dados
+                                 fictícios no formato JSON real da API (status TIMED/IN_PLAY/
+                                 PAUSED/FINISHED, prorrogação e pênaltis com check no
+                                 classificado) + seção de artilharia; sem requisição/escrita
       tela_ajuda.dart         ← FAQ: pontuação Modo Clássico, multiplicadores de fase,
                                  pontuação Modo Copa, palpites especiais
     services/
@@ -241,6 +257,10 @@ C:\bolao\
       biblioteca.dart         ← funções utilitárias top-level (flagDe, siglaDe,
                                  formatarData, mostrarMensagem, ehPlaceholder,
                                  calcularPontos, multiplicadorFase, calcularPontosComFase)
+      artilharia.dart         ← model Artilheiro + kArtilhariaSimulada (placeholder até
+                                 a integração com a API) + widget LinhaArtilheiro (pódio
+                                 ouro/prata/bronze); usado na Home (top 5) e na aba
+                                 ARTILHARIA da Tabela
       avatares.dart           ← listas kJogadores (Principais) e kJogadoresBrasil2026
                                  (26 fotos oficiais FIFA: 25 jogadores + Ancelotti)
                                  + widgets WidgetAvatar, CardAvatar
@@ -294,11 +314,12 @@ Cores.onSecondaryContainer   = Color(0xFF6E5C00)
 Cores.azulTerciario       = Color(0xFF004CED)
 
 // Superfície / fundo
-Cores.background              = Color(0xFFF9F9FF)
+Cores.background              = Color(0xFFEFF1F6)  // fundo acinzentado: profundidade p/ cards brancos
+Cores.verdeSuave              = Color(0xFFE6F2EA)  // filtros/segmentos não selecionados
 Cores.surface                 = Color(0xFFF9F9FF)
-Cores.surfaceVariant          = Color(0xFFD8E3FB)
-Cores.surfaceContainer        = Color(0xFFE7EEFF)
-Cores.surfaceContainerHigh    = Color(0xFFDEE8FF)
+Cores.surfaceVariant          = Color(0xFFD3E5DA)  // superfícies em verde claro (antes azuladas)
+Cores.surfaceContainer        = Color(0xFFE6F2EA)
+Cores.surfaceContainerHigh    = Color(0xFFDCEBE1)
 
 // Texto
 Cores.onSurface               = Color(0xFF111C2D)
@@ -334,11 +355,12 @@ leading: Builder(
 - Cabeçalho com animação de fundo (`assets/background-cards/cabecalho.webp`, WebP animado, `BoxFit.cover`) e conteúdo sobreposto via `Stack`: card glassmorphism (`ClipRRect` + `BackdropFilter` blur 10px + fundo `Colors.white` 18% alpha + borda 35% alpha) envolvendo avatar, nome e pontuação Clássico via `StreamBuilder<Usuario?>`
 - Seção "CONTA": Meu Perfil → `TelaPerfil`; Notificações → `TelaNotificacoes`
 - Seção "GRUPOS": Meus Grupos → `TelaGrupos`
-- Seção "ADMIN" (só para `isAdmin == true`), 4 itens:
+- Seção "ADMIN" (só para `isAdmin == true`), 5 itens:
   - Placares — Reg. Clássica → `TelaAdminPlacares`
   - Classificação — Reg. Copa → `TelaAdminCopa`
   - Palpites Especiais → `TelaAdminEspeciais`
   - Outras Definições → `TelaAdminDefinicoes`
+  - Teste de API → `TelaAdminTesteApi`
 - Seção "SUPORTE": Ajuda & FAQ → `TelaAjuda`
 - Rodapé: botão Sair que chama `FirebaseAuth.instance.signOut()`
 
@@ -644,7 +666,8 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 - Título da aba Home: `'CRAVA AÍ!'` (antes `'COPA 2026'`, alterado em `menu_principal.dart`)
 - Seção "JOGOS DE HOJE": label compacto + carrossel horizontal com `_CardJogo` (AO VIVO / ENCERRADO). Estado vazio exibido como linha inline (ícone + texto). Sem botão "VER TODOS"
 - 3 cards de ação em coluna vertical, mesma largura (full-width menos 32dp): PALPITES, RANKING, PALPITES ESPECIAIS. Cada card usa `_CardAcao` com imagem de fundo (`assets/background-cards/` via `DecorationImage` + `BoxFit.cover`), texto branco em `GoogleFonts.anybody` sem emoji. Navega para índice 1, 2 e `TelaPalpitesEspeciais` respectivamente.
-- Callback `onNavegar` recebido do `MenuPrincipal`
+- Card **ARTILHARIA** (top 5 de `kArtilhariaSimulada`, pódio ouro/prata/bronze) abaixo dos cards de ação; tocar navega para a tela Tabela já na aba ARTILHARIA (callback `onVerArtilharia` + `Sinal _sinalAbrirArtilharia` no `MenuPrincipal`)
+- Callbacks `onNavegar` e `onVerArtilharia` recebidos do `MenuPrincipal`
 
 ### `tela_palpites_especiais.dart` — implementada
 - Tela completa com AppBar azul (`Cores.azulTerciario`)
@@ -660,17 +683,21 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 - Salva via `UsuarioService.salvarPalpitesEspeciais()`
 
 ### `tela_tabela.dart` — implementada
-- Tabs "Próximos" / "Encerrados" com `AnimatedContainer`
-- Chips horizontais roláveis: **Todos** + **A** a **L**; eliminatórias só em "Todos"
-- `CustomScrollView` com slivers agrupados por seção
-- **RefreshIndicator** (pull-to-refresh) — rebusca todos os jogos via `JogoService().buscarTodos()`
+- 3 abas superiores **JOGOS / CLASSIFICAÇÃO / ARTILHARIA** (faixa verde com abas brancas, sempre visíveis para todos os usuários; `sinalAbrirArtilharia` permite a Home abrir direto a ARTILHARIA)
+- JOGOS: chips de filtro **Por data / Por rodada / Por grupo** — Por data usa sub-abas Próximos/Encerrados (card segmentado verde-suave com seleção branca e contadores); Por rodada/Por grupo usam campo seletor que abre `BottomSheetOpcoes`
+- Cards de jogo no estilo novo (brancos, sombra suave, raio 16, sem borda); placar em texto puro ("— x —" antes de encerrar, sem indicador de ao vivo); data·local centralizados no topo do card, sem chips
+- CLASSIFICAÇÃO: 12 tabelas de grupo calculadas em tempo real dos placares já inseridos (critérios FIFA: pontos > saldo > gols pró), colunas J/SG/PTS, destaque verde no 1º/2º; seletor "Todos os grupos" / Grupo A–L
+- ARTILHARIA: lista completa de `kArtilhariaSimulada` (placeholder do endpoint /scorers da API)
+- `CustomScrollView` com slivers agrupados por seção; **RefreshIndicator** (pull-to-refresh)
 - Tocar em jogo encerrado abre dialog de palpites via Cloud Function `buscarPalpitesJogo`: valida jogo encerrado, coleta membros de todos os grupos do solicitante (união), retorna palpites filtrados com nome/avatar/pontos; ordenados por pontuação
 
 ### `tela_palpites.dart` — implementada
 - Abas superiores **MODO CLÁSSICO** / **MODO COPA** em verde (só visíveis quando usuário tem grupos dos dois modos E Fase de Grupos ativa)
-- Sub-abas **Próximos** / **Encerrados** dentro de cada modo
+- Sub-abas **Próximos** / **Encerrados** dentro de cada modo (card segmentado verde-suave com seleção branca e contadores)
+- Filtros de jogos no MODO CLÁSSICO: chips **Por data | Por rodada | Por grupo** — Por data mantém as sub-abas; Por rodada/Por grupo abrem seletor (`BottomSheetOpcoes`) e exibem lista mista (cards de palpite editáveis + cards de resultado) agrupada por data
 - MODO CLÁSSICO: exibe jogos da Fase de Grupos (id 1–72) com palpite de placar
-- Auto-save com debounce: palpite completo é salvo automaticamente 1s após o usuário parar de digitar (ou na hora via Enter/tap no cadeado). Cadeado é indicador de status: fechado verde = salvo, aberto amarelo + borda `Cores.secondaryContainer` = digitado mas não salvo, aberto cinza = vazio. Campos sempre editáveis até o cutoff de 5 min; SnackBar verde confirma cada save
+- Cards no estilo novo: brancos com sombra suave sobre `Cores.background`; a borda do card sinaliza o estado (verde = salvo, amarela = pendente, sem borda = vazio); as caixas de placar têm visual neutro sempre (não mudam de cor ao salvar)
+- Auto-save com debounce: palpite completo é salvo automaticamente 1s após o usuário parar de digitar (ou na hora via Enter/tap no cadeado). Cadeado é indicador de status: fechado verde = salvo, aberto amarelo = digitado mas não salvo, aberto cinza = vazio. Campos sempre editáveis até o cutoff de 5 min; SnackBar verde confirma cada save
 - Rascunhos não salvos preservados na troca de sub-aba/modo: `Map<int, ({String p1, String p2})>` no state do pai (Clássico) e referência de `_local` registrada no pai via `onRascunho` (Copa); `dispose()` do card dispara save fire-and-forget se houver palpite completo pendente
 - MODO COPA: formulário de palpite de classificação dos 12 grupos (dropdowns 1º/2º/3º por grupo); FAB quadrado "SALVAR" no canto inferior direito; bloqueado após início do 1º jogo
 - Detecção automática de fim da Fase de Grupos: quando jogos 73+ têm times reais, abas de modo somem e todos os jogos restantes aparecem em único Próximos/Encerrados
@@ -683,7 +710,7 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 - Banner verde no topo quando `palpitesTravados == true` informando que Palpites Especiais e Modo Copa estão visíveis para todos
 
 ### `tela_ranking.dart` — implementada
-- Ranking filtrado por grupo (sem ranking global)
+- Ranking filtrado por grupo (sem ranking global); sem cabeçalho de título — a tela começa direto no seletor de grupos
 - Pódio top 3 + lista 4º em diante; 1º lugar usa `Cores.ouro` (corBorda e corBase), 2º `Cores.prata`, 3º `Cores.bronze`
 - Dialog com histórico de palpites do usuário via Cloud Function `buscarPalpitesUsuario`: verifica grupo em comum entre solicitante e alvo, retorna palpites clássicos + Copa; suporte a filtro A–L + MATA-MATA, palpites especiais completos (6 campos) e Modo Copa com pontuação por posição; palpites Copa e Especiais ocultos até palpitesTravados=true
 - Usa `calcularPontosComFase` com multiplicador de fase correto
@@ -719,6 +746,12 @@ Punição: −10 pts por jogo não palpitado após o `criadoEm` do usuário. Jog
 - Recalcular Reg. Clássica: chama Cloud Function `recalcularTudo`
 - Recalcular Reg. Copa: chama Cloud Function `recalcularCopa`; executar após inserir todos os placares da fase de grupos
 - Limpar Órfãos: chama Cloud Function `limparUsuariosOrfaos`
+
+### `tela_admin_teste_api.dart` — implementada
+- Simulação visual da futura integração com a football-data.org — **nenhuma requisição é feita e nada é gravado no Firestore**
+- Dados fictícios escritos no formato JSON exato da API v4, consumidos por classes de parse (`_JogoApi.fromJson`) que serão a base da integração real
+- Carrossel "JOGOS DE HOJE" com um card por status: TIMED (chip azul AGENDADO `#1A7AE8`), IN_PLAY (chip vermelho AO VIVO, placar vermelho), PAUSED (chip amarelo INTERVALO), FINISHED normal e FINISHED na prorrogação/pênaltis — placar principal = 90 min (`regularTime`), placar pequeno "(4 x 2)" embaixo e check verde na bandeira de quem avançou
+- Seção de artilharia com top 5 + dialog da lista completa
 
 ### `tela_perfil.dart` — implementada
 - Exibe avatar com botão de troca; edição de nome; alterar senha; excluir conta
@@ -950,4 +983,5 @@ Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regene
 
 ## Próximos passos
 
-1. Publicar nova versão na Play Store quando o conjunto de features estiver estável.
+1. Integrar a API football-data.org (free tier; competição `WC`, temporada 2026 confirmada disponível): Cloud Function agendada busca os jogos do dia e grava no Firestore placares finais (`score.regularTime` — regra dos 90 min), campo `vencedor` (`score.winner` quando empate nos 90), status ao vivo, classificação (`/standings`) e artilharia (`/scorers`). O app nunca chama a API diretamente (chave fica em secret das Functions; repositório é público). A tela Teste de API valida o visual; `kArtilhariaSimulada` será substituída pelos dados reais.
+2. Publicar nova versão na Play Store quando o conjunto de features estiver estável.
