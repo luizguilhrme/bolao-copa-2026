@@ -104,6 +104,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ── logs ──────────────────────────────────────────────────────────────────
+    // Logs de execução das Cloud Functions (sincronizarApi/mapearJogosApi),
+    // exibidos na tela admin Ver Logs. Escrita exclusiva das Functions
+    // (Admin SDK ignora estas regras); apagados por política de TTL (expiraEm).
+    match /logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // ── palpites_copa ─────────────────────────────────────────────────────────
     // Um documento por usuário (ID = UID). Leitura e escrita restritas ao
     // próprio usuário. Leitura por terceiros é feita exclusivamente pela
