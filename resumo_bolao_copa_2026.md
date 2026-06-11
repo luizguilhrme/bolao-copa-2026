@@ -20,7 +20,7 @@ C:\bolao\
   assets/
     dados/
       jogos.json              ← 104 jogos com datas reais da Copa 2026
-      jogos_teste.json        ← 99 jogos para testes: IDs 1–5 com placar1=1/placar2=0
+      jogos_teste.json        ← 104 jogos para testes: IDs 1–5 com placar1=1/placar2=0
                                  (todos Grupo A, datas 2026-05-30/31); IDs 6–72 sem placar
                                  (datas originais do jogos.json); IDs 73–104 idênticos ao
                                  jogos.json. popularJogosNoFirestore apaga todos os docs
@@ -746,6 +746,20 @@ GradeAvataresSecionada(avatarSelecionadoId: _avatarSelecionado, onTap: (id) { ..
 ```
 
 `WidgetAvatar` aceita `corFundo`, `corTexto`, `borderColor` e `borderWidth` para se adaptar ao drawer (fundo verde-claro) e ao perfil (fundo verde-escuro).
+
+---
+
+## UsuarioService — métodos
+
+```dart
+criarPerfil(Usuario)
+buscarPorUid(String uid)
+observarUsuario(String uid)               // Stream reativo
+atualizarNome(String uid, String nome)
+atualizarAvatar(String uid, String avatarId)
+salvarPalpitesEspeciais({uid, campeao,                    // todos os 5 palpites especiais
+  chuteiradeOuro?, boladeOuro?, luvadeOuro?, melhorJovem?})
+```
 
 ---
 
