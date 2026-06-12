@@ -16,6 +16,8 @@ class Cores {
 
   // ── Terciária (azul) ─────────────────────────────────────────────
   static const Color azulTerciario = Color(0xFF004CED);
+  // Chip de status AGENDADO nos cards de jogo (Home, Tabela, Teste de API)
+  static const Color azulAgendado = Color(0xFF1A7AE8);
 
   // ── Superfície / fundo ────────────────────────────────────────────
   // Fundo acinzentado: dá profundidade aos cards brancos com sombra suave

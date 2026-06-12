@@ -74,7 +74,7 @@ Modo Copa — points per team in group classification:
 
 Special bets: Campeão do Mundo +500 | Chuteira de Ouro +300 | Bola de Ouro +300 | Luva de Ouro +300 | Melhor Jogador Jovem +200
 
-**Palpite cutoff:** palpites are locked 5 minutes before game start. Games where `team1` or `team2` is still a placeholder (`ehPlaceholder()` in `biblioteca.dart`) are hidden from the palpites screen entirely until both teams are resolved. Palpites Copa e Especiais são bloqueados por `palpitesTravados=true` em `config/copa2026`.
+**Palpite cutoff:** palpites are locked 5 minutes before game start. Games where `team1` or `team2` is still a placeholder (`ehPlaceholder()` in `biblioteca.dart`) are hidden from the palpites screen entirely until both teams are resolved. Palpites Copa e Especiais são bloqueados por `palpitesTravados=true` em `config/copa2026`. **Visibilidade dos palpites alheios:** palpites clássicos dos outros ficam visíveis a partir do travamento do jogo (cutoff de 5 min, enforced na CF `buscarPalpitesJogo`); pontos só aparecem após o placar final. Palpites Copa/Especiais dos outros ficam visíveis após `palpitesTravados=true`.
 
 ## Code conventions
 

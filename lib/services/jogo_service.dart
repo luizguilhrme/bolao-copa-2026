@@ -56,6 +56,17 @@ class JogoService {
         .toList();
   }
 
+  // Stream de todos os jogos, ordenados por data. Usado pela TelaTabela para
+  // o placar ao vivo e o chip de status atualizarem em tempo real conforme a
+  // sincronizarApi grava statusApi/placarAoVivo no Firestore.
+  Stream<List<Jogo>> observarTodos() {
+    return _colecao.orderBy('dataHora').snapshots().map(
+          (snapshot) => snapshot.docs
+              .map((doc) => Jogo.fromMap(doc.data() as Map<String, dynamic>))
+              .toList(),
+        );
+  }
+
   // Retorna apenas os jogos de uma data específica.
   // Útil para a seção "Jogos de Hoje" da TelaHome.
   Future<List<Jogo>> buscarPorData(DateTime data) async {

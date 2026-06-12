@@ -80,12 +80,14 @@ C:\bolao\
                                  o card de artilharia da Home à aba ARTILHARIA da Tabela
       tela_home.dart          ← hero card verde com ranking/pontuação + carrossel de jogos
                                  do dia no modelo da tela Teste de API com dados reais:
-                                 chip de status (AGENDADO azul / AO VIVO vermelho /
-                                 INTERVALO amarelo / ENCERRADO cinza), fase • horário,
+                                 chip de status compartilhado (ChipStatusJogo de
+                                 biblioteca.dart: AGENDADO azul / AO VIVO vermelho /
+                                 ENCERRADO cinza; PAUSED exibido como AO VIVO — sem chip
+                                 INTERVALO, a API atualiza com atraso), fase • horário,
                                  placar parcial em vermelho (placarAoVivo), placar dos
                                  90 min com decisão "(4 x 2)" embaixo e check verde em
                                  quem avançou (vencedor); fallback por horário acende o
-                                 AO VIVO antes do 1º sync da API
+                                 AO VIVO antes do 1º sync da API (statusEfetivoDe)
                                  + 3 cards de ação em coluna (Palpites, Ranking,
                                  Palpites Especiais) com imagem de fundo personalizada
                                  + card ARTILHARIA (top 5 de api/artilharia; oculto até os
@@ -120,22 +122,31 @@ C:\bolao\
       tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos;
                                  dialog de palpites via CF buscarPalpitesUsuario (valida grupo em comum);
                                  filtro A–L + MATA-MATA, palpites especiais completos (5 campos)
-                                 e suporte a Modo Copa; palpites Copa e Especiais ocultos até palpitesTravados=true;
+                                 e suporte a Modo Copa; palpites clássicos dos outros visíveis
+                                 a partir do travamento do jogo (cutoff de 5 min antes do
+                                 início), pontos só após o resultado; palpites Copa e
+                                 Especiais ocultos até palpitesTravados=true;
                                  desempate 3 (campeão) e 4 (artilheiro) usam comparação case-insensitive
       tela_grupos.dart        ← lista grupos do usuário; criar grupo com seleção de modo CLÁSSICO/COPA;
                                  card exibe chip de modo; entrar com código; sair;
                                  tocar no card abre dialog de detalhes com membros e avatares;
                                  ícone de lápis (só dono) edita o nome do grupo
       tela_tabela.dart        ← 3 abas superiores JOGOS / CLASSIFICAÇÃO / ARTILHARIA (sempre
-                                 visíveis); JOGOS: 104 jogos com filtros Por data (sub-abas
-                                 Próximos/Encerrados) / Por rodada / Por grupo; cards exibem
-                                 placar parcial da API em vermelho quando ao vivo;
+                                 visíveis); JOGOS: 104 jogos via stream do Firestore
+                                 (JogoService.observarTodos — placar ao vivo e chip de
+                                 status atualizam em tempo real) com filtros Por data
+                                 (sub-abas Próximos/Encerrados) / Por rodada / Por grupo;
+                                 cards com ChipStatusJogo no cabeçalho, placar parcial em
+                                 vermelho quando ao vivo (0 x 0 até o 1º sync) e decisão
+                                 "(4 x 2)" sob o placar final;
                                  CLASSIFICAÇÃO: usa o standings oficial de api/classificacao
                                  quando existe, com fallback no cálculo local dos placares;
                                  ARTILHARIA: lista completa de api/artilharia (estado vazio
                                  até os primeiros gols);
-                                 tocar em jogo encerrado abre dialog via CF buscarPalpitesJogo
-                                 (palpites da união dos membros de todos os grupos do usuário)
+                                 tocar em jogo com palpites travados (cutoff de 5 min) abre
+                                 dialog via CF buscarPalpitesJogo (palpites da união dos
+                                 membros de todos os grupos do usuário; badge de pontos só
+                                 após o resultado)
       tela_admin_placares.dart ← inserção de placares com abas Próximos/Encerrados;
                                  em eliminatórias com empate abre dialog "Quem avançou?" para salvar
                                  o campo vencedor (pênaltis/prorrogação)
@@ -158,8 +169,9 @@ C:\bolao\
                                  mensagem multi-linha; somente leitura
       tela_admin_teste_api.dart ← simulação visual da integração football-data.org com dados
                                  fictícios no formato JSON real da API (status TIMED/IN_PLAY/
-                                 PAUSED/FINISHED, prorrogação e pênaltis com check no
-                                 classificado) + seção de artilharia; sem requisição/escrita
+                                 FINISHED, prorrogação e pênaltis com check no classificado;
+                                 sem card PAUSED — intervalo é exibido como AO VIVO)
+                                 + seção de artilharia; sem requisição/escrita
       tela_ajuda.dart         ← FAQ: pontuação Modo Clássico + multiplicadores de fase,
                                  pontuação Modo Copa, palpites especiais
     services/
@@ -168,7 +180,8 @@ C:\bolao\
                                  reautenticarComGoogle (popup na web / seletor nativo no
                                  Android; usado por excluir conta e definir senha de
                                  usuário Google-only), inicializar, sair
-      jogo_service.dart       ← popularJogosNoFirestore({bool teste}), buscarTodos, buscarPorData
+      jogo_service.dart       ← popularJogosNoFirestore({bool teste}), buscarTodos,
+                                 observarTodos (stream — TelaTabela), buscarPorData
       usuario_service.dart    ← criarPerfil, buscarPorUid, observarUsuario,
                                  atualizarNome, atualizarAvatar
       palpite_service.dart    ← salvar, buscarPorJogo, buscarTodosPorUsuario,
@@ -186,13 +199,17 @@ C:\bolao\
                                  chamador usa fallback local)
     utils/
       cores.dart              ← constantes de cores; inclui Cores.error (vermelho),
+                                 Cores.azulAgendado (chip AGENDADO dos cards de jogo),
                                  Cores.pont* (badges de pontuação), Cores.ouro/prata/bronze (pódio);
                                  nunca usar Color(0xFFB8860B) diretamente — usar Cores.ouro
       biblioteca.dart         ← funções utilitárias top-level: flagDe, siglaDe, isoDe,
                                  nomePtDe, formatarData, formatarCriadoEm, mostrarMensagem,
                                  mostrarRegras, ehPlaceholder, calcularPontos, multiplicadorFase,
                                  calcularPontosComFase, corPontuacao, corFundoPontuacao,
-                                 corBordaPontuacao; widget Bandeira
+                                 corBordaPontuacao, statusEfetivoDe (status efetivo do jogo:
+                                 placar/statusApi/fallback por horário); widgets Bandeira e
+                                 ChipStatusJogo (AGENDADO/AO VIVO/ENCERRADO; PAUSED = AO VIVO,
+                                 usado na Home, Tabela e Teste de API)
       dialogos.dart           ← helpers de SnackBar (mostrarSnackBarSucesso/Erro/Info),
                                  DialogAmbiente (seleção Produção/Teste), JogadorData (model),
                                  BottomSheetJogadores (seletor de jogador com cor:) e
@@ -652,7 +669,7 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 ### `tela_home.dart` — implementada
 - **Hero card verde** (oculto quando sem grupos ou pontuação zerada): ticker marquee seamless com a posição do usuário em cada grupo ("1º no CLASSICO TESTE | 2º no COPA TESTE"), usando `SingleChildScrollView` horizontal + conteúdo duplicado (jumpTo invisível). Pontuação Clássico (★) à esquerda e Copa (🏆) à direita. Card aparece somente após algum resultado ser registrado (pontuação > 0)
 - Título da aba Home: `'CRAVA AÍ!'` (antes `'COPA 2026'`, alterado em `menu_principal.dart`)
-- Seção "JOGOS DE HOJE": label compacto + carrossel horizontal com `_CardJogo` (AO VIVO / ENCERRADO). Estado vazio exibido como linha inline (ícone + texto). Sem botão "VER TODOS"
+- Seção "JOGOS DE HOJE": label compacto + carrossel horizontal com `_CardJogo` (AO VIVO / ENCERRADO). Jogos encerrados (`placar1 != null` ou `statusApi == 'FINISHED'`) vão pro fim da fila; entre os não encerrados a ordem é por horário, então o jogo ao vivo fica na frente. Estado vazio exibido como linha inline (ícone + texto). Sem botão "VER TODOS"
 - 3 cards de ação em coluna vertical, mesma largura (full-width menos 32dp): PALPITES, RANKING, PALPITES ESPECIAIS. Cada card usa `_CardAcao` com imagem de fundo (`assets/background-cards/` via `DecorationImage` + `BoxFit.cover`), texto branco em `GoogleFonts.anybody` sem emoji. Navega para índice 1, 2 e `TelaPalpitesEspeciais` respectivamente.
 - Card **ARTILHARIA** (top 5 de `kArtilhariaSimulada`, pódio ouro/prata/bronze) abaixo dos cards de ação; tocar navega para a tela Tabela já na aba ARTILHARIA (callback `onVerArtilharia` + `Sinal _sinalAbrirArtilharia` no `MenuPrincipal`)
 - Callbacks `onNavegar` e `onVerArtilharia` recebidos do `MenuPrincipal`
@@ -660,11 +677,12 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 ### `tela_tabela.dart` — implementada
 - 3 abas superiores **JOGOS / CLASSIFICAÇÃO / ARTILHARIA** (faixa verde com abas brancas, sempre visíveis para todos os usuários; `sinalAbrirArtilharia` permite a Home abrir direto a ARTILHARIA)
 - JOGOS: chips de filtro **Por data / Por rodada / Por grupo** — Por data usa sub-abas Próximos/Encerrados (card segmentado verde-suave com seleção branca e contadores); Por rodada/Por grupo usam campo seletor que abre `BottomSheetOpcoes`
-- Cards de jogo no estilo novo (brancos, sombra suave, raio 16, sem borda); placar em texto puro ("— x —" antes de encerrar, sem indicador de ao vivo); data·local centralizados no topo; bandeiras 36px em círculo e nomes em português (`nomePtDe`)
+- Jogos via **stream** do Firestore (`JogoService.observarTodos`) — placar ao vivo e chip de status atualizam em tempo real conforme a `sincronizarApi` grava; o pull-to-refresh rebusca só artilharia/classificação
+- Cards de jogo no estilo novo (brancos, sombra suave, raio 16, sem borda); cabeçalho com `ChipStatusJogo` (AGENDADO/AO VIVO/ENCERRADO) à esquerda e data·local à direita; placar em texto puro: final (preto, com decisão "(4 x 2)" embaixo), parcial ao vivo em vermelho (0 x 0 até o 1º sync), parcial cinza quando a API encerrou mas o placar final ainda não foi confirmado, ou "— x —"; bandeiras 36px em círculo e nomes em português (`nomePtDe`)
 - CLASSIFICAÇÃO: 12 tabelas de grupo calculadas em tempo real dos placares inseridos (critérios FIFA: pontos > saldo > gols pró), colunas J/SG/PTS, destaque verde no 1º/2º; seletor "Todos os grupos" / Grupo A–L
 - ARTILHARIA: lista completa de `kArtilhariaSimulada` (placeholder do endpoint /scorers da API)
 - `CustomScrollView` com slivers agrupados por seção; RefreshIndicator (pull-to-refresh)
-- Tocar em um jogo encerrado abre dialog com todos os palpites registrados, ordenados por pontuação; cada linha mostra posição, avatar, nome, palpite e badge de pontos
+- Tocar em um jogo com palpites travados (a partir de 5 min antes do início) abre dialog com todos os palpites registrados via CF `buscarPalpitesJogo`; cada linha mostra posição, avatar, nome, palpite e badge de pontos — a badge só aparece depois do placar final (antes, lista ordenada por nome); cabeçalho do dialog mostra placar final, parcial ao vivo ou "VS"
 
 ### `tela_palpites.dart` — implementada
 - **Abas superiores MODO CLÁSSICO / MODO COPA** (verde, só visíveis quando usuário tem grupos dos dois modos E Fase de Grupos ativa); sub-abas **Próximos** / **Encerrados** dentro de cada modo (card segmentado verde-suave com seleção branca e contadores)
@@ -693,8 +711,8 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 - Tocar em qualquer card (pódio ou lista) abre `_DialogPalpitesUsuario`:
   - Cabeçalho verde (Clássico) ou azul (Copa) com avatar + nome
   - Bloco de Palpites Especiais (6 campos: campeão, artilheiro, goleiro, melhor jogador, mais goleadora, menos vazada) — visível somente após `palpitesTravados=true`
-  - Filtro de chips A–L + chip MATA-MATA (aparece quando admin registra pelo menos um jogo 73+)
-  - **Modo Clássico + grupo A–L:** lista os 6 jogos daquele grupo com placar real, palpite e badge de pontos (só jogos com placar registrado)
+  - Filtro de chips A–L + chip MATA-MATA (aparece quando algum jogo 73+ tem resultado ou palpites travados)
+  - **Modo Clássico + grupo A–L:** lista os jogos daquele grupo com palpites já travados (cutoff de 5 min antes do início); placar real e badge de pontos só aparecem depois do resultado — antes disso a linha mostra "×" no lugar do placar e apenas o palpite
   - **Modo Copa + grupo A–L:** 3 posições palpitadas; se classificação real salva, mostra seta/check por posição, badge de pontos e linha de bônus (+100 se grupo perfeito) — visível somente após `palpitesTravados=true`
   - **MATA-MATA (ambos os modos):** palpites de placar exato dos jogos 73–104 com resultado registrado
 
@@ -926,7 +944,7 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 | `recalcularCopa` | HTTPS Callable (admin only) | Calcula pontos Copa fase de grupos (SET em `pontuacaoCopa`); marca `copaGruposCalculado: true` |
 | `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos; tira UIDs órfãos dos arrays `membros` dos grupos (deleta grupos que ficarem vazios; transfere a posse se o dono era órfão) |
 | `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times eliminatórias, classificação, `pontuacaoClassica`, `pontuacaoCopa`, `pontuacaoEliminatorias`, `pontuacaoEspeciais`, `placaresExatos`, `palpitesPerdidos`, flags e os campos da API (`statusApi`, `placarAoVivo1/2`, `placarDecisao1/2` — `apiId` é preservado); palpites preservados |
-| `buscarPalpitesJogo` | HTTPS Callable | Retorna palpites de um jogo encerrado filtrados pelos membros dos grupos do solicitante (união). Usado pelo dialog da `tela_tabela`. |
+| `buscarPalpitesJogo` | HTTPS Callable | Retorna palpites de um jogo com palpites já travados (a partir de 5 min antes do início — `dataHora` − 5 min), filtrados pelos membros dos grupos do solicitante (união). `pontos` vem `null` enquanto não há placar final (lista ordenada por nome); com placar, calculados com multiplicador de fase e ordenados por pontos. Usado pelo dialog da `tela_tabela`. |
 | `buscarPalpitesUsuario` | HTTPS Callable | Retorna palpites clássicos + Copa de um usuário, validando grupo em comum com o solicitante. Usado pelo dialog do `tela_ranking`. |
 | `sincronizarApi` | Schedule (`*/2 * * * *`, secret FOOTBALL_DATA_KEY) | Janela inteligente: só chama a football-data.org quando há jogo ativo (início −20 min a +5h, sem placar final) ou eliminatória com placeholder nas próximas 72h. Grava `statusApi` + `placarAoVivo1/2` durante o jogo; no FINISHED grava `placar1/2` (`score.regularTime` — regra dos 90 min) + `vencedor` (`score.winner` em empate nos 90) + `placarDecisao1/2` (pênaltis ou placar final da prorrogação), disparando o trigger `calcularPontuacao`. Define os confrontos das eliminatórias preenchendo `team1/team2` onde ainda há placeholder (nunca sobrescreve time definido). Compara antes de escrever; não sobrescreve placar inserido pelo admin. Quando algum jogo termina, atualiza `api/classificacao` e `api/artilharia`. Mapeia `apiId` pendentes quando os times ficam definidos. Cada execução que chamou a API grava um doc na coleção `logs` (helper `_logar`) com o que a API retornou por jogo e o que foi gravado; erros geram log com `origem: 'erro'` antes do rethrow. |
 | `mapearJogosApi` | HTTPS Callable (admin only, secret FOOTBALL_DATA_KEY) | De-para permanente jogo↔API: grava `apiId` em cada doc de `jogos` cruzando data/hora UTC + fase + grupo (nomes de time como desempate, com aliases para grafias divergentes). Retorna `{mapeados, pendentes}`. Também grava a primeira foto de `api/classificacao` e `api/artilharia`. Rodar uma vez — e novamente após Popular Jogos. Grava log do resultado na coleção `logs`. |

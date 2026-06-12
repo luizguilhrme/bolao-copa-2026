@@ -3,9 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 
-// Cores e sombra em teste nesta tela (não fazem parte da paleta oficial):
+// Sombra em teste nesta tela (não faz parte da paleta oficial):
 // cards branco puro com sombra suave, sem borda.
-const _azulAgendado = Color(0xFF1A7AE8);
 const _sombraCard = [
   BoxShadow(color: Color(0x14000000), blurRadius: 16, offset: Offset(0, 4)),
 ];
@@ -26,10 +25,12 @@ const _sombraCard = [
 // ─── Dados simulados ──────────────────────────────────────────────────────────
 
 /// Resposta simulada de GET /v4/competitions/WC/matches?dateFrom=...&dateTo=...
-/// Um jogo por status possível: TIMED, IN_PLAY, PAUSED, FINISHED (90 min),
+/// Um jogo por status possível: TIMED, IN_PLAY, FINISHED (90 min),
 /// FINISHED na prorrogação (duration EXTRA_TIME) e FINISHED nos pênaltis
 /// (duration PENALTY_SHOOTOUT). regularTime = placar dos 90 min, que é o
 /// que vale para o bolão; fullTime inclui gols de prorrogação.
+/// PAUSED não tem card próprio: a API atualiza com atraso, então o intervalo
+/// é exibido como AO VIVO (sem chip INTERVALO).
 const List<Map<String, dynamic>> _jogosSimulados = [
   {
     'id': 537327,
@@ -57,20 +58,6 @@ const List<Map<String, dynamic>> _jogosSimulados = [
       'winner': null,
       'duration': 'REGULAR',
       'fullTime': {'home': 1, 'away': 0},
-    },
-  },
-  {
-    'id': 537357,
-    'utcDate': '2026-06-14T20:00:00Z',
-    'status': 'PAUSED',
-    'stage': 'GROUP_STAGE',
-    'group': 'GROUP_F',
-    'homeTeam': {'name': 'Netherlands'},
-    'awayTeam': {'name': 'Japan'},
-    'score': {
-      'winner': null,
-      'duration': 'REGULAR',
-      'fullTime': {'home': 2, 'away': 1},
     },
   },
   {
@@ -446,62 +433,6 @@ class _LabelSecao extends StatelessWidget {
   }
 }
 
-// ─── Chip de status ───────────────────────────────────────────────────────────
-
-class _ChipStatus extends StatelessWidget {
-  const _ChipStatus({required this.status});
-
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, corFundo, corTexto, comPonto) = switch (status) {
-      'IN_PLAY' => ('AO VIVO', Cores.error, Colors.white, true),
-      'PAUSED' => (
-        'INTERVALO',
-        Cores.secondaryContainer,
-        Cores.onSecondaryContainer,
-        true,
-      ),
-      'FINISHED' => ('ENCERRADO', Cores.onSurfaceVariant, Colors.white, false),
-      _ => ('AGENDADO', _azulAgendado, Colors.white, false),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: corFundo,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (comPonto) ...[
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: corTexto,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 5),
-          ],
-          Text(
-            label,
-            style: GoogleFonts.anybody(
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-              color: corTexto,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ─── Card de jogo ─────────────────────────────────────────────────────────────
 
 class _CardJogoApi extends StatelessWidget {
@@ -530,7 +461,7 @@ class _CardJogoApi extends StatelessWidget {
           // Linha superior: chip de status à esquerda, fase e horário à direita
           Row(
             children: [
-              _ChipStatus(status: jogo.status),
+              ChipStatusJogo(status: jogo.status),
               const SizedBox(width: 8),
               Expanded(
                 child: Align(

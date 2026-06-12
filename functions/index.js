@@ -824,10 +824,12 @@ exports.limparDadosTeste = onCall(
 );
 
 // ─── buscarPalpitesJogo ───────────────────────────────────────────────────────
-// Retorna os palpites de um jogo já encerrado, filtrados pelos membros dos
-// grupos do solicitante. Substitui a leitura direta da coleção palpites na
-// TelaTabela, permitindo restringir a regra de leitura do Firestore ao
-// próprio dono do documento.
+// Retorna os palpites de um jogo com palpites já travados (a partir de 5 min
+// antes do início — quando ninguém mais pode alterar), filtrados pelos
+// membros dos grupos do solicitante. Pontos só são calculados depois do
+// placar final; antes disso vêm null. Substitui a leitura direta da coleção
+// palpites na TelaTabela, permitindo restringir a regra de leitura do
+// Firestore ao próprio dono do documento.
 
 exports.buscarPalpitesJogo = onCall(
   { region: 'southamerica-east1' },
@@ -840,13 +842,16 @@ exports.buscarPalpitesJogo = onCall(
     const db = getFirestore();
     const callerUid = request.auth.uid;
 
-    // Valida que o jogo existe e está encerrado
+    // Valida que o jogo existe e que os palpites já travaram (cutoff de
+    // 5 min antes do início — mesma regra da tela de palpites)
     const jogoDoc = await db.collection('jogos').doc(String(jogoId)).get();
     if (!jogoDoc.exists) throw new HttpsError('not-found', 'Jogo não encontrado.');
     const jogo = jogoDoc.data();
-    if (jogo.placar1 == null || jogo.placar2 == null) {
-      throw new HttpsError('failed-precondition', 'Jogo ainda não encerrado.');
+    const cutoffMs = jogo.dataHora.toDate().getTime() - 5 * 60 * 1000;
+    if (Date.now() < cutoffMs) {
+      throw new HttpsError('failed-precondition', 'Palpites ainda não travados.');
     }
+    const temPlacar = jogo.placar1 != null && jogo.placar2 != null;
 
     // Coleta UIDs de todos os membros dos grupos do solicitante (inclui ele mesmo)
     const gruposSnap = await db.collection('grupos')
@@ -889,14 +894,19 @@ exports.buscarPalpitesJogo = onCall(
           avatar: u.avatar || null,
           palpite1: p.palpite1,
           palpite2: p.palpite2,
-          pontos: calcularPontosComFase(
-            p.palpite1, p.palpite2,
-            jogo.placar1, jogo.placar2,
-            jogo.round || 'Fase de Grupos'
-          ),
+          // Pontos só depois do placar final; antes, palpites visíveis sem pontos
+          pontos: temPlacar
+            ? calcularPontosComFase(
+                p.palpite1, p.palpite2,
+                jogo.placar1, jogo.placar2,
+                jogo.round || 'Fase de Grupos'
+              )
+            : null,
         };
       })
-      .sort((a, b) => b.pontos - a.pontos);
+      .sort((a, b) => temPlacar
+        ? b.pontos - a.pontos
+        : a.nome.localeCompare(b.nome));
 
     return { itens };
   }
