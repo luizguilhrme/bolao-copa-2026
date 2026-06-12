@@ -66,14 +66,16 @@ class _TelaTabelaState extends State<TelaTabela> {
   // Filtro da aba CLASSIFICAÇÃO: null = todos os grupos
   String? _grupoClassificacao;
 
-  late Future<List<Jogo>> _futureJogos;
+  // Stream: placar ao vivo e chip de status atualizam em tempo real
+  // conforme a sincronizarApi grava no Firestore.
+  late Stream<List<Jogo>> _streamJogos;
   late Future<List<Artilheiro>> _futureArtilharia;
   late Future<Map<String, List<ClassificacaoApiTime>>?> _futureClassificacaoApi;
 
   @override
   void initState() {
     super.initState();
-    _futureJogos = JogoService().buscarTodos();
+    _streamJogos = JogoService().observarTodos();
     _futureArtilharia = ApiDadosService().buscarArtilharia();
     _futureClassificacaoApi = ApiDadosService().buscarClassificacao();
     widget.sinalAbrirArtilharia?.addListener(_abrirArtilharia);
@@ -90,21 +92,23 @@ class _TelaTabelaState extends State<TelaTabela> {
   }
 
   Future<void> _recarregar() async {
+    // Os jogos chegam por stream (sempre atuais); o refresh manual rebusca
+    // só a artilharia e a classificação oficial.
     setState(() {
-      _futureJogos = JogoService().buscarTodos();
       _futureArtilharia = ApiDadosService().buscarArtilharia();
       _futureClassificacaoApi = ApiDadosService().buscarClassificacao();
     });
-    await _futureJogos;
+    await _futureArtilharia;
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Jogo>>(
-      future: _futureJogos,
+    return StreamBuilder<List<Jogo>>(
+      stream: _streamJogos,
       builder: (context, snapshot) {
         // ── Carregando ──────────────────────────────────────────────────────
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
 
@@ -567,10 +571,19 @@ class _CardJogo extends StatelessWidget {
 
   bool get _encerrado => jogo.placar1 != null;
 
+  // Status efetivo (biblioteca.dart): alimenta o chip e o placar ao vivo.
+  String get _status => statusEfetivoDe(jogo);
+
+  // Palpites travados (5 min antes do início): a partir daí os palpites dos
+  // outros podem ser vistos, mesmo antes do resultado.
+  bool get _travado => DateTime.now().isAfter(
+        jogo.dataHora.toLocal().subtract(const Duration(minutes: 5)),
+      );
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: _encerrado ? () => _mostrarPalpitesJogo(context, jogo) : null,
+      onTap: _travado ? () => _mostrarPalpitesJogo(context, jogo) : null,
       child: Container(
         decoration: const BoxDecoration(
           color: Colors.white,
@@ -590,22 +603,33 @@ class _CardJogo extends StatelessWidget {
     );
   }
 
-  // ── Cabeçalho: data e local (ou data de encerramento), centralizados ──────
+  // ── Cabeçalho: chip de status à esquerda, data e local à direita ──────────
 
   Widget _buildCabecalho() {
-    return Center(
-      child: Text(
-        _encerrado
-            ? 'Encerrado · ${formatarData(jogo.dataHora)}'
-            // Horário já convertido para o fuso local do dispositivo
-            : '${formatarData(jogo.dataHora)} · ${jogo.ground}',
-        style: GoogleFonts.hankenGrotesk(
-          fontSize: 11,
-          color: Cores.onSurfaceVariant,
+    return Row(
+      children: [
+        ChipStatusJogo(status: _status),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                _status == 'FINISHED'
+                    ? formatarData(jogo.dataHora)
+                    // Horário já convertido para o fuso local do dispositivo
+                    : '${formatarData(jogo.dataHora)} · ${jogo.ground}',
+                style: GoogleFonts.hankenGrotesk(
+                  fontSize: 11,
+                  color: Cores.onSurfaceVariant,
+                ),
+                maxLines: 1,
+              ),
+            ),
+          ),
         ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+      ],
     );
   }
 
@@ -629,26 +653,53 @@ class _CardJogo extends StatelessWidget {
   }
 
   // Placar em texto puro — sem caixas, que pareciam campos editáveis como
-  // os da tela de palpites. Três estados: encerrado (placar definitivo),
-  // ao vivo pela API (placar parcial em vermelho) ou aguardando (— x —).
+  // os da tela de palpites. Estados: encerrado com placar definitivo;
+  // encerrado pela API aguardando confirmação do placar final (parcial em
+  // cinza); ao vivo (parcial em vermelho, 0 x 0 até o 1º sync); ou
+  // aguardando (— x —). Inclui a decisão (pênaltis/prorrogação) embaixo.
   Widget _buildPlacar() {
     if (_encerrado) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${jogo.placar1}  x  ${jogo.placar2}',
+            style: GoogleFonts.anybody(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: Cores.onSurface,
+            ),
+          ),
+          if (jogo.placarDecisao != null)
+            Text(
+              jogo.placarDecisao!,
+              style: GoogleFonts.hankenGrotesk(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Cores.onSurfaceVariant,
+              ),
+            ),
+        ],
+      );
+    }
+    if (_status == 'IN_PLAY') {
       return Text(
-        '${jogo.placar1}  x  ${jogo.placar2}',
+        '${jogo.placarAoVivo1 ?? 0}  x  ${jogo.placarAoVivo2 ?? 0}',
         style: GoogleFonts.anybody(
           fontSize: 22,
           fontWeight: FontWeight.w900,
-          color: Cores.onSurface,
+          color: Cores.error,
         ),
       );
     }
-    if (jogo.aoVivoApi && jogo.placarAoVivo1 != null) {
+    // FINISHED na API mas placar final ainda não confirmado: último parcial
+    if (_status == 'FINISHED' && jogo.placarAoVivo1 != null) {
       return Text(
         '${jogo.placarAoVivo1}  x  ${jogo.placarAoVivo2}',
         style: GoogleFonts.anybody(
           fontSize: 22,
           fontWeight: FontWeight.w900,
-          color: Cores.error,
+          color: Cores.onSurfaceVariant,
         ),
       );
     }
@@ -1168,11 +1219,14 @@ class _ItemPalpiteJogo {
   const _ItemPalpiteJogo({
     required this.usuario,
     required this.palpite,
-    required this.pontos,
+    this.pontos,
   });
   final Usuario usuario;
   final Palpite palpite;
-  final int pontos;
+
+  /// Null enquanto o jogo não tem placar final (palpites visíveis a partir
+  /// do travamento, pontos só depois do resultado).
+  final int? pontos;
 }
 
 class _DialogPalpitesJogo extends StatefulWidget {
@@ -1218,7 +1272,7 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
           palpite1: (m['palpite1'] as num).toInt(),
           palpite2: (m['palpite2'] as num).toInt(),
         ),
-        pontos: (m['pontos'] as num).toInt(),
+        pontos: (m['pontos'] as num?)?.toInt(),
       );
     }).toList();
   }
@@ -1272,11 +1326,16 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
                         ],
                       ),
                     ),
-                    // Placar central
+                    // Placar central: final, parcial ao vivo ou VS antes
+                    // do resultado existir
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       child: Text(
-                        '${j.placar1}×${j.placar2}',
+                        j.placar1 != null
+                            ? '${j.placar1}×${j.placar2}'
+                            : j.placarAoVivo1 != null
+                                ? '${j.placarAoVivo1}×${j.placarAoVivo2}'
+                                : 'VS',
                         style: GoogleFonts.anybody(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
@@ -1440,10 +1499,12 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
               color: Cores.onSurfaceVariant,
             ),
           ),
-          const SizedBox(width: 8),
 
-          // Badge de pontos
-          _BadgePontos(item.pontos),
+          // Badge de pontos — só depois do placar final
+          if (item.pontos != null) ...[
+            const SizedBox(width: 8),
+            _BadgePontos(item.pontos!),
+          ],
         ],
       ),
     );

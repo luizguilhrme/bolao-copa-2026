@@ -1,6 +1,7 @@
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/jogo.dart';
 import 'cores.dart';
 
 // =============================================================================
@@ -958,4 +959,73 @@ String siglaDe(String team) {
   };
   return siglas[team] ??
       team.substring(0, team.length.clamp(0, 3)).toUpperCase();
+}
+
+// -----------------------------------------------------------------------------
+// Status efetivo do jogo + chip de status (Home, Tabela, Teste de API)
+// -----------------------------------------------------------------------------
+
+/// Status efetivo de um jogo combinando placar gravado, statusApi e horário:
+/// 'FINISHED' quando o placar final está gravado ou a API encerrou;
+/// 'IN_PLAY' quando a API marca ao vivo (PAUSED conta como ao vivo — o sync
+/// chega com atraso, então não exibimos "intervalo") ou, como fallback,
+/// quando o horário de início já passou e o 1º sync da API ainda não chegou;
+/// 'TIMED' (agendado) nos demais casos.
+String statusEfetivoDe(Jogo jogo) {
+  if (jogo.placar1 != null || jogo.statusApi == 'FINISHED') return 'FINISHED';
+  if (jogo.aoVivoApi) return 'IN_PLAY';
+  if (jogo.dataHora.toLocal().isBefore(DateTime.now())) return 'IN_PLAY';
+  return 'TIMED';
+}
+
+/// Chip de status do jogo: AGENDADO (azul), AO VIVO (vermelho, com ponto)
+/// ou ENCERRADO (cinza). Aceita statusApi cru ou o retorno de
+/// [statusEfetivoDe] — PAUSED é exibido como AO VIVO.
+class ChipStatusJogo extends StatelessWidget {
+  const ChipStatusJogo({super.key, required this.status});
+
+  /// 'TIMED' | 'IN_PLAY' | 'PAUSED' | 'FINISHED'
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, corFundo, comPonto) = switch (status) {
+      'IN_PLAY' || 'PAUSED' => ('AO VIVO', Cores.error, true),
+      'FINISHED' => ('ENCERRADO', Cores.onSurfaceVariant, false),
+      _ => ('AGENDADO', Cores.azulAgendado, false),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: corFundo,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (comPonto) ...[
+            Container(
+              width: 6,
+              height: 6,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 5),
+          ],
+          Text(
+            label,
+            style: GoogleFonts.anybody(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

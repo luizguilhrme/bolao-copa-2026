@@ -195,8 +195,9 @@ class TelaAjuda extends StatelessWidget {
             resposta:
                 'Sim — você pode ver os palpites de qualquer participante que compartilhe '
                 'pelo menos um grupo com você. No Ranking, toque no card de um jogador. '
-                'Na Tabela de Jogos, toque em um jogo encerrado para ver todos os '
-                'palpites, ordenados por pontuação.',
+                'Na Tabela de Jogos, toque em um jogo para ver todos os palpites — eles '
+                'ficam visíveis assim que os palpites travam (5 minutos antes do início) '
+                'e a pontuação aparece após o resultado.',
           ),
           const _FaqItem(
             pergunta: 'Como funcionam os grupos?',

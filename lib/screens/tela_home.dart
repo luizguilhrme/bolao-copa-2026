@@ -311,8 +311,8 @@ class _TelaHomeState extends State<TelaHome> {
   Widget _buildSecaoJogos(List<Jogo> jogos) {
     final ordenados =
         jogos.toList()..sort((a, b) {
-          final aEnc = a.placar1 != null ? 1 : 0;
-          final bEnc = b.placar1 != null ? 1 : 0;
+          final aEnc = a.placar1 != null || a.statusApi == 'FINISHED' ? 1 : 0;
+          final bEnc = b.placar1 != null || b.statusApi == 'FINISHED' ? 1 : 0;
           if (aEnc != bEnc) return aEnc - bEnc;
           return a.dataHora.compareTo(b.dataHora);
         });
@@ -624,7 +624,6 @@ class _TickerRankingState extends State<_TickerRanking> {
 // placarDecisao): chip de status, fase • horário, placar dos 90 minutos com
 // a decisão embaixo e check verde em quem avançou.
 
-const _azulAgendado = Color(0xFF1A7AE8);
 const _sombraCard = [
   BoxShadow(color: Color(0x14000000), blurRadius: 16, offset: Offset(0, 4)),
 ];
@@ -634,17 +633,11 @@ class _CardJogo extends StatelessWidget {
 
   final Jogo jogo;
 
-  // Status efetivo: FINISHED encerra (placar gravado ou API); fallback por
-  // horário acende o AO VIVO enquanto o primeiro sync da API não chega.
-  String get _status {
-    if (jogo.placar1 != null || jogo.statusApi == 'FINISHED') return 'FINISHED';
-    if (jogo.statusApi == 'PAUSED') return 'PAUSED';
-    if (jogo.statusApi == 'IN_PLAY') return 'IN_PLAY';
-    if (jogo.dataHora.toLocal().isBefore(DateTime.now())) return 'IN_PLAY';
-    return 'TIMED';
-  }
+  // Status efetivo (biblioteca.dart): FINISHED encerra (placar gravado ou
+  // API); fallback por horário acende o AO VIVO até o 1º sync da API chegar.
+  String get _status => statusEfetivoDe(jogo);
 
-  bool get _aoVivo => _status == 'IN_PLAY' || _status == 'PAUSED';
+  bool get _aoVivo => _status == 'IN_PLAY';
 
   @override
   Widget build(BuildContext context) {
@@ -665,7 +658,7 @@ class _CardJogo extends StatelessWidget {
           // Linha superior: chip de status à esquerda, fase e horário à direita
           Row(
             children: [
-              _ChipStatus(status: _status),
+              ChipStatusJogo(status: _status),
               const SizedBox(width: 8),
               Expanded(
                 child: Align(
@@ -826,62 +819,6 @@ class _LadoTime extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ─── Chip de status (AGENDADO / AO VIVO / INTERVALO / ENCERRADO) ─────────────
-
-class _ChipStatus extends StatelessWidget {
-  const _ChipStatus({required this.status});
-
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, corFundo, corTexto, comPonto) = switch (status) {
-      'IN_PLAY' => ('AO VIVO', Cores.error, Colors.white, true),
-      'PAUSED' => (
-        'INTERVALO',
-        Cores.secondaryContainer,
-        Cores.onSecondaryContainer,
-        true,
-      ),
-      'FINISHED' => ('ENCERRADO', Cores.onSurfaceVariant, Colors.white, false),
-      _ => ('AGENDADO', _azulAgendado, Colors.white, false),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: corFundo,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (comPonto) ...[
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: corTexto,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 5),
-          ],
-          Text(
-            label,
-            style: GoogleFonts.anybody(
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-              color: corTexto,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

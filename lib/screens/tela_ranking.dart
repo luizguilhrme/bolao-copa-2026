@@ -783,19 +783,31 @@ class _DadosDialog {
   final String? luvadeOuroReal;
   final String? melhorJovemReal;
 
-  bool get temMataMata => jogos.any((j) => j.id > 72 && j.placar1 != null);
+  // O filtro MATA-MATA aparece quando algum jogo eliminatório já travou os
+  // palpites (5 min antes do início) ou tem resultado.
+  bool get temMataMata => jogos.any(
+        (j) =>
+            j.id > 72 &&
+            (j.placar1 != null ||
+                DateTime.now().isAfter(
+                  j.dataHora.toLocal().subtract(const Duration(minutes: 5)),
+                )),
+      );
 }
 
 class _ItemPalpiteClassico {
   const _ItemPalpiteClassico({
     required this.jogo,
     this.palpite,
-    required this.pontos,
+    this.pontos,
     this.semPalpite = false,
   });
   final Jogo jogo;
   final Palpite? palpite;
-  final int pontos;
+
+  /// Null enquanto o jogo não tem placar final (palpites visíveis a partir
+  /// do travamento, pontos só depois do resultado).
+  final int? pontos;
   final bool semPalpite;
 }
 
@@ -1248,9 +1260,15 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
     final palpitesMap = {for (final p in dados.palpites) p.jogoId: p};
     final criadoEm = widget.usuario.criadoEm;
 
+    // Palpites visíveis a partir do travamento (5 min antes do início),
+    // mesmo sem resultado — ninguém mais pode alterar o palpite.
+    final agora = DateTime.now();
     final jogosRelevantes =
         dados.jogos.where((j) {
-            if (j.placar1 == null) return false;
+            final travado = agora.isAfter(
+              j.dataHora.toLocal().subtract(const Duration(minutes: 5)),
+            );
+            if (!travado) return false;
             return mataMata
                 ? j.id > 72
                 : j.id <= 72 && j.group == 'Grupo $_filtroGrupo';
@@ -1262,7 +1280,7 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
-            'Nenhum resultado ainda.',
+            'Nenhum palpite liberado ainda.',
             style: GoogleFonts.hankenGrotesk(color: Cores.onSurfaceVariant),
           ),
         ),
@@ -1272,23 +1290,28 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
     final itens =
         jogosRelevantes.map((j) {
           final p = palpitesMap[j.id];
+          final temPlacar = j.placar1 != null;
           if (p != null) {
             return _ItemPalpiteClassico(
               jogo: j,
               palpite: p,
-              pontos: calcularPontosComFase(
-                p.palpite1,
-                p.palpite2,
-                j.placar1!,
-                j.placar2!,
-                j.round,
-              ),
+              // Pontos só depois do resultado
+              pontos:
+                  temPlacar
+                      ? calcularPontosComFase(
+                        p.palpite1,
+                        p.palpite2,
+                        j.placar1!,
+                        j.placar2!,
+                        j.round,
+                      )
+                      : null,
             );
           }
           final deveMultar = j.dataHora.isAfter(criadoEm);
           return _ItemPalpiteClassico(
             jogo: j,
-            pontos: deveMultar ? -10 : 0,
+            pontos: temPlacar ? (deveMultar ? -10 : 0) : null,
             semPalpite: true,
           );
         }).toList();
@@ -1319,11 +1342,17 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 5),
             child: Text(
-              '${item.jogo.placar1}–${item.jogo.placar2}',
+              // Sem placar final ainda (jogo travado/em andamento): ×
+              item.jogo.placar1 != null
+                  ? '${item.jogo.placar1}–${item.jogo.placar2}'
+                  : '×',
               style: GoogleFonts.anybody(
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
-                color: Cores.verdePrincipal,
+                color:
+                    item.jogo.placar1 != null
+                        ? Cores.verdePrincipal
+                        : Cores.outline,
               ),
             ),
           ),
@@ -1356,8 +1385,11 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
                 color: Cores.onSurfaceVariant,
               ),
             ),
-          const SizedBox(width: 8),
-          _BadgePontos(item.pontos),
+          // Badge de pontos — só depois do placar final
+          if (item.pontos != null) ...[
+            const SizedBox(width: 8),
+            _BadgePontos(item.pontos!),
+          ],
         ],
       ),
     );
