@@ -55,4 +55,19 @@ class Cores {
   static const Color ouro = Color(0xFFC69E3B);
   static const Color prata = Color(0xFFC0C0C0);
   static const Color bronze = Color(0xFFCD7F32);
+
+  // ── Ranking (cards de medalha do top 3 + textos) ──────────────────
+  // Fundos suaves e bordas dos cards de medalha
+  static const Color ouroSuave = Color(0xFFFFF7DE);
+  static const Color ouroBorda = Color(0xFFE7C969);
+  // Texto/contorno dourado escuro (label LÍDER, contorno da coroa)
+  static const Color ouroEscuro = Color(0xFF9C7A1F);
+  // Prata mais fria/escura que Cores.prata — selo e anel do 2º lugar
+  static const Color prataMedalha = Color(0xFF9AA3AE);
+  static const Color prataSuave = Color(0xFFF1F3F6);
+  static const Color prataBorda = Color(0xFFCDD3DA);
+  static const Color bronzeSuave = Color(0xFFFAEBDD);
+  static const Color bronzeBorda = Color(0xFFE2B488);
+  // Texto terciário neutro (posições e linha de stats do ranking)
+  static const Color cinzaTexto = Color(0xFF7A8794);
 }

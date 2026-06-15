@@ -64,3 +64,6 @@ AGENTS.md
 # Manual do usuário (documento local, não sobe ao GitHub)
 manual_usuario.docx
 gerar_manual.js
+
+# Material de design (assets locais, não versionado)
+claude-design/

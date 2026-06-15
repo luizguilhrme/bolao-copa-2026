@@ -110,7 +110,18 @@ C:\bolao\
                                  banner verde no topo quando palpitesTravados=true;
                                  filtros de jogos no Clássico: chips Por data (sub-abas) /
                                  Por rodada / Por grupo (seletor via BottomSheetOpcoes);
-                                 rodada/grupo exibem lista mista (cards editáveis + resultados)
+                                 rodada/grupo exibem lista mista (cards editáveis + resultados);
+                                 botão de compartilhar no rodapé do card de resultado
+                                 (só encerrado com palpite) abre tela_compartilhar.dart
+      tela_compartilhar.dart  ← tela "Compartilhar" do story do palpite: preview da
+                                 arte Figurinha (9:16) + card "O que mostrar" com
+                                 toggles Perfil (avatar + nome, sub-toggle @usuário =
+                                 parte local do e-mail), Posição no ranking (chips dos
+                                 bolões com a posição calculada via ordenarRanking) e
+                                 Pontuação — escolhas lembradas na sessão (campos static);
+                                 captura RepaintBoundary → PNG 1080×1920 → share_plus
+                                 (share sheet / Web Share API) com fallback de download
+                                 no Web; botão "Baixar imagem" extra só no Web
       tela_palpites_especiais.dart ← 5 palpites especiais com AppBar dourada (Cores.ouro);
                                  Campeão do Mundo: seletor de time (fora do card FIFA);
                                  card dourado "PREMIAÇÕES OFICIAIS FIFA" (Cores.ouro 8% alpha)
@@ -119,7 +130,11 @@ C:\bolao\
                                  (cor: Cores.ouro); Luva de Ouro pré-filtra GOL; cada prêmio
                                  tem botão "?" que abre AlertDialog explicativo;
                                  bloqueio por palpitesTravados=true
-      tela_ranking.dart       ← ranking filtrado por grupo com pódio e lista; chips para alternar grupos;
+      tela_ranking.dart       ← ranking filtrado por grupo: top 3 em cards de medalha
+                                 (coroa + LÍDER no 1º), lista "Demais colocados" e barra
+                                 azul fixa "Você" no rodapé; setas de movimento, cravadas
+                                 e pontos da rodada via CF estatisticasRanking;
+                                 chips para alternar grupos;
                                  dialog de palpites via CF buscarPalpitesUsuario (valida grupo em comum);
                                  filtro A–L + MATA-MATA, palpites especiais completos (5 campos)
                                  e suporte a Modo Copa; palpites clássicos dos outros visíveis
@@ -200,13 +215,20 @@ C:\bolao\
     utils/
       cores.dart              ← constantes de cores; inclui Cores.error (vermelho),
                                  Cores.azulAgendado (chip AGENDADO dos cards de jogo),
-                                 Cores.pont* (badges de pontuação), Cores.ouro/prata/bronze (pódio);
+                                 Cores.pont* (badges de pontuação), Cores.ouro/prata/bronze (pódio),
+                                 bloco do ranking (ouroSuave/ouroBorda/ouroEscuro,
+                                 prataMedalha/prataSuave/prataBorda, bronzeSuave/bronzeBorda,
+                                 cinzaTexto — cards de medalha e textos terciários);
                                  nunca usar Color(0xFFB8860B) diretamente — usar Cores.ouro
       biblioteca.dart         ← funções utilitárias top-level: flagDe, siglaDe, isoDe,
                                  nomePtDe, formatarData, formatarCriadoEm, mostrarMensagem,
                                  mostrarRegras, ehPlaceholder, calcularPontos, multiplicadorFase,
                                  calcularPontosComFase, corPontuacao, corFundoPontuacao,
-                                 corBordaPontuacao, statusEfetivoDe (status efetivo do jogo:
+                                 corBordaPontuacao, ordenarRanking (critério oficial do
+                                 ranking — pontos + 4 desempates; usada pela TelaRanking
+                                 e pela posição na arte de compartilhamento),
+                                 formatarPontos (milhar pt-BR: 1240 → "1.240"),
+                                 statusEfetivoDe (status efetivo do jogo:
                                  placar/statusApi/fallback por horário); widgets Bandeira e
                                  ChipStatusJogo (AGENDADO/AO VIVO/ENCERRADO; PAUSED = AO VIVO,
                                  usado na Home, Tabela e Teste de API)
@@ -215,6 +237,20 @@ C:\bolao\
                                  BottomSheetJogadores (seletor de jogador com cor:) e
                                  mostrarSeletorOpcoes/BottomSheetOpcoes (seletor de opção
                                  única sem busca — filtros Por rodada/Por grupo)
+      arte_compartilhar.dart  ← widget ArteFigurinha: arte do story (1080×1920) em
+                                 estilo card colecionável — fundo verde degradê com
+                                 pontilhado (CustomPainter) e brilho neon, cabeçalho
+                                 BOLÃO/CRAVA AÍ! + rótulo da rodada/fase, moldura
+                                 dourada com card escuro rotacionado −2°, bandeiras
+                                 com borda na cor da seleção (_coresTimes), resultado,
+                                 MEU PALPITE + rótulo do acerto (PLACAR EXATO etc.),
+                                 selo "CRAVOU!" verde-neon (pontosBase >= 100) e blocos
+                                 opcionais via OpcoesArte/RankingArte (perfil, @usuário,
+                                 pontos, posição no bolão); design definido no protótipo
+                                 post-instagram/ (stories.jsx)
+      baixar_imagem_stub.dart ← stub do fallback de download (lança UnsupportedError)
+      baixar_imagem_web.dart  ← download do PNG no Web via Blob + âncora (package:web);
+                                 escolhido por conditional import na tela_compartilhar
       artilharia.dart         ← model Artilheiro (com fromMap do doc api/artilharia)
                                  + widget LinhaArtilheiro (pódio ouro/prata/bronze);
                                  usado na Home (top 5) e na aba ARTILHARIA da Tabela;
@@ -392,6 +428,8 @@ google_sign_in: ^6.2.1
 country_flags: ^4.1.2
 google_fonts: ^6.2.1
 intl: ^0.19.0
+share_plus: ^10.1.2   # compartilhar a arte de resultado (share sheet / Web Share API)
+web: ^1.1.0           # fallback de download da arte no Web (Blob + âncora)
 ```
 
 ### Serviços ativados no Firebase Console
@@ -699,15 +737,32 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 - **Penalidade −10 pts:** jogo encerrado sem palpite cujo `dataHora > criadoEm` → card vermelho + badge "−10 pts"
 - **Navegação por Enter** entre campos de gol; `_AbaProximos` gerencia `FocusNode` por card
 - Pontos exibidos com multiplicador de fase (×1.0 a ×2.0); cores dos badges baseadas em `pontosBase`
+- **Compartilhar no story:** botão circular verde (ícone share) no rodapé do card de resultado — só em jogo encerrado com palpite registrado e pontos calculados. Abre a `TelaCompartilhar` (rota normal, não diálogo)
 
-### `tela_ranking.dart` — implementada
+### `tela_compartilhar.dart` — implementada
+- Tela "Compartilhar" do story do palpite, aberta pelo card de resultado da tela de Palpites. Design definido no protótipo `post-instagram/` (Claude design): `share-screen.jsx` (a tela) e `stories.jsx` (a arte)
+- **Preview** da arte `ArteFigurinha` (arte_compartilhar.dart) em escala reduzida 9:16 com `FittedBox`; o `RepaintBoundary` envolve o tamanho lógico 1080×1920, então a captura sai sempre em resolução cheia
+- **Card "O que mostrar"** (tudo opcional, escolhas lembradas durante a sessão em campos `static`):
+  - **Perfil** — avatar + nome na arte; quando ligado, exibe o sub-toggle **Mostrar @usuário** (`@` + parte local do e-mail). Por decisão de produto, o sub-toggle não traz texto explicando que o @ vem do e-mail — só a opção de mostrar/ocultar
+  - **Posição no ranking** — chips com cada bolão do usuário ("3º Galera do Trabalho"); a posição é calculada com `ordenarRanking` (biblioteca.dart), o MESMO critério da TelaRanking (pontos do modo do grupo + 4 desempates, com `campeaoReal`/`chuteiradeOuroReal` de config/copa2026). Linha oculta se o usuário não tem bolões
+  - **Pontuação** — badge de pontos na arte (verde-neon quando cravou)
+- **COMPARTILHAR NO STORY** captura o `RepaintBoundary` como PNG e entrega ao `share_plus`: share sheet nativo no Android (Instagram Stories/WhatsApp/salvar), Web Share API com arquivo no Web/PWA (Safari iOS, Chrome Android) e, sem suporte a arquivos (ex: navegador desktop), download direto via conditional import (`baixar_imagem_web.dart`, package:web). Botão extra **"Baixar imagem"** só no Web (no Android o share sheet já oferece salvar)
+- Carrega em paralelo: perfil do usuário, grupos, todos os usuários (p/ ranking) e config; em caso de erro a arte continua funcionando — os toggles de perfil/ranking ficam ocultos
+
+### `tela_ranking.dart` — implementada (redesign 2026-06, protótipo `claude-design/ranking`)
 - Ranking filtrado por grupo — não existe ranking global; sem cabeçalho de título — a tela começa direto no seletor de grupos
 - `StatefulWidget` com dois `StreamBuilder` aninhados: grupos do usuário (outer) + todos os usuários ordenados por pontuação (inner); filtragem client-side por `grupo.membros`
+- Ordenação (pontos + desempates) delega para `ordenarRanking` em `biblioteca.dart` — compartilhada com a posição exibida na arte de compartilhamento (TelaCompartilhar)
 - Usuário sem grupos → mensagem orientando a criar/entrar via Meus Grupos
 - Usuário com 1 grupo → ranking desse grupo, sem seletor
 - Usuário com 2+ grupos → chips no topo para alternar; seleção explícita em `_grupoSelecionado`; se grupo selecionado sair da lista, volta automaticamente para o primeiro
-- Pódio visual para top 3: avatar real (foto do jogador via `WidgetAvatar`); fundo do degrau `Cores.ouro` (1º) / `Cores.prata` (2º) / `Cores.bronze` (3º)
-- Lista para 4º em diante com avatar real; usuário logado destacado com borda verde
+- **Layout (redesign):**
+  - Linha de contexto alinhada à direita: "Dia N · Rª Rodada · X jogadores" (N = dias distintos com jogo encerrado = `rodada.numero`; "Rª Rodada"/nome da fase = `rodada.label`, a rodada REAL — matchday da fase de grupos ou nome da fase nas eliminatórias; `label` é opcional e some quando a CF não consegue determinar; sem stats mostra só o nº de jogadores)
+  - **Top 3 em cards de medalha** empilhados (largura cheia): fundo/borda `Cores.ouroSuave/ouroBorda`, `prataSuave/prataBorda`, `bronzeSuave/bronzeBorda`; selo circular com o número; avatar com anel na cor da medalha (`Cores.ouro`/`prataMedalha`/`bronze`); 1º lugar com coroa desenhada via `CustomPaint` (`_Coroa`) sobre o avatar + label "LÍDER" (`Cores.ouroEscuro`) e sombra dourada
+  - Seção **"DEMAIS COLOCADOS"** (rótulo + linha) e lista do 4º em diante: cards brancos no padrão do app (sombra suave, raio 16)
+  - Cada linha mostra: posição, avatar, nome + **seta de movimento** (▲ verde / ▼ vermelha / traço, posições desde a última rodada), linha de stats "N cravadas · X rodada" (alvo `_Alvo` via CustomPaint; cravadas = `placaresExatos`; X = pontos na última rodada) e pontuação total formatada com `formatarPontos()` (milhar pt-BR)
+  - **Barra fixa "Você"** no rodapé (azul `Cores.azulTerciario`, sempre visível sobre um fade do fundo): posição, avatar, movimento, "N cravadas · +X nesta rodada", total + "PTS"; também abre o dialog de palpites
+  - Movimento e pontos da rodada vêm da CF `estatisticasRanking` (carregada por grupo ao trocar seletor/aba via `Sinal`); se a chamada falhar, a tela degrada graciosamente — setas e "rodada" somem, cravadas e totais continuam
 - Tocar em qualquer card (pódio ou lista) abre `_DialogPalpitesUsuario`:
   - Cabeçalho verde (Clássico) ou azul (Copa) com avatar + nome
   - Bloco de Palpites Especiais (6 campos: campeão, artilheiro, goleiro, melhor jogador, mais goleadora, menos vazada) — visível somente após `palpitesTravados=true`
@@ -946,6 +1001,7 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 | `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times eliminatórias, classificação, `pontuacaoClassica`, `pontuacaoCopa`, `pontuacaoEliminatorias`, `pontuacaoEspeciais`, `placaresExatos`, `palpitesPerdidos`, flags e os campos da API (`statusApi`, `placarAoVivo1/2`, `placarDecisao1/2` — `apiId` é preservado); palpites preservados |
 | `buscarPalpitesJogo` | HTTPS Callable | Retorna palpites de um jogo com palpites já travados (a partir de 5 min antes do início — `dataHora` − 5 min), filtrados pelos membros dos grupos do solicitante (união). `pontos` vem `null` enquanto não há placar final (lista ordenada por nome); com placar, calculados com multiplicador de fase e ordenados por pontos. Usado pelo dialog da `tela_tabela`. |
 | `buscarPalpitesUsuario` | HTTPS Callable | Retorna palpites clássicos + Copa de um usuário, validando grupo em comum com o solicitante. Usado pelo dialog do `tela_ranking`. |
+| `estatisticasRanking` | HTTPS Callable | Read-only (não escreve nada). Recebe `grupoId` (solicitante precisa ser membro) e retorna, por membro, `pontosRodada` e `movimento` + metadados da rodada (`{data, numero, jogos}`). "Rodada" = último dia (campo `date`) com jogo encerrado; `numero` = dias distintos com jogo encerrado. Pontos da rodada: modo clássico soma todos os jogos do dia (com multiplicador de fase e −10 de ausência); modo Copa soma só eliminatórias + pontos Copa de grupos A–L cuja classificação fechou nesse dia (usa `classificacao_real` + helper `calcularPontosCopaGrupo`, hoisted para o topo do arquivo e compartilhado com `recalcularCopa`). Movimento = posição antes da rodada (totais − pontos da rodada, com os mesmos 4 desempates de `ordenarRanking`) vs posição atual. Usado pela `tela_ranking` (setas ▲▼ e "X rodada"). |
 | `sincronizarApi` | Schedule (`*/2 * * * *`, secret FOOTBALL_DATA_KEY) | Janela inteligente: só chama a football-data.org quando há jogo ativo (início −20 min a +5h, sem placar final) ou eliminatória com placeholder nas próximas 72h. Grava `statusApi` + `placarAoVivo1/2` durante o jogo; no FINISHED grava `placar1/2` (`score.regularTime` — regra dos 90 min) + `vencedor` (`score.winner` em empate nos 90) + `placarDecisao1/2` (pênaltis ou placar final da prorrogação), disparando o trigger `calcularPontuacao`. Define os confrontos das eliminatórias preenchendo `team1/team2` onde ainda há placeholder (nunca sobrescreve time definido). Compara antes de escrever; não sobrescreve placar inserido pelo admin. Quando algum jogo termina, atualiza `api/classificacao` e `api/artilharia`. Mapeia `apiId` pendentes quando os times ficam definidos. Cada execução que chamou a API grava um doc na coleção `logs` (helper `_logar`) com o que a API retornou por jogo e o que foi gravado; erros geram log com `origem: 'erro'` antes do rethrow. |
 | `mapearJogosApi` | HTTPS Callable (admin only, secret FOOTBALL_DATA_KEY) | De-para permanente jogo↔API: grava `apiId` em cada doc de `jogos` cruzando data/hora UTC + fase + grupo (nomes de time como desempate, com aliases para grafias divergentes). Retorna `{mapeados, pendentes}`. Também grava a primeira foto de `api/classificacao` e `api/artilharia`. Rodar uma vez — e novamente após Popular Jogos. Grava log do resultado na coleção `logs`. |
 
