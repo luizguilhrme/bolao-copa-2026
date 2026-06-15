@@ -107,7 +107,6 @@ C:\bolao\
                                  MODO COPA: form de palpite de classificação dos 12 grupos;
                                  bloqueio do Modo Copa exclusivamente por palpitesTravados=true;
                                  card de resultado exibe "Avançou: [time]" quando jogo.vencedor != null;
-                                 banner verde no topo quando palpitesTravados=true;
                                  filtros de jogos no Clássico: chips Por data (sub-abas) /
                                  Por rodada / Por grupo (seletor via BottomSheetOpcoes);
                                  rodada/grupo exibem lista mista (cards editáveis + resultados);
