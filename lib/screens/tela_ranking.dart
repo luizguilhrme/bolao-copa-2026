@@ -36,6 +36,13 @@ class _TelaRankingState extends State<TelaRanking> {
   String? _campeaoReal;
   String? _chuteiradeOuroReal;
 
+  // Estatísticas da última rodada (CF estatisticasRanking) do grupo efetivo.
+  // Null enquanto carrega ou se a função falhar — a tela degrada graciosamente
+  // (sem setas de movimento nem pontos da rodada).
+  String? _statsGrupoId;
+  Map<String, _StatRodada>? _stats;
+  _InfoRodada? _rodada;
+
   // Não usa orderBy no Firestore porque documentos sem o campo seriam excluídos.
   // A ordenação completa (com desempates) é feita no build após filtrar por grupo.
   final Stream<List<Usuario>> _streamUsuarios = FirebaseFirestore.instance
@@ -43,17 +50,34 @@ class _TelaRankingState extends State<TelaRanking> {
       .snapshots()
       .map((snap) => snap.docs.map((d) => Usuario.fromMap(d.data())).toList());
 
+  // Stream estável (campo, não recriado no build): se fosse criado dentro do
+  // build, cada setState faria o StreamBuilder reassinar e passar por
+  // ConnectionState.waiting, piscando a tela e resetando o scroll dos chips.
+  late final Stream<List<Grupo>> _streamGrupos =
+      GrupoService().buscarGruposDoUsuario(_uidAtual);
+
+  // Controlador próprio do carrossel de grupos: preserva a posição de scroll
+  // dos chips entre rebuilds (troca de grupo, chegada das estatísticas etc.).
+  final _scrollSeletor = ScrollController();
+
   @override
   void initState() {
     super.initState();
     _carregarConfig();
-    widget.sinalAtualizar?.addListener(_carregarConfig);
+    widget.sinalAtualizar?.addListener(_aoSinal);
   }
 
   @override
   void dispose() {
-    widget.sinalAtualizar?.removeListener(_carregarConfig);
+    widget.sinalAtualizar?.removeListener(_aoSinal);
+    _scrollSeletor.dispose();
     super.dispose();
+  }
+
+  void _aoSinal() {
+    _carregarConfig();
+    final grupoId = _statsGrupoId;
+    if (grupoId != null) _carregarStats(grupoId);
   }
 
   Future<void> _carregarConfig() async {
@@ -71,56 +95,60 @@ class _TelaRankingState extends State<TelaRanking> {
     });
   }
 
-  List<Usuario> _ordenar(List<Usuario> lista, bool modoCopa) {
-    final campNorm = _campeaoReal?.toLowerCase().trim();
-    final chutNorm = _chuteiradeOuroReal?.toLowerCase().trim();
-    lista.sort((a, b) {
-      final ptA = modoCopa ? a.pontuacaoCopaTotal : a.pontuacaoClassicaTotal;
-      final ptB = modoCopa ? b.pontuacaoCopaTotal : b.pontuacaoClassicaTotal;
-      if (ptB != ptA) return ptB.compareTo(ptA);
-      // 1. Mais placares exatos
-      if (b.placaresExatos != a.placaresExatos) {
-        return b.placaresExatos.compareTo(a.placaresExatos);
+  Future<void> _carregarStats(String grupoId) async {
+    try {
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'southamerica-east1',
+      ).httpsCallable('estatisticasRanking');
+      final result = await callable.call({'grupoId': grupoId});
+      // Descarta resposta se o usuário já trocou de grupo enquanto carregava
+      if (!mounted || _statsGrupoId != grupoId) return;
+
+      final data = Map<String, dynamic>.from(result.data as Map);
+      final rawStats = Map<String, dynamic>.from(data['stats'] as Map? ?? {});
+      final stats = <String, _StatRodada>{};
+      rawStats.forEach((uid, raw) {
+        final m = Map<String, dynamic>.from(raw as Map);
+        stats[uid] = _StatRodada(
+          pontosRodada: (m['pontosRodada'] as num).toInt(),
+          movimento: (m['movimento'] as num).toInt(),
+        );
+      });
+      _InfoRodada? rodada;
+      if (data['rodada'] != null) {
+        final r = Map<String, dynamic>.from(data['rodada'] as Map);
+        rodada = _InfoRodada(
+          numero: (r['numero'] as num).toInt(),
+          label: r['label'] as String?,
+        );
       }
-      // 2. Menos palpites perdidos
-      if (a.palpitesPerdidos != b.palpitesPerdidos) {
-        return a.palpitesPerdidos.compareTo(b.palpitesPerdidos);
-      }
-      // 3. Acertou o campeão (case-insensitive, sem espaços extras)
-      final aCamp =
-          (campNorm != null &&
-                  a.palpiteCampeao?.toLowerCase().trim() == campNorm)
-              ? 1
-              : 0;
-      final bCamp =
-          (campNorm != null &&
-                  b.palpiteCampeao?.toLowerCase().trim() == campNorm)
-              ? 1
-              : 0;
-      if (bCamp != aCamp) return bCamp.compareTo(aCamp);
-      // 4. Acertou a Chuteira de Ouro (case-insensitive, sem espaços extras)
-      final aChut =
-          (chutNorm != null &&
-                  a.palpiteChuteiradeOuro?.toLowerCase().trim() == chutNorm)
-              ? 1
-              : 0;
-      final bChut =
-          (chutNorm != null &&
-                  b.palpiteChuteiradeOuro?.toLowerCase().trim() == chutNorm)
-              ? 1
-              : 0;
-      return bChut.compareTo(aChut);
-    });
-    return lista;
+      setState(() {
+        _stats = stats;
+        _rodada = rodada;
+      });
+    } catch (_) {
+      // Sem estatísticas a tela funciona normalmente, só sem os extras
+    }
   }
+
+  // Critério oficial (pontos + desempates) extraído para biblioteca.dart —
+  // compartilhado com a posição exibida na arte de compartilhamento.
+  List<Usuario> _ordenar(List<Usuario> lista, bool modoCopa) => ordenarRanking(
+    lista,
+    modoCopa: modoCopa,
+    campeaoReal: _campeaoReal,
+    chuteiradeOuroReal: _chuteiradeOuroReal,
+  );
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Grupo>>(
-      stream: GrupoService().buscarGruposDoUsuario(_uidAtual),
+      stream: _streamGrupos,
       builder: (context, snapGrupos) {
-        // Ainda carregando grupos — espera antes de mostrar qualquer coisa
-        if (snapGrupos.connectionState == ConnectionState.waiting) {
+        // Spinner só na primeira carga — com dados anteriores em mãos,
+        // rebuilds não devem piscar a tela
+        if (snapGrupos.connectionState == ConnectionState.waiting &&
+            !snapGrupos.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
 
@@ -174,6 +202,17 @@ class _TelaRankingState extends State<TelaRanking> {
 
         final bool modoCopa = grupoEfetivo.regra == 'copa';
 
+        // Carrega as estatísticas da rodada quando o grupo efetivo muda
+        // (primeira carga ou troca pelo seletor). Não zera _rodada — o número
+        // da rodada é da competição (igual para todos os grupos), então mantê-lo
+        // evita o texto "Rodada N" piscar a cada troca; só _stats (movimento e
+        // pontos por jogador) é específico do grupo.
+        if (_statsGrupoId != grupoEfetivo.id) {
+          _statsGrupoId = grupoEfetivo.id;
+          _stats = null;
+          Future.microtask(() => _carregarStats(grupoEfetivo.id));
+        }
+
         return StreamBuilder<List<Usuario>>(
           stream: _streamUsuarios,
           builder: (context, snapshot) {
@@ -209,6 +248,7 @@ class _TelaRankingState extends State<TelaRanking> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                       child: _SeletorGrupo(
+                        controller: _scrollSeletor,
                         grupos: grupos,
                         selecionado: grupoEfetivo,
                         onSelecionar:
@@ -242,63 +282,129 @@ class _TelaRankingState extends State<TelaRanking> {
               );
             }
 
-            return CustomScrollView(
-              slivers: [
-                // Seletor de grupo (só aparece com 2 ou mais grupos)
-                if (grupos.length > 1)
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                    sliver: SliverToBoxAdapter(
-                      child: _SeletorGrupo(
-                        grupos: grupos,
-                        selecionado: grupoEfetivo,
-                        onSelecionar:
-                            (g) => setState(() => _grupoSelecionado = g),
-                      ),
-                    ),
-                  ),
+            // Posição do usuário logado para a barra fixa do rodapé
+            final indiceEu = usuarios.indexWhere((u) => u.uid == _uidAtual);
+            final usuarioEu = indiceEu >= 0 ? usuarios[indiceEu] : null;
 
-                // Pódio (só aparece com 3 ou mais participantes)
-                if (usuarios.length >= 3)
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 32, 16, 8),
-                    sliver: SliverToBoxAdapter(
-                      child: _Podio(
-                        primeiro: usuarios[0],
-                        segundo: usuarios[1],
-                        terceiro: usuarios[2],
-                        uidAtual: _uidAtual,
-                        modoCopa: modoCopa,
-                      ),
-                    ),
-                  ),
+            // Top 3 em cards de medalha; do 4º em diante na lista
+            final medalhas = usuarios.take(3).toList();
+            final demais =
+                usuarios.length > 3 ? usuarios.sublist(3) : <Usuario>[];
 
-                // Lista (4º em diante, ou todos se < 3)
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, i) {
-                        final indiceReal = usuarios.length >= 3 ? i + 3 : i;
-                        if (indiceReal >= usuarios.length) return null;
-                        final usuario = usuarios[indiceReal];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _ItemRanking(
-                            posicao: indiceReal + 1,
-                            usuario: usuario,
-                            euSou: usuario.uid == _uidAtual,
-                            modoCopa: modoCopa,
+            return Stack(
+              children: [
+                CustomScrollView(
+                  slivers: [
+                    // Seletor de grupo (só aparece com 2 ou mais grupos)
+                    if (grupos.length > 1)
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                        sliver: SliverToBoxAdapter(
+                          child: _SeletorGrupo(
+                            controller: _scrollSeletor,
+                            grupos: grupos,
+                            selecionado: grupoEfetivo,
+                            onSelecionar:
+                                (g) => setState(() => _grupoSelecionado = g),
                           ),
-                        );
-                      },
-                      childCount:
-                          usuarios.length >= 3
-                              ? usuarios.length - 3
-                              : usuarios.length,
+                        ),
+                      ),
+
+                    // Contexto: dia da competição + rodada real + nº de jogadores
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
+                      sliver: SliverToBoxAdapter(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            _rodada != null
+                                ? 'Dia ${_rodada!.numero}'
+                                    '${_rodada!.label != null ? ' · ${_rodada!.label}' : ''}'
+                                    ' · ${usuarios.length} jogadores'
+                                : '${usuarios.length} jogadores',
+                            style: GoogleFonts.hankenGrotesk(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: Cores.cinzaTexto,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Top 3 — cards de medalha
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, i) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _CardMedalha(
+                              posicao: i + 1,
+                              usuario: medalhas[i],
+                              stat: _stats?[medalhas[i].uid],
+                              modoCopa: modoCopa,
+                            ),
+                          ),
+                          childCount: medalhas.length,
+                        ),
+                      ),
+                    ),
+
+                    // Demais colocados (4º em diante)
+                    if (demais.isNotEmpty) ...[
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(18, 8, 18, 10),
+                        sliver: SliverToBoxAdapter(
+                          child: _RotuloSecao('DEMAIS COLOCADOS'),
+                        ),
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, i) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _ItemRanking(
+                                posicao: i + 4,
+                                usuario: demais[i],
+                                stat: _stats?[demais[i].uid],
+                                modoCopa: modoCopa,
+                              ),
+                            ),
+                            childCount: demais.length,
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    // Espaço para a barra fixa "Você" não cobrir o fim da lista
+                    SliverToBoxAdapter(
+                      child: SizedBox(height: usuarioEu != null ? 104 : 24),
+                    ),
+                  ],
+                ),
+
+                // Fade do fundo + barra fixa do usuário logado
+                if (usuarioEu != null) ...[
+                  const Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: _FadeRodape(),
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: _BarraVoce(
+                      posicao: indiceEu + 1,
+                      usuario: usuarioEu,
+                      stat: _stats?[usuarioEu.uid],
+                      modoCopa: modoCopa,
                     ),
                   ),
-                ),
+                ],
               ],
             );
           },
@@ -312,11 +418,13 @@ class _TelaRankingState extends State<TelaRanking> {
 
 class _SeletorGrupo extends StatelessWidget {
   const _SeletorGrupo({
+    required this.controller,
     required this.grupos,
     required this.selecionado,
     required this.onSelecionar,
   });
 
+  final ScrollController controller;
   final List<Grupo> grupos;
   final Grupo selecionado;
   final ValueChanged<Grupo> onSelecionar;
@@ -324,6 +432,7 @@ class _SeletorGrupo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
+      controller: controller,
       scrollDirection: Axis.horizontal,
       child: Row(
         children:
@@ -384,258 +493,270 @@ class _Chip extends StatelessWidget {
   }
 }
 
-// ─── Pódio (top 3) ────────────────────────────────────────────────────────────
+// ─── Modelos das estatísticas da rodada (CF estatisticasRanking) ─────────────
 
-class _Podio extends StatelessWidget {
-  const _Podio({
-    required this.primeiro,
-    required this.segundo,
-    required this.terceiro,
-    required this.uidAtual,
+class _StatRodada {
+  const _StatRodada({required this.pontosRodada, required this.movimento});
+
+  /// Pontos ganhos na última rodada (último dia com jogo encerrado).
+  final int pontosRodada;
+
+  /// Posições ganhas (+) ou perdidas (−) em relação a antes da rodada.
+  final int movimento;
+}
+
+class _InfoRodada {
+  const _InfoRodada({required this.numero, this.label});
+
+  /// Dia da competição = dias distintos com jogo encerrado até agora.
+  final int numero;
+
+  /// Rodada real (ex.: "1ª Rodada" na fase de grupos, ou o nome da fase nas
+  /// eliminatórias). Pode ser null se a CF não conseguiu determinar.
+  final String? label;
+}
+
+// ─── Card de medalha (top 3) ──────────────────────────────────────────────────
+
+class _CardMedalha extends StatelessWidget {
+  const _CardMedalha({
+    required this.posicao,
+    required this.usuario,
+    required this.stat,
     required this.modoCopa,
   });
 
-  final Usuario primeiro;
-  final Usuario segundo;
-  final Usuario terceiro;
-  final String uidAtual;
+  final int posicao;
+  final Usuario usuario;
+  final _StatRodada? stat;
   final bool modoCopa;
+
+  Color get _cor => switch (posicao) {
+    1 => Cores.ouro,
+    2 => Cores.prataMedalha,
+    _ => Cores.bronze,
+  };
+
+  Color get _fundo => switch (posicao) {
+    1 => Cores.ouroSuave,
+    2 => Cores.prataSuave,
+    _ => Cores.bronzeSuave,
+  };
+
+  Color get _borda => switch (posicao) {
+    1 => Cores.ouroBorda,
+    2 => Cores.prataBorda,
+    _ => Cores.bronzeBorda,
+  };
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        // 2º lugar — esquerda
-        Expanded(
-          child: _ColunaPodio(
-            usuario: segundo,
-            posicao: 2,
-            alturaBase: 130,
-            corBorda: Cores.prata,
-            corBase: Cores.surfaceContainerHigh,
-            euSou: segundo.uid == uidAtual,
-            modoCopa: modoCopa,
-          ),
+    final lider = posicao == 1;
+    final pontos =
+        modoCopa ? usuario.pontuacaoCopaTotal : usuario.pontuacaoClassicaTotal;
+
+    return GestureDetector(
+      onTap: () => _mostrarPalpitesUsuario(context, usuario, modoCopa),
+      child: Container(
+        decoration: BoxDecoration(
+          color: _fundo,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _borda, width: 1.5),
+          boxShadow: [
+            if (lider)
+              BoxShadow(
+                color: Cores.ouro.withValues(alpha: 0.2),
+                blurRadius: 22,
+                offset: const Offset(0, 8),
+              )
+            else
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+          ],
         ),
-        const SizedBox(width: 8),
-        // 1º lugar — centro (maior)
-        Expanded(
-          child: _ColunaPodio(
-            usuario: primeiro,
-            posicao: 1,
-            alturaBase: 170,
-            corBorda: Cores.ouro,
-            corBase: Cores.ouro,
-            euSou: primeiro.uid == uidAtual,
-            modoCopa: modoCopa,
-          ),
+        padding: EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: lider ? 14 : 11,
         ),
-        const SizedBox(width: 8),
-        // 3º lugar — direita
-        Expanded(
-          child: _ColunaPodio(
-            usuario: terceiro,
-            posicao: 3,
-            alturaBase: 110,
-            corBorda: Cores.bronze,
-            corBase: Cores.surfaceContainer,
-            euSou: terceiro.uid == uidAtual,
-            modoCopa: modoCopa,
-          ),
+        child: Row(
+          children: [
+            // Selo com o número da posição
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _cor,
+                boxShadow: [
+                  BoxShadow(
+                    color: _cor.withValues(alpha: 0.4),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Text(
+                  '$posicao',
+                  style: GoogleFonts.anybody(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 11),
+
+            // Avatar (coroa sobre a foto do líder)
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                WidgetAvatar(
+                  avatarId: usuario.avatar,
+                  nome: usuario.nome,
+                  tamanho: lider ? 50 : 44,
+                  corFundo: _fundo,
+                  corTexto: _cor,
+                  borderColor: _cor,
+                  borderWidth: lider ? 3 : 2,
+                ),
+                if (lider)
+                  const Positioned(
+                    top: -14,
+                    left: 0,
+                    right: 0,
+                    child: Center(child: _Coroa(largura: 28)),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 11),
+
+            // Nome + movimento + linha de stats
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (lider)
+                    Text(
+                      'LÍDER',
+                      style: GoogleFonts.anybody(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2,
+                        color: Cores.ouroEscuro,
+                      ),
+                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          usuario.nome,
+                          style: GoogleFonts.anybody(
+                            fontSize: lider ? 17 : 16,
+                            fontWeight: FontWeight.w800,
+                            color: Cores.onSurface,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      _Movimento(stat?.movimento),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  _LinhaStats(
+                    cravadas: usuario.placaresExatos,
+                    pontosRodada: stat?.pontosRodada,
+                    cor: Cores.onSurfaceVariant,
+                    corIcone: _cor,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // Pontuação total
+            Text(
+              formatarPontos(pontos),
+              style: GoogleFonts.anybody(
+                fontSize: lider ? 23 : 21,
+                fontWeight: FontWeight.w800,
+                color: Cores.onSurface,
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
 
-class _ColunaPodio extends StatelessWidget {
-  const _ColunaPodio({
-    required this.usuario,
-    required this.posicao,
-    required this.alturaBase,
-    required this.corBorda,
-    required this.corBase,
-    required this.euSou,
-    required this.modoCopa,
-  });
+// Coroa dourada sobre o avatar do líder
+class _Coroa extends StatelessWidget {
+  const _Coroa({required this.largura});
 
-  final Usuario usuario;
-  final int posicao;
-  final double alturaBase;
-  final Color corBorda;
-  final Color corBase;
-  final bool euSou;
-  final bool modoCopa;
-
-  double get _tamanhoAvatar => posicao == 1 ? 72.0 : 56.0;
-  double get _fontePontos => posicao == 1 ? 22.0 : 17.0;
+  final double largura;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _mostrarPalpitesUsuario(context, usuario, modoCopa),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Avatar com badge de posição
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: corBorda.withValues(alpha: 0.4),
-                      blurRadius: posicao == 1 ? 16 : 8,
-                    ),
-                  ],
-                ),
-                child: WidgetAvatar(
-                  avatarId: usuario.avatar,
-                  nome: usuario.nome,
-                  tamanho: _tamanhoAvatar,
-                  corFundo: corBorda.withValues(alpha: 0.2),
-                  borderColor: corBorda,
-                  borderWidth: posicao == 1 ? 4 : 3,
-                ),
-              ),
-
-              // Badge: troféu para 1º, número para 2º e 3º
-              Positioned(
-                bottom: -4,
-                right: -4,
-                child:
-                    posicao == 1
-                        ? Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Cores.secondaryContainer,
-                            border: Border.all(color: Cores.surface, width: 2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.15),
-                                blurRadius: 4,
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.military_tech_rounded,
-                            size: 16,
-                            color: Cores.onSecondaryContainer,
-                          ),
-                        )
-                        : Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: corBorda,
-                            border: Border.all(color: Cores.surface, width: 2),
-                          ),
-                          child: Center(
-                            child: Text(
-                              '$posicao',
-                              style: GoogleFonts.anybody(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          // Base do pódio
-          Container(
-            width: double.infinity,
-            height: alturaBase,
-            decoration: BoxDecoration(
-              color: corBorda,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
-              ),
-              border: Border.all(
-                color: euSou ? Cores.verdePrincipal : Colors.transparent,
-                width: 2,
-              ),
-            ),
-            padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  usuario.nome,
-                  style: GoogleFonts.anybody(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color:
-                        posicao == 1
-                            ? Cores.onSecondaryContainer
-                            : Cores.onSurface,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${modoCopa ? usuario.pontuacaoCopaTotal : usuario.pontuacaoClassicaTotal}',
-                  style: GoogleFonts.anybody(
-                    fontSize: _fontePontos,
-                    fontWeight: FontWeight.w800,
-                    color:
-                        posicao == 1
-                            ? Cores.onSecondaryContainer
-                            : Cores.onSurface,
-                  ),
-                ),
-                Text(
-                  'pts',
-                  style: GoogleFonts.hankenGrotesk(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color:
-                        posicao == 1
-                            ? Cores.onSecondaryContainer
-                            : Cores.onSurfaceVariant,
-                  ),
-                ),
-                if (euSou) ...[
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Cores.verdePrincipal,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      'VOCÊ',
-                      style: GoogleFonts.hankenGrotesk(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ), // Column
-    ); // GestureDetector
+    return CustomPaint(
+      size: Size(largura, largura * 0.78),
+      painter: _CoroaPainter(),
+    );
   }
+}
+
+class _CoroaPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Desenhada num viewBox 26×20 e escalada
+    final sx = size.width / 26;
+    final sy = size.height / 20;
+
+    final corpo =
+        Path()
+          ..moveTo(2 * sx, 17.5 * sy)
+          ..lineTo(24 * sx, 17.5 * sy)
+          ..lineTo(22.4 * sx, 5.5 * sy)
+          ..lineTo(17.4 * sx, 10.1 * sy)
+          ..lineTo(13 * sx, 2 * sy)
+          ..lineTo(8.6 * sx, 10.1 * sy)
+          ..lineTo(3.6 * sx, 5.5 * sy)
+          ..close();
+
+    canvas.drawPath(corpo, Paint()..color = Cores.ouro);
+    canvas.drawPath(
+      corpo,
+      Paint()
+        ..color = Cores.ouroEscuro
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = sx
+        ..strokeJoin = StrokeJoin.round,
+    );
+
+    final centroJoia = Offset(13 * sx, 2 * sy);
+    canvas.drawCircle(
+      centroJoia,
+      1.7 * sx,
+      Paint()..color = Cores.secondaryContainer,
+    );
+    canvas.drawCircle(
+      centroJoia,
+      1.7 * sx,
+      Paint()
+        ..color = Cores.ouroEscuro
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8 * sx,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ─── Item da lista (4º em diante) ─────────────────────────────────────────────
@@ -644,102 +765,442 @@ class _ItemRanking extends StatelessWidget {
   const _ItemRanking({
     required this.posicao,
     required this.usuario,
-    required this.euSou,
+    required this.stat,
     required this.modoCopa,
   });
 
   final int posicao;
   final Usuario usuario;
-  final bool euSou;
+  final _StatRodada? stat;
   final bool modoCopa;
 
   @override
   Widget build(BuildContext context) {
+    final pontos =
+        modoCopa ? usuario.pontuacaoCopaTotal : usuario.pontuacaoClassicaTotal;
+
     return GestureDetector(
       onTap: () => _mostrarPalpitesUsuario(context, usuario, modoCopa),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
+      child: Container(
         decoration: BoxDecoration(
-          color: euSou ? Cores.primaryContainer : Cores.surface,
-          border: Border.all(
-            color: euSou ? Cores.verdePrincipal : Cores.outlineVariant,
-            width: euSou ? 2 : 1,
-          ),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
+          boxShadow: const [
             BoxShadow(
-              color:
-                  euSou
-                      ? Cores.verdePrincipal.withValues(alpha: 0.15)
-                      : Colors.black.withValues(alpha: 0.05),
-              blurRadius: euSou ? 12 : 4,
-              offset: const Offset(0, 2),
+              color: Color(0x14000000),
+              blurRadius: 16,
+              offset: Offset(0, 4),
             ),
           ],
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         child: Row(
           children: [
-            // Posição
             SizedBox(
-              width: 32,
+              width: 22,
               child: Text(
                 '$posicao',
                 style: GoogleFonts.anybody(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: euSou ? Cores.verdePrincipal : Cores.onSurfaceVariant,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Cores.cinzaTexto,
                 ),
                 textAlign: TextAlign.center,
               ),
             ),
-            const SizedBox(width: 12),
-
-            // Avatar
+            const SizedBox(width: 11),
             WidgetAvatar(
               avatarId: usuario.avatar,
               nome: usuario.nome,
-              tamanho: euSou ? 48 : 44,
-              corFundo:
-                  euSou ? Cores.verdePrincipal : Cores.surfaceContainerHigh,
-              corTexto: euSou ? Colors.white : Cores.onSurface,
-              borderColor: euSou ? Cores.verdePrincipal : Cores.outlineVariant,
+              tamanho: 42,
+              corFundo: Cores.surfaceContainerHigh,
+              corTexto: Cores.onSurface,
             ),
-            const SizedBox(width: 12),
-
-            // Nome
+            const SizedBox(width: 11),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    euSou ? '${usuario.nome} (você)' : usuario.nome,
-                    style: GoogleFonts.hankenGrotesk(
-                      fontSize: 15,
-                      fontWeight: euSou ? FontWeight.w800 : FontWeight.w600,
-                      color: euSou ? Cores.verdePrincipal : Cores.onSurface,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          usuario.nome,
+                          style: GoogleFonts.anybody(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Cores.onSurface,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      _Movimento(stat?.movimento),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  _LinhaStats(
+                    cravadas: usuario.placaresExatos,
+                    pontosRodada: stat?.pontosRodada,
+                    cor: Cores.cinzaTexto,
                   ),
                 ],
               ),
             ),
-
-            // Pontuação
+            const SizedBox(width: 8),
             Text(
-              '${modoCopa ? usuario.pontuacaoCopaTotal : usuario.pontuacaoClassicaTotal} pts',
+              formatarPontos(pontos),
               style: GoogleFonts.anybody(
-                fontSize: euSou ? 18 : 16,
-                fontWeight: FontWeight.w700,
-                color: euSou ? Cores.verdePrincipal : Cores.onSurface,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Cores.onSurface,
               ),
             ),
           ],
         ),
-      ), // AnimatedContainer
-    ); // GestureDetector
+      ),
+    );
   }
+}
+
+// ─── Barra fixa "Você" (azul, rodapé) ─────────────────────────────────────────
+
+class _BarraVoce extends StatelessWidget {
+  const _BarraVoce({
+    required this.posicao,
+    required this.usuario,
+    required this.stat,
+    required this.modoCopa,
+  });
+
+  final int posicao;
+  final Usuario usuario;
+  final _StatRodada? stat;
+  final bool modoCopa;
+
+  @override
+  Widget build(BuildContext context) {
+    final pontos =
+        modoCopa ? usuario.pontuacaoCopaTotal : usuario.pontuacaoClassicaTotal;
+    final s = stat;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: GestureDetector(
+        onTap: () => _mostrarPalpitesUsuario(context, usuario, modoCopa),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Cores.azulTerciario,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white12),
+            boxShadow: [
+              BoxShadow(
+                color: Cores.azulAgendado.withValues(alpha: 0.4),
+                blurRadius: 28,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 34,
+                child: Text(
+                  '$posicaoº',
+                  style: GoogleFonts.anybody(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(width: 10),
+              WidgetAvatar(
+                avatarId: usuario.avatar,
+                nome: usuario.nome,
+                tamanho: 42,
+                corFundo: Colors.white24,
+                corTexto: Colors.white,
+                borderColor: Colors.white60,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Você',
+                          style: GoogleFonts.hankenGrotesk(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _Movimento(s?.movimento, claro: true),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text.rich(
+                      TextSpan(
+                        text:
+                            '${usuario.placaresExatos} '
+                            '${usuario.placaresExatos == 1 ? 'cravada' : 'cravadas'}',
+                        children: [
+                          if (s != null) ...[
+                            const TextSpan(text: ' · '),
+                            TextSpan(
+                              text:
+                                  s.pontosRodada >= 0
+                                      ? '+${s.pontosRodada}'
+                                      : '${s.pontosRodada}',
+                              style: GoogleFonts.hankenGrotesk(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const TextSpan(text: ' nesta rodada'),
+                          ],
+                        ],
+                      ),
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.82),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    formatarPontos(pontos),
+                    style: GoogleFonts.anybody(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      height: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'PTS',
+                    style: GoogleFonts.hankenGrotesk(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1,
+                      color: Colors.white.withValues(alpha: 0.72),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Esmaecimento do fundo atrás da barra "Você"
+class _FadeRodape extends StatelessWidget {
+  const _FadeRodape();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        height: 92,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Cores.background.withValues(alpha: 0), Cores.background],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Átomos: rótulo de seção, movimento, linha de stats ───────────────────────
+
+class _RotuloSecao extends StatelessWidget {
+  const _RotuloSecao(this.texto);
+
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          texto,
+          style: GoogleFonts.anybody(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.2,
+            color: Cores.cinzaTexto,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Container(height: 1, color: Cores.outlineVariant)),
+      ],
+    );
+  }
+}
+
+// Seta de movimento desde a última rodada (▲ n / ▼ n / traço quando 0).
+// Sem estatísticas carregadas (null) não ocupa espaço.
+class _Movimento extends StatelessWidget {
+  const _Movimento(this.n, {this.claro = false});
+
+  final int? n;
+  final bool claro;
+
+  @override
+  Widget build(BuildContext context) {
+    final v = n;
+    if (v == null) return const SizedBox.shrink();
+    if (v == 0) {
+      return Container(
+        width: 8,
+        height: 2.2,
+        decoration: BoxDecoration(
+          color: claro ? Colors.white70 : Cores.cinzaTexto,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      );
+    }
+    final sobe = v > 0;
+    final cor =
+        claro
+            ? Colors.white
+            : (sobe ? Cores.pontVencedorSaldo : Cores.pontNegativo);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          sobe ? '▲' : '▼',
+          style: TextStyle(fontSize: 9, color: cor, height: 1.2),
+        ),
+        const SizedBox(width: 1),
+        Text(
+          '${v.abs()}',
+          style: GoogleFonts.anybody(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: cor,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Linha "N cravadas · X rodada" — pontos da rodada só com stats carregadas
+class _LinhaStats extends StatelessWidget {
+  const _LinhaStats({
+    required this.cravadas,
+    required this.pontosRodada,
+    required this.cor,
+    this.corIcone,
+  });
+
+  final int cravadas;
+  final int? pontosRodada;
+  final Color cor;
+  final Color? corIcone;
+
+  @override
+  Widget build(BuildContext context) {
+    final estilo = GoogleFonts.hankenGrotesk(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: cor,
+    );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _Alvo(tamanho: 11, cor: corIcone ?? cor),
+        const SizedBox(width: 4),
+        Text(
+          '$cravadas ${cravadas == 1 ? 'cravada' : 'cravadas'}',
+          style: estilo,
+        ),
+        if (pontosRodada != null) ...[
+          const SizedBox(width: 7),
+          Container(
+            width: 3,
+            height: 3,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: cor.withValues(alpha: 0.5),
+            ),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            '$pontosRodada',
+            style: GoogleFonts.hankenGrotesk(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: cor,
+            ),
+          ),
+          Text(' rodada', style: estilo),
+        ],
+      ],
+    );
+  }
+}
+
+// Ícone de cravada (alvo concêntrico)
+class _Alvo extends StatelessWidget {
+  const _Alvo({required this.tamanho, required this.cor});
+
+  final double tamanho;
+  final Color cor;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(size: Size.square(tamanho), painter: _AlvoPainter(cor));
+  }
+}
+
+class _AlvoPainter extends CustomPainter {
+  const _AlvoPainter(this.cor);
+
+  final Color cor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centro = Offset(size.width / 2, size.height / 2);
+    final escala = size.width / 14;
+    canvas.drawCircle(
+      centro,
+      6 * escala,
+      Paint()
+        ..color = cor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4 * escala,
+    );
+    canvas.drawCircle(centro, 2.3 * escala, Paint()..color = cor);
+  }
+
+  @override
+  bool shouldRepaint(covariant _AlvoPainter oldDelegate) =>
+      oldDelegate.cor != cor;
 }
 
 // ─── Diálogo: palpites de um usuário ─────────────────────────────────────────

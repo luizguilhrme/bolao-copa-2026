@@ -2,6 +2,7 @@ import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/jogo.dart';
+import '../models/usuario.dart';
 import 'cores.dart';
 
 // =============================================================================
@@ -405,11 +406,73 @@ int calcularPontosCopaGrupo(
   return pontos;
 }
 
+/// Ordena usuários pelo critério oficial do ranking (mesma regra da
+/// TelaRanking e da posição exibida na arte de compartilhamento):
+/// pontuação total do modo, depois os desempates — mais placares exatos,
+/// menos palpites perdidos, acertou o campeão, acertou a Chuteira de Ouro.
+/// [campeaoReal] e [chuteiradeOuroReal] vêm de config/copa2026.
+List<Usuario> ordenarRanking(
+  List<Usuario> lista, {
+  required bool modoCopa,
+  String? campeaoReal,
+  String? chuteiradeOuroReal,
+}) {
+  final campNorm = campeaoReal?.toLowerCase().trim();
+  final chutNorm = chuteiradeOuroReal?.toLowerCase().trim();
+  lista.sort((a, b) {
+    final ptA = modoCopa ? a.pontuacaoCopaTotal : a.pontuacaoClassicaTotal;
+    final ptB = modoCopa ? b.pontuacaoCopaTotal : b.pontuacaoClassicaTotal;
+    if (ptB != ptA) return ptB.compareTo(ptA);
+    // 1. Mais placares exatos
+    if (b.placaresExatos != a.placaresExatos) {
+      return b.placaresExatos.compareTo(a.placaresExatos);
+    }
+    // 2. Menos palpites perdidos
+    if (a.palpitesPerdidos != b.palpitesPerdidos) {
+      return a.palpitesPerdidos.compareTo(b.palpitesPerdidos);
+    }
+    // 3. Acertou o campeão (case-insensitive, sem espaços extras)
+    final aCamp =
+        (campNorm != null && a.palpiteCampeao?.toLowerCase().trim() == campNorm)
+            ? 1
+            : 0;
+    final bCamp =
+        (campNorm != null && b.palpiteCampeao?.toLowerCase().trim() == campNorm)
+            ? 1
+            : 0;
+    if (bCamp != aCamp) return bCamp.compareTo(aCamp);
+    // 4. Acertou a Chuteira de Ouro (case-insensitive, sem espaços extras)
+    final aChut =
+        (chutNorm != null &&
+                a.palpiteChuteiradeOuro?.toLowerCase().trim() == chutNorm)
+            ? 1
+            : 0;
+    final bChut =
+        (chutNorm != null &&
+                b.palpiteChuteiradeOuro?.toLowerCase().trim() == chutNorm)
+            ? 1
+            : 0;
+    return bChut.compareTo(aChut);
+  });
+  return lista;
+}
+
 /// Pontos reais considerando a fase do jogo.
 int calcularPontosComFase(int p1, int p2, int r1, int r2, String round) {
   final base = calcularPontos(p1, p2, r1, r2);
   if (base == 0) return 0;
   return (base * multiplicadorFase(round)).round();
+}
+
+/// Formata pontuação com separador de milhar pt-BR (1240 → "1.240").
+String formatarPontos(int n) {
+  final s = n.abs().toString();
+  final sb = StringBuffer(n < 0 ? '-' : '');
+  for (int i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) sb.write('.');
+    sb.write(s[i]);
+  }
+  return sb.toString();
 }
 
 /// Lista dos 48 times da Copa 2026 (nomes em inglês, mesmos usados no Firestore).
@@ -595,7 +658,7 @@ class _AbaClassico extends StatelessWidget {
         const _LinhaRegra(
           pontos: 50,
           descricao: 'Só o vencedor certo',
-          exemplo: 'Palpitou 2×0, jogo foi 1×0',
+          exemplo: 'Palpitou 3×2, jogo foi 2×0',
         ),
         const _LinhaRegra(
           pontos: 50,

@@ -16,6 +16,7 @@ import '../services/usuario_service.dart';
 import '../utils/biblioteca.dart';
 import '../utils/cores.dart';
 import '../utils/dialogos.dart';
+import 'tela_compartilhar.dart';
 
 // Cards brancos com sombra suave sobre Cores.background.
 const _sombraCard = [
@@ -474,34 +475,6 @@ class _TelaPalpitesState extends State<TelaPalpites> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Banner informativo quando palpites Copa e Especiais estão travados
-          if (_palpitesTravados)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              color: Cores.verdePrincipal.withValues(alpha: 0.10),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.lock_rounded,
-                    size: 16,
-                    color: Cores.verdePrincipal,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Palpites Especiais e Modo Copa estão travados e visíveis para todos.',
-                      style: GoogleFonts.hankenGrotesk(
-                        fontSize: 13,
-                        color: Cores.verdePrincipal,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
           // Seletor de MODO (só quando ambos os modos presentes e fase de grupos ativa)
           if (_mostrarAbas)
             _SeletorModo(
@@ -1502,7 +1475,7 @@ class _CardResultado extends StatelessWidget {
             ),
           ),
 
-          // Rodapé: pontuação + horário do palpite
+          // Rodapé: pontuação + horário do palpite + compartilhar
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
             child: Row(
@@ -1518,15 +1491,59 @@ class _CardResultado extends StatelessWidget {
                 else
                   const SizedBox.shrink(),
 
-                // criadoEm
-                if (palpite?.criadoEm != null)
-                  Text(
-                    'Registrado em ${formatarCriadoEm(palpite!.criadoEm)}',
-                    style: GoogleFonts.hankenGrotesk(
-                      fontSize: 11,
-                      color: Cores.onSurfaceVariant,
-                    ),
+                // criadoEm + compartilhar no story (só encerrado com palpite)
+                Flexible(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (palpite?.criadoEm != null)
+                        Flexible(
+                          child: Text(
+                            'Registrado em ${formatarCriadoEm(palpite!.criadoEm)}',
+                            style: GoogleFonts.hankenGrotesk(
+                              fontSize: 11,
+                              color: Cores.onSurfaceVariant,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      if (encerrado &&
+                          palpite != null &&
+                          pontos != null &&
+                          pontosBase != null) ...[
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap:
+                              () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder:
+                                      (_) => TelaCompartilhar(
+                                        jogo: jogo,
+                                        palpite: palpite!,
+                                        pontos: pontos!,
+                                        pontosBase: pontosBase!,
+                                      ),
+                                ),
+                              ),
+                          child: Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: Cores.verdePrincipal.withValues(
+                                alpha: 0.12,
+                              ),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.share_rounded,
+                              size: 18,
+                              color: Cores.verdePrincipal,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
+                ),
               ],
             ),
           ),

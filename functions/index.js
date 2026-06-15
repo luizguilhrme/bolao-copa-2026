@@ -46,6 +46,31 @@ function calcularPontosComFase(p1, p2, r1, r2, round) {
   return Math.round(base * multiplicador(round));
 }
 
+// Pontos Copa de um grupo (espelha calcularPontosCopaGrupo de biblioteca.dart).
+// Usada por recalcularCopa e estatisticasRanking.
+function calcularPontosCopaGrupo(palpite, real) {
+  const classificadosReais = new Set(
+    ['primeiro', 'segundo', 'terceiro'].map(p => real[p]).filter(Boolean)
+  );
+  let pontos = 0, exatos = 0, validos = 0;
+  for (const pos of ['primeiro', 'segundo', 'terceiro']) {
+    const p = palpite[pos];
+    if (!p) continue; // não palpitou esta posição
+    const r = real[pos];
+    if (r) {
+      // há resultado real para esta posição: conta para o bônus
+      validos++;
+      if (p === r) { pontos += 200; exatos++; }
+      else if (classificadosReais.has(p)) pontos += 100;
+    } else if (classificadosReais.has(p)) {
+      // sem resultado nessa posição mas o time classificou em outra
+      pontos += 100;
+    }
+  }
+  if (validos >= 2 && exatos === validos) pontos += 100;
+  return pontos;
+}
+
 // ─── calcularPontuacao ────────────────────────────────────────────────────────
 // Dispara quando o admin insere ou corrige um placar em /jogos/{jogoId}.
 // Recalcula e aplica o delta de pontuação para cada participante que fez
@@ -243,9 +268,10 @@ exports.calcularPontuacao = onDocumentUpdated(
       const delta = posAntes - posDepois;
       const abs = Math.abs(delta);
       const pos = `${posDepois}º lugar`;
+      const palavraPos = abs > 1 ? 'posições' : 'posição';
       const body = delta > 0
-        ? `Você subiu ${abs} posição${abs > 1 ? 'ões' : ''} no ranking! Agora está em ${pos}.`
-        : `Você caiu ${abs} posição${abs > 1 ? 'ões' : ''} no ranking. Agora está em ${pos}.`;
+        ? `Você subiu ${abs} ${palavraPos} no ranking! Agora está em ${pos}.`
+        : `Você caiu ${abs} ${palavraPos} no ranking. Agora está em ${pos}.`;
 
       await _enviarNotificacao(messaging, db, uid, userData.fcmToken, {
         title: '📊 Ranking atualizado',
@@ -575,29 +601,7 @@ exports.recalcularCopa = onCall(
       );
     }
 
-    // Espelha calcularPontosCopaGrupo() de biblioteca.dart
-    function calcularPontosCopaGrupo(palpite, real) {
-      const classificadosReais = new Set(
-        ['primeiro', 'segundo', 'terceiro'].map(p => real[p]).filter(Boolean)
-      );
-      let pontos = 0, exatos = 0, validos = 0;
-      for (const pos of ['primeiro', 'segundo', 'terceiro']) {
-        const p = palpite[pos];
-        if (!p) continue; // não palpitou esta posição
-        const r = real[pos];
-        if (r) {
-          // há resultado real para esta posição: conta para o bônus
-          validos++;
-          if (p === r) { pontos += 200; exatos++; }
-          else if (classificadosReais.has(p)) pontos += 100;
-        } else if (classificadosReais.has(p)) {
-          // sem resultado nessa posição mas o time classificou em outra
-          pontos += 100;
-        }
-      }
-      if (validos >= 2 && exatos === validos) pontos += 100;
-      return pontos;
-    }
+    // calcularPontosCopaGrupo está no topo do arquivo (helper compartilhado)
 
     const palpitesCopaSnap = await db.collection('palpites_copa').get();
 
@@ -958,6 +962,209 @@ exports.buscarPalpitesUsuario = onCall(
     const palpitesCopa = copaDoc.exists ? (copaDoc.data().grupos || {}) : {};
 
     return { palpites, palpitesCopa };
+  }
+);
+
+// ─── estatisticasRanking ──────────────────────────────────────────────────────
+// Estatísticas da última rodada para a TelaRanking: "rodada" = último dia
+// (campo `date` do jogo) com pelo menos um jogo encerrado. Para cada membro
+// do grupo retorna os pontos ganhos nessa rodada e o movimento de posição
+// (ranking antes da rodada vs agora, com os mesmos desempates do app).
+// Read-only: não escreve nada — todo o cálculo é feito na hora.
+
+exports.estatisticasRanking = onCall(
+  { region: 'southamerica-east1' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Não autenticado.');
+
+    const { grupoId } = request.data;
+    if (!grupoId) throw new HttpsError('invalid-argument', 'grupoId obrigatório.');
+
+    const db = getFirestore();
+    const grupoDoc = await db.collection('grupos').doc(grupoId).get();
+    if (!grupoDoc.exists) throw new HttpsError('not-found', 'Grupo não encontrado.');
+
+    const membros = grupoDoc.data().membros || [];
+    if (!membros.includes(request.auth.uid)) {
+      throw new HttpsError('permission-denied', 'Você não é membro deste grupo.');
+    }
+    const modoCopa = (grupoDoc.data().regra || 'classico') === 'copa';
+
+    const [jogosSnap, configDoc] = await Promise.all([
+      db.collection('jogos').get(),
+      db.collection('config').doc('copa2026').get(),
+    ]);
+    const jogos = jogosSnap.docs.map((d) => d.data());
+    const encerrados = jogos.filter((j) => j.placar1 != null && j.placar2 != null);
+    if (encerrados.length === 0 || membros.length === 0) {
+      return { rodada: null, stats: {} };
+    }
+
+    const datas = [...new Set(encerrados.map((j) => j.date))].sort();
+    const ultimaData = datas[datas.length - 1];
+    const jogosRodada = encerrados.filter((j) => j.date === ultimaData);
+
+    // Rótulo da rodada REAL (não confundir com "numero", que é o dia da
+    // competição). Fase de grupos: matchday "Rodada N" -> "Nª Rodada".
+    // Eliminatórias (sem matchday): nome da fase do jogo mais recente.
+    let rodadaLabel = null;
+    const comMatchday = jogosRodada.filter((j) => j.matchday);
+    if (comMatchday.length > 0) {
+      const maxN = Math.max(...comMatchday.map(
+        (j) => parseInt(String(j.matchday).replace(/\D/g, ''), 10) || 0
+      ));
+      rodadaLabel = maxN > 0 ? `${maxN}ª Rodada` : null;
+    } else if (jogosRodada.length > 0) {
+      rodadaLabel = jogosRodada[0].round || null;
+    }
+
+    // Usuários, palpites da rodada (IDs determinísticos {uid}_{jogoId}) e,
+    // no modo Copa, os palpites de classificação de grupo
+    const usuarioRefs = membros.map((uid) => db.collection('usuarios').doc(uid));
+    const palpiteRefs = [];
+    for (const uid of membros) {
+      for (const j of jogosRodada) {
+        palpiteRefs.push(db.collection('palpites').doc(`${uid}_${j.id}`));
+      }
+    }
+    const copaRefs = modoCopa
+      ? membros.map((uid) => db.collection('palpites_copa').doc(uid))
+      : [];
+
+    const [usuarioDocs, palpiteDocs, copaDocs] = await Promise.all([
+      db.getAll(...usuarioRefs),
+      db.getAll(...palpiteRefs),
+      copaRefs.length > 0 ? db.getAll(...copaRefs) : Promise.resolve([]),
+    ]);
+
+    const usuarios = {};
+    usuarioDocs.forEach((d) => { if (d.exists) usuarios[d.id] = d.data(); });
+    const palpites = {};
+    palpiteDocs.forEach((d) => { if (d.exists) palpites[d.id] = d.data(); });
+    const palpitesCopa = {};
+    copaDocs.forEach((d) => { if (d.exists) palpitesCopa[d.id] = d.data().grupos || {}; });
+
+    // Modo Copa: grupos A–L cuja classificação "fechou" nesta rodada (todos os
+    // jogos encerrados e o último deles na última data) — os pontos Copa desses
+    // grupos contam como pontos da rodada
+    const config = configDoc.exists ? configDoc.data() : {};
+    const classificacaoReal = config.classificacao_real || {};
+    const gruposFechadosNaRodada = [];
+    if (modoCopa) {
+      for (const letra of Object.keys(classificacaoReal)) {
+        const jogosGrupo = jogos.filter((j) => j.group === `Grupo ${letra}`);
+        if (jogosGrupo.length === 0) continue;
+        const todosEncerrados = jogosGrupo.every((j) => j.placar1 != null);
+        const dataFinal = jogosGrupo.map((j) => j.date).sort().pop();
+        if (todosEncerrados && dataFinal === ultimaData) {
+          gruposFechadosNaRodada.push(letra);
+        }
+      }
+    }
+
+    // Pontos da rodada por membro. Exatos/perdidos contam em qualquer modo
+    // (os contadores placaresExatos/palpitesPerdidos são globais); pontos de
+    // jogo da fase de grupos não contam no modo Copa.
+    const statsRodada = {};
+    for (const uid of membros) {
+      const u = usuarios[uid];
+      if (!u) continue;
+      let pontosRodada = 0, exatos = 0, perdidos = 0;
+      for (const j of jogosRodada) {
+        const contaPontos = !modoCopa || j.id > 72;
+        const p = palpites[`${uid}_${j.id}`];
+        if (p) {
+          if (contaPontos) {
+            pontosRodada += calcularPontosComFase(
+              p.palpite1, p.palpite2, j.placar1, j.placar2,
+              j.round || 'Fase de Grupos'
+            );
+          }
+          if (p.palpite1 === j.placar1 && p.palpite2 === j.placar2) exatos++;
+        } else {
+          // Regra −10: sem palpite em jogo posterior à criação da conta
+          const criadoEm = u.criadoEm?.toDate?.();
+          const dataJogo = j.dataHora?.toDate?.();
+          if (criadoEm && dataJogo && criadoEm < dataJogo) {
+            if (contaPontos) pontosRodada -= 10;
+            perdidos++;
+          }
+        }
+      }
+      if (modoCopa) {
+        const meusGrupos = palpitesCopa[uid] || {};
+        for (const letra of gruposFechadosNaRodada) {
+          pontosRodada += calcularPontosCopaGrupo(
+            meusGrupos[letra] || {}, classificacaoReal[letra]
+          );
+        }
+      }
+      statsRodada[uid] = { pontosRodada, exatos, perdidos };
+    }
+
+    // Movimento: posição antes da rodada (totais − pontos da rodada) vs agora.
+    // Mesmo critério de ordenarRanking (biblioteca.dart): pontos do modo +
+    // 4 desempates (exatos, perdidos, campeão, Chuteira de Ouro).
+    const totalDe = (u) => (modoCopa
+      ? (u.pontuacaoCopa || 0)
+      : (u.pontuacaoClassica || 0))
+      + (u.pontuacaoEliminatorias || 0) + (u.pontuacaoEspeciais || 0);
+    const campNorm = config.campeaoReal?.toLowerCase().trim() || null;
+    const chutNorm = config.chuteiradeOuroReal?.toLowerCase().trim() || null;
+    const comparar = (a, b) => {
+      if (b.pontos !== a.pontos) return b.pontos - a.pontos;
+      if (b.exatos !== a.exatos) return b.exatos - a.exatos;
+      if (a.perdidos !== b.perdidos) return a.perdidos - b.perdidos;
+      const camp = (x) => (campNorm != null &&
+        x.u.palpiteCampeao?.toLowerCase().trim() === campNorm) ? 1 : 0;
+      if (camp(b) !== camp(a)) return camp(b) - camp(a);
+      const chut = (x) => (chutNorm != null &&
+        x.u.palpiteChuteiradeOuro?.toLowerCase().trim() === chutNorm) ? 1 : 0;
+      return chut(b) - chut(a);
+    };
+
+    const agora = [], antes = [];
+    for (const uid of Object.keys(statsRodada)) {
+      const u = usuarios[uid];
+      const s = statsRodada[uid];
+      agora.push({
+        uid, u,
+        pontos: totalDe(u),
+        exatos: u.placaresExatos || 0,
+        perdidos: u.palpitesPerdidos || 0,
+      });
+      antes.push({
+        uid, u,
+        pontos: totalDe(u) - s.pontosRodada,
+        exatos: (u.placaresExatos || 0) - s.exatos,
+        perdidos: (u.palpitesPerdidos || 0) - s.perdidos,
+      });
+    }
+    agora.sort(comparar);
+    antes.sort(comparar);
+    const posAntes = {}, posAgora = {};
+    antes.forEach((e, i) => { posAntes[e.uid] = i + 1; });
+    agora.forEach((e, i) => { posAgora[e.uid] = i + 1; });
+
+    const stats = {};
+    for (const uid of Object.keys(statsRodada)) {
+      stats[uid] = {
+        pontosRodada: statsRodada[uid].pontosRodada,
+        movimento: posAntes[uid] - posAgora[uid],
+      };
+    }
+
+    return {
+      // numero = quantidade de dias distintos com jogo encerrado ("Dia N");
+      // label = rodada real (matchday da fase de grupos ou nome da fase)
+      rodada: {
+        data: ultimaData,
+        numero: datas.length,
+        jogos: jogosRodada.length,
+        label: rodadaLabel,
+      },
+      stats,
+    };
   }
 );
 
