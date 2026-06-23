@@ -275,7 +275,10 @@ class _TelaTabelaState extends State<TelaTabela> {
                         ),
                       ),
                     for (var i = 0; i < artilheiros.length; i++) ...[
-                      LinhaArtilheiro(posicao: i + 1, artilheiro: artilheiros[i]),
+                      LinhaArtilheiro(
+                        posicao: posicaoArtilheiro(artilheiros, i),
+                        artilheiro: artilheiros[i],
+                      ),
                       if (i < artilheiros.length - 1)
                         const Divider(height: 14, color: Cores.surfaceVariant),
                     ],
@@ -452,6 +455,11 @@ class _TelaTabelaState extends State<TelaTabela> {
   // ---------------------------------------------------------------------------
 
   Widget _buildLista(List<Jogo> todos) {
+    // Ordena por horário. Por rodada, Por grupo e Por data/Encerrados exibem o
+    // jogo mais recente primeiro (decrescente); só Por data/Próximos mantém a
+    // ordem cronológica (crescente, o próximo jogo no topo).
+    final descendente = _filtroJogos != 0 || _abaAtiva == 1;
+
     // Aplica o filtro ativo: Por data (sub-abas), Por rodada ou Por grupo
     final filtrados =
         todos.where((j) {
@@ -468,8 +476,10 @@ class _TelaTabelaState extends State<TelaTabela> {
             }
           }).toList()
           ..sort(
-            (a, b) => a.dataHora.compareTo(b.dataHora),
-          ); // ordena por horário
+            (a, b) => descendente
+                ? b.dataHora.compareTo(a.dataHora)
+                : a.dataHora.compareTo(b.dataHora),
+          );
 
     if (filtrados.isEmpty) {
       return RefreshIndicator(
@@ -904,15 +914,20 @@ class _ChipsFiltroJogos extends StatelessWidget {
   final int filtro;
   final void Function(int) onChanged;
 
+  // Rótulos indexados pelo índice semântico do filtro (0=data, 1=rodada,
+  // 2=grupo) — mantém a lógica de filtragem intacta.
   static const _labels = ['Por data', 'Por rodada', 'Por grupo'];
+
+  // Ordem em que os chips aparecem na tela: Por data | Por grupo | Por rodada.
+  static const _ordemExibicao = [0, 2, 1];
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        for (var i = 0; i < _labels.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          _buildChip(_labels[i], i),
+        for (var pos = 0; pos < _ordemExibicao.length; pos++) ...[
+          if (pos > 0) const SizedBox(width: 8),
+          _buildChip(_labels[_ordemExibicao[pos]], _ordemExibicao[pos]),
         ],
       ],
     );
@@ -1220,6 +1235,7 @@ class _ItemPalpiteJogo {
     required this.usuario,
     required this.palpite,
     this.pontos,
+    this.pontuacaoClassicaTotal = 0,
   });
   final Usuario usuario;
   final Palpite palpite;
@@ -1227,6 +1243,10 @@ class _ItemPalpiteJogo {
   /// Null enquanto o jogo não tem placar final (palpites visíveis a partir
   /// do travamento, pontos só depois do resultado).
   final int? pontos;
+
+  /// Total Clássico do usuário no ranking — base do "Por pontuação" quando o
+  /// jogo ainda não tem placar.
+  final int pontuacaoClassicaTotal;
 }
 
 class _DialogPalpitesJogo extends StatefulWidget {
@@ -1239,6 +1259,9 @@ class _DialogPalpitesJogo extends StatefulWidget {
 
 class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
   late final Future<List<_ItemPalpiteJogo>> _future;
+
+  // Ordem da lista: false = alfabética (padrão) | true = por pontuação (desc).
+  bool _porPontuacao = false;
 
   @override
   void initState() {
@@ -1273,6 +1296,8 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
           palpite2: (m['palpite2'] as num).toInt(),
         ),
         pontos: (m['pontos'] as num?)?.toInt(),
+        pontuacaoClassicaTotal:
+            (m['pontuacaoClassicaTotal'] as num?)?.toInt() ?? 0,
       );
     }).toList();
   }
@@ -1388,8 +1413,10 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
             ),
           ),
 
-          // Lista de palpites
-          FutureBuilder<List<_ItemPalpiteJogo>>(
+          // Lista de palpites — Flexible para a lista rolar dentro do espaço
+          // disponível em vez de estourar a altura do diálogo.
+          Flexible(
+            child: FutureBuilder<List<_ItemPalpiteJogo>>(
             future: _future,
             builder: (ctx, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
@@ -1398,7 +1425,7 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
                   child: CircularProgressIndicator(color: Cores.verdePrincipal),
                 );
               }
-              final itens = snap.data ?? [];
+              final itens = List<_ItemPalpiteJogo>.of(snap.data ?? []);
               if (itens.isEmpty) {
                 return Padding(
                   padding: const EdgeInsets.all(24),
@@ -1410,18 +1437,53 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
                   ),
                 );
               }
-              return ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 420),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: itens.length,
-                  separatorBuilder:
-                      (_, __) =>
-                          const Divider(height: 1, color: Cores.outlineVariant),
-                  itemBuilder: (_, i) => _buildLinha(itens[i], i + 1),
-                ),
+
+              // Há placar final quando os itens têm pontos calculados.
+              final temPlacar = itens.any((i) => i.pontos != null);
+
+              int porNome(_ItemPalpiteJogo a, _ItemPalpiteJogo b) =>
+                  a.usuario.nome.toLowerCase().compareTo(
+                    b.usuario.nome.toLowerCase(),
+                  );
+              if (temPlacar) {
+                // Com placar: sempre na ordem de pontuação deste jogo (desc).
+                itens.sort((a, b) {
+                  final cmp = (b.pontos ?? 0).compareTo(a.pontos ?? 0);
+                  return cmp != 0 ? cmp : porNome(a, b);
+                });
+              } else if (_porPontuacao) {
+                // Sem placar: opção pela pontuação total do Clássico no ranking.
+                itens.sort((a, b) {
+                  final cmp = b.pontuacaoClassicaTotal.compareTo(
+                    a.pontuacaoClassicaTotal,
+                  );
+                  return cmp != 0 ? cmp : porNome(a, b);
+                });
+              } else {
+                itens.sort(porNome);
+              }
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Toggle só sem placar; com placar a ordem é fixa (por jogo).
+                  if (!temPlacar) _buildToggleOrdem(),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: itens.length,
+                      separatorBuilder:
+                          (_, __) => const Divider(
+                            height: 1,
+                            color: Cores.outlineVariant,
+                          ),
+                      itemBuilder: (_, i) => _buildLinha(itens[i], i + 1),
+                    ),
+                  ),
+                ],
               );
             },
+            ),
           ),
 
           // Botão fechar
@@ -1443,6 +1505,79 @@ class _DialogPalpitesJogoState extends State<_DialogPalpitesJogo> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // Segmento Alfabética | Por pontuação — mesmo visual das sub-abas da Tabela.
+  Widget _buildToggleOrdem() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Cores.verdeSuave,
+          border: Border.all(color: Cores.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: _segmentoOrdem(
+                'Alfabética',
+                !_porPontuacao,
+                () => setState(() => _porPontuacao = false),
+              ),
+            ),
+            Container(
+              width: 1,
+              height: 18,
+              color: Cores.outlineVariant,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+            ),
+            Expanded(
+              child: _segmentoOrdem(
+                'Por pontuação',
+                _porPontuacao,
+                () => setState(() => _porPontuacao = true),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _segmentoOrdem(String label, bool ativo, VoidCallback onTap) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        decoration: BoxDecoration(
+          color: ativo ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+          boxShadow:
+              ativo
+                  ? const [
+                    BoxShadow(
+                      color: Color(0x14000000),
+                      blurRadius: 6,
+                      offset: Offset(0, 2),
+                    ),
+                  ]
+                  : null,
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.anybody(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: ativo ? Cores.onSurface : Cores.onSurfaceVariant,
+          ),
+        ),
       ),
     );
   }
