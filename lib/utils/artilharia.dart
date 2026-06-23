@@ -41,8 +41,21 @@ class Artilheiro {
   }
 }
 
+/// Posição na classificação de artilharia considerando empates por gols
+/// (ranking de competição: jogadores com o mesmo número de gols dividem a
+/// mesma posição — 1, 1, 3, 3, …). Não há critério de desempate, então só
+/// o número de gols importa. [lista] precisa estar ordenada por gols (desc).
+int posicaoArtilheiro(List<Artilheiro> lista, int indice) {
+  var posicao = 1;
+  for (var i = 1; i <= indice; i++) {
+    if (lista[i].gols != lista[i - 1].gols) posicao = i + 1;
+  }
+  return posicao;
+}
+
 /// Linha da classificação: posição (pódio colorido no top 3), bandeira,
-/// nome, seleção/assistências e gols.
+/// nome, seleção/assistências e gols. Jogadores empatados em gols recebem a
+/// mesma [posicao] (e o mesmo medalhão), pois não há critério de desempate.
 class LinhaArtilheiro extends StatelessWidget {
   const LinhaArtilheiro({
     super.key,

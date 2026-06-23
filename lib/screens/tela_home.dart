@@ -458,7 +458,10 @@ class _TelaHomeState extends State<TelaHome> {
                   ),
                   const SizedBox(height: 10),
                   for (var i = 0; i < top5.length; i++) ...[
-                    LinhaArtilheiro(posicao: i + 1, artilheiro: top5[i]),
+                    LinhaArtilheiro(
+                      posicao: posicaoArtilheiro(top5, i),
+                      artilheiro: top5[i],
+                    ),
                     if (i < top5.length - 1)
                       const Divider(height: 12, color: Cores.surfaceVariant),
                   ],

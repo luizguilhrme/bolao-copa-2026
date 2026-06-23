@@ -149,18 +149,24 @@ C:\bolao\
                                  visíveis); JOGOS: 104 jogos via stream do Firestore
                                  (JogoService.observarTodos — placar ao vivo e chip de
                                  status atualizam em tempo real) com filtros Por data
-                                 (sub-abas Próximos/Encerrados) / Por rodada / Por grupo;
+                                 (sub-abas Próximos/Encerrados) / Por grupo / Por rodada
+                                 (nessa ordem dos chips); ordenação: Por rodada, Por grupo e
+                                 Por data/Encerrados exibem o mais recente primeiro
+                                 (decrescente), só Por data/Próximos fica cronológico;
                                  cards com ChipStatusJogo no cabeçalho, placar parcial em
                                  vermelho quando ao vivo (0 x 0 até o 1º sync) e decisão
                                  "(4 x 2)" sob o placar final;
                                  CLASSIFICAÇÃO: usa o standings oficial de api/classificacao
                                  quando existe, com fallback no cálculo local dos placares;
                                  ARTILHARIA: lista completa de api/artilharia (estado vazio
-                                 até os primeiros gols);
+                                 até os primeiros gols; empatados em gols dividem a posição —
+                                 ranking de competição 1,1,3,3 via posicaoArtilheiro);
                                  tocar em jogo com palpites travados (cutoff de 5 min) abre
                                  dialog via CF buscarPalpitesJogo (palpites da união dos
                                  membros de todos os grupos do usuário; badge de pontos só
-                                 após o resultado)
+                                 após o resultado; sem placar: ordem alfabética com toggle
+                                 "Por pontuação" pelo total do Clássico; com placar: sempre
+                                 por pontos do jogo)
       tela_admin_placares.dart ← inserção de placares com abas Próximos/Encerrados;
                                  em eliminatórias com empate abre dialog "Quem avançou?" para salvar
                                  o campo vencedor (pênaltis/prorrogação)
@@ -251,6 +257,8 @@ C:\bolao\
       baixar_imagem_web.dart  ← download do PNG no Web via Blob + âncora (package:web);
                                  escolhido por conditional import na tela_compartilhar
       artilharia.dart         ← model Artilheiro (com fromMap do doc api/artilharia)
+                                 + helper posicaoArtilheiro (empate por gols = mesma
+                                 posição, ranking de competição 1,1,3,3)
                                  + widget LinhaArtilheiro (pódio ouro/prata/bronze);
                                  usado na Home (top 5) e na aba ARTILHARIA da Tabela;
                                  kArtilhariaSimulada foi removida — dados reais via
@@ -713,13 +721,14 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 
 ### `tela_tabela.dart` — implementada
 - 3 abas superiores **JOGOS / CLASSIFICAÇÃO / ARTILHARIA** (faixa verde com abas brancas, sempre visíveis para todos os usuários; `sinalAbrirArtilharia` permite a Home abrir direto a ARTILHARIA)
-- JOGOS: chips de filtro **Por data / Por rodada / Por grupo** — Por data usa sub-abas Próximos/Encerrados (card segmentado verde-suave com seleção branca e contadores); Por rodada/Por grupo usam campo seletor que abre `BottomSheetOpcoes`
+- JOGOS: chips de filtro **Por data / Por grupo / Por rodada** (nessa ordem de exibição; índices semânticos internos mantidos 0=data, 1=rodada, 2=grupo via `_ordemExibicao`) — Por data usa sub-abas Próximos/Encerrados (card segmentado verde-suave com seleção branca e contadores); Por rodada/Por grupo usam campo seletor que abre `BottomSheetOpcoes`
+- **Ordenação dos jogos:** Por rodada, Por grupo e Por data/Encerrados exibem o jogo mais recente primeiro (decrescente por `dataHora`, seções inclusive); só Por data/Próximos mantém a ordem cronológica (crescente, próximo jogo no topo)
 - Jogos via **stream** do Firestore (`JogoService.observarTodos`) — placar ao vivo e chip de status atualizam em tempo real conforme a `sincronizarApi` grava; o pull-to-refresh rebusca só artilharia/classificação
 - Cards de jogo no estilo novo (brancos, sombra suave, raio 16, sem borda); cabeçalho com `ChipStatusJogo` (AGENDADO/AO VIVO/ENCERRADO) à esquerda e data·local à direita; placar em texto puro: final (preto, com decisão "(4 x 2)" embaixo), parcial ao vivo em vermelho (0 x 0 até o 1º sync), parcial cinza quando a API encerrou mas o placar final ainda não foi confirmado, ou "— x —"; bandeiras 36px em círculo e nomes em português (`nomePtDe`)
 - CLASSIFICAÇÃO: 12 tabelas de grupo calculadas em tempo real dos placares inseridos (critérios FIFA: pontos > saldo > gols pró), colunas J/SG/PTS, destaque verde no 1º/2º; seletor "Todos os grupos" / Grupo A–L
-- ARTILHARIA: lista completa de `kArtilhariaSimulada` (placeholder do endpoint /scorers da API)
+- ARTILHARIA: lista completa de `api/artilharia` (endpoint /scorers da API). Jogadores empatados em gols dividem a posição (ranking de competição 1,1,3,3 via `posicaoArtilheiro`), com o mesmo medalhão de pódio
 - `CustomScrollView` com slivers agrupados por seção; RefreshIndicator (pull-to-refresh)
-- Tocar em um jogo com palpites travados (a partir de 5 min antes do início) abre dialog com todos os palpites registrados via CF `buscarPalpitesJogo`; cada linha mostra posição, avatar, nome, palpite e badge de pontos — a badge só aparece depois do placar final (antes, lista ordenada por nome); cabeçalho do dialog mostra placar final, parcial ao vivo ou "VS"
+- Tocar em um jogo com palpites travados (a partir de 5 min antes do início) abre dialog com todos os palpites registrados via CF `buscarPalpitesJogo`; cada linha mostra posição, avatar, nome, palpite e badge de pontos — a badge só aparece depois do placar final; cabeçalho do dialog mostra placar final, parcial ao vivo ou "VS". **Ordenação da lista:** com placar final, sempre por pontos daquele jogo (desc), sem toggle; sem placar, padrão alfabético com toggle **Alfabética | Por pontuação** (segmento estilo sub-abas) — "Por pontuação" usa o total do Clássico do usuário (`pontuacaoClassicaTotal`, vindo da CF). Lista em `Flexible` para rolar sem estourar a altura do dialog
 
 ### `tela_palpites.dart` — implementada
 - **Abas superiores MODO CLÁSSICO / MODO COPA** (verde, só visíveis quando usuário tem grupos dos dois modos E Fase de Grupos ativa); sub-abas **Próximos** / **Encerrados** dentro de cada modo (card segmentado verde-suave com seleção branca e contadores)
@@ -998,7 +1007,7 @@ Deployadas na região `southamerica-east1`. Arquivo: `functions/index.js` (Node 
 | `recalcularCopa` | HTTPS Callable (admin only) | Calcula pontos Copa fase de grupos (SET em `pontuacaoCopa`); marca `copaGruposCalculado: true` |
 | `limparUsuariosOrfaos` | HTTPS Callable (admin only) | Remove docs `usuarios` sem conta Auth + palpites órfãos; tira UIDs órfãos dos arrays `membros` dos grupos (deleta grupos que ficarem vazios; transfere a posse se o dono era órfão) |
 | `limparDadosTeste` | HTTPS Callable (admin only) | Reseta placares, times eliminatórias, classificação, `pontuacaoClassica`, `pontuacaoCopa`, `pontuacaoEliminatorias`, `pontuacaoEspeciais`, `placaresExatos`, `palpitesPerdidos`, flags e os campos da API (`statusApi`, `placarAoVivo1/2`, `placarDecisao1/2` — `apiId` é preservado); palpites preservados |
-| `buscarPalpitesJogo` | HTTPS Callable | Retorna palpites de um jogo com palpites já travados (a partir de 5 min antes do início — `dataHora` − 5 min), filtrados pelos membros dos grupos do solicitante (união). `pontos` vem `null` enquanto não há placar final (lista ordenada por nome); com placar, calculados com multiplicador de fase e ordenados por pontos. Usado pelo dialog da `tela_tabela`. |
+| `buscarPalpitesJogo` | HTTPS Callable | Retorna palpites de um jogo com palpites já travados (a partir de 5 min antes do início — `dataHora` − 5 min), filtrados pelos membros dos grupos do solicitante (união). `pontos` vem `null` enquanto não há placar final; com placar, calculados com multiplicador de fase. Cada item também traz `pontuacaoClassicaTotal` (soma de `pontuacaoClassica + pontuacaoEliminatorias + pontuacaoEspeciais` do doc do usuário — mesmo valor do getter do model, sem recálculo), usado pelo toggle "Por pontuação" do dialog quando o jogo não tem placar. A ordenação final fica a cargo do app. Usado pelo dialog da `tela_tabela`. |
 | `buscarPalpitesUsuario` | HTTPS Callable | Retorna palpites clássicos + Copa de um usuário, validando grupo em comum com o solicitante. Usado pelo dialog do `tela_ranking`. |
 | `estatisticasRanking` | HTTPS Callable | Read-only (não escreve nada). Recebe `grupoId` (solicitante precisa ser membro) e retorna, por membro, `pontosRodada` e `movimento` + metadados da rodada (`{data, numero, jogos}`). "Rodada" = último dia (campo `date`) com jogo encerrado; `numero` = dias distintos com jogo encerrado. Pontos da rodada: modo clássico soma todos os jogos do dia (com multiplicador de fase e −10 de ausência); modo Copa soma só eliminatórias + pontos Copa de grupos A–L cuja classificação fechou nesse dia (usa `classificacao_real` + helper `calcularPontosCopaGrupo`, hoisted para o topo do arquivo e compartilhado com `recalcularCopa`). Movimento = posição antes da rodada (totais − pontos da rodada, com os mesmos 4 desempates de `ordenarRanking`) vs posição atual. Usado pela `tela_ranking` (setas ▲▼ e "X rodada"). |
 | `sincronizarApi` | Schedule (`*/2 * * * *`, secret FOOTBALL_DATA_KEY) | Janela inteligente: só chama a football-data.org quando há jogo ativo (início −20 min a +5h, sem placar final) ou eliminatória com placeholder nas próximas 72h. Grava `statusApi` + `placarAoVivo1/2` durante o jogo; no FINISHED grava `placar1/2` (`score.regularTime` — regra dos 90 min) + `vencedor` (`score.winner` em empate nos 90) + `placarDecisao1/2` (pênaltis ou placar final da prorrogação), disparando o trigger `calcularPontuacao`. Define os confrontos das eliminatórias preenchendo `team1/team2` onde ainda há placeholder (nunca sobrescreve time definido). Compara antes de escrever; não sobrescreve placar inserido pelo admin. Quando algum jogo termina, atualiza `api/classificacao` e `api/artilharia`. Mapeia `apiId` pendentes quando os times ficam definidos. Cada execução que chamou a API grava um doc na coleção `logs` (helper `_logar`) com o que a API retornou por jogo e o que foi gravado; erros geram log com `origem: 'erro'` antes do rethrow. |

@@ -906,6 +906,12 @@ exports.buscarPalpitesJogo = onCall(
                 jogo.round || 'Fase de Grupos'
               )
             : null,
+          // Total Clássico do usuário (= pontuacaoClassicaTotal do app) — base
+          // do "Por pontuação" no diálogo enquanto o jogo não tem placar.
+          pontuacaoClassicaTotal:
+            (u.pontuacaoClassica || 0) +
+            (u.pontuacaoEliminatorias || 0) +
+            (u.pontuacaoEspeciais || 0),
         };
       })
       .sort((a, b) => temPlacar
