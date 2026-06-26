@@ -279,10 +279,16 @@ class _TelaPalpitesState extends State<TelaPalpites> {
 
   // ─── Computed properties ────────────────────────────────────────────────────
 
-  /// True se os 16 avos de final já têm times definidos (Fase de Grupos encerrada).
+  /// True se os 16 avos de final já têm times definidos E não há mais jogos da
+  /// Fase de Grupos disponíveis para palpite (cutoff ainda não passou).
   bool get _faseGruposEncerrada {
     final j73 = _todosJogos.where((j) => j.id == 73).firstOrNull;
-    return j73 != null && !ehPlaceholder(j73.team1);
+    if (j73 == null || ehPlaceholder(j73.team1)) return false;
+    // Ainda há jogos de grupo abertos para palpite → fase não encerrou
+    final temGrupoAberto = _gruposProximos.values.any(
+      (jogos) => jogos.any((j) => j.group != null),
+    );
+    return !temGrupoAberto;
   }
 
   bool get _temModoClassico =>
