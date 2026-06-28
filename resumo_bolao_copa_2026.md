@@ -732,6 +732,7 @@ Times comparados por nome exato em inglês. Pessoas (artilheiro, melhor jogador,
 
 ### `tela_palpites.dart` — implementada
 - **Abas superiores MODO CLÁSSICO / MODO COPA** (verde, só visíveis quando usuário tem grupos dos dois modos E Fase de Grupos ativa); sub-abas **Próximos** / **Encerrados** dentro de cada modo (card segmentado verde-suave com seleção branca e contadores)
+- **Modo Copa encerrado:** quando todos os grupos têm classificados definidos (1º e 2º) **e** `config/copa2026.copaGruposCalculado == true` (getter `_copaResultadoFinal`), a aba Copa **esconde as sub-abas Próximos/Encerrados** e mostra direto o resultado final (`_AbaCopaEncerrados`). Regra só vale para o Modo Copa — o Clássico mantém as sub-abas
 - **Filtros de jogos no MODO CLÁSSICO:** chips **Por data | Por rodada | Por grupo** — Por data mantém as sub-abas; Por rodada/Por grupo abrem seletor (`BottomSheetOpcoes`) e exibem lista mista (cards de palpite editáveis + cards de resultado) agrupada por data
 - **Cards no estilo novo:** brancos com sombra suave sobre `Cores.background`; a borda do card sinaliza o estado (verde = salvo, amarela = pendente, sem borda = vazio); as caixas de placar têm visual neutro sempre (não mudam de cor ao salvar)
 - **MODO CLÁSSICO:** palpite de placar nos jogos da Fase de Grupos (id 1–72)
