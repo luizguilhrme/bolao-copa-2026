@@ -90,6 +90,7 @@ class _TelaPalpitesState extends State<TelaPalpites> {
   Map<String, Map<String, String?>> _palpitesCopa = {};
   Map<String, Map<String, String?>> _classificacaoReal = {};
   bool _palpitesTravados = false;
+  bool _copaGruposCalculado = false;
 
   // Dados derivados — atualizados pelo timer
   Map<String, List<Jogo>> _gruposProximos = {};
@@ -179,6 +180,8 @@ class _TelaPalpitesState extends State<TelaPalpites> {
           });
         }
         _palpitesTravados = (data?['palpitesTravados'] as bool?) ?? false;
+        _copaGruposCalculado =
+            (data?['copaGruposCalculado'] as bool?) ?? false;
       } catch (_) {
         _classificacaoReal = {};
       }
@@ -305,6 +308,22 @@ class _TelaPalpitesState extends State<TelaPalpites> {
 
   /// Palpites Copa bloqueados apenas quando admin trava.
   bool get _copaBloqueada => _palpitesTravados;
+
+  /// True quando a Copa encerrou de fato: todos os grupos têm classificados
+  /// definidos (1º e 2º) e a pontuação do Modo Copa já foi calculada pelo
+  /// admin. Nesse estado a aba Copa some com os botões Próximos/Encerrados e
+  /// exibe apenas o resultado final.
+  bool get _copaResultadoFinal {
+    if (!_copaGruposCalculado) return false;
+    final grupos = _timesPorGrupo.keys;
+    if (grupos.isEmpty) return false;
+    return grupos.every((letra) {
+      final real = _classificacaoReal[letra];
+      return real != null &&
+          real['primeiro'] != null &&
+          real['segundo'] != null;
+    });
+  }
 
   /// Times de cada grupo extraídos dos jogos da Fase de Grupos.
   Map<String, List<String>> get _timesPorGrupo {
@@ -494,17 +513,20 @@ class _TelaPalpitesState extends State<TelaPalpites> {
 
           // Copa: sub-abas direto. Clássico: título + chips de filtro
           // (Por data / Por rodada / Por grupo) e o controle correspondente.
-          if (exibirCopa)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: _SeletorAbas(
-                abaProximos: _abaProximos,
-                countProximos: 0,
-                countEncerrados: 0,
-                modoCopa: true,
-                onChanged: (v) => setState(() => _abaProximos = v),
+          if (exibirCopa) ...[
+            // Copa encerrada e calculada: sem sub-abas, só o resultado final
+            if (!_copaResultadoFinal)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: _SeletorAbas(
+                  abaProximos: _abaProximos,
+                  countProximos: 0,
+                  countEncerrados: 0,
+                  modoCopa: true,
+                  onChanged: (v) => setState(() => _abaProximos = v),
+                ),
               ),
-            )
+          ]
           else ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
@@ -554,7 +576,7 @@ class _TelaPalpitesState extends State<TelaPalpites> {
               duration: const Duration(milliseconds: 200),
               child:
                   exibirCopa
-                      ? (_abaProximos
+                      ? ((_abaProximos && !_copaResultadoFinal)
                           ? _AbaCopaProximos(
                             key: const ValueKey('copa-proximos'),
                             timesPorGrupo: _timesPorGrupo,
