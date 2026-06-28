@@ -52,22 +52,28 @@ function calcularPontosCopaGrupo(palpite, real) {
   const classificadosReais = new Set(
     ['primeiro', 'segundo', 'terceiro'].map(p => real[p]).filter(Boolean)
   );
-  let pontos = 0, exatos = 0, validos = 0;
+  let pontos = 0;
+  let realCount = 0;     // nº de classificados reais (2 ou 3)
+  let perfeito = true;   // palpite idêntico ao real em TODAS as posições
   for (const pos of ['primeiro', 'segundo', 'terceiro']) {
-    const p = palpite[pos];
+    const p = palpite[pos] || null;
+    const r = real[pos] || null;
+    if (r) realCount++;
+    if (p !== r) perfeito = false;
+
     if (!p) continue; // não palpitou esta posição
-    const r = real[pos];
     if (r) {
-      // há resultado real para esta posição: conta para o bônus
-      validos++;
-      if (p === r) { pontos += 200; exatos++; }
+      if (p === r) pontos += 200;
       else if (classificadosReais.has(p)) pontos += 100;
     } else if (classificadosReais.has(p)) {
       // sem resultado nessa posição mas o time classificou em outra
       pontos += 100;
     }
   }
-  if (validos >= 2 && exatos === validos) pontos += 100;
+  // Bônus "grupo perfeito": só quando o palpite reproduz exatamente a
+  // classificação real — todos os classificados na posição certa e nenhum
+  // palpite a mais (ex.: palpitar um 3º num grupo de apenas 2 classificados).
+  if (perfeito && realCount >= 2) pontos += 100;
   return pontos;
 }
 
@@ -432,6 +438,11 @@ exports.recalcularTudo = onCall(
         palpitesPerdidos: perdidosPorUid[doc.id] || 0,
       });
     });
+    // Libera novo cálculo do Modo Copa: o app instrui a rodar a Clássica
+    // "para resetar" antes de recalcular o Copa (que faz SET em pontuacaoCopa).
+    batch.update(db.collection('config').doc('copa2026'), {
+      copaGruposCalculado: false,
+    });
     await batch.commit();
 
     return { atualizados: usuariosSnap.size };
@@ -605,6 +616,11 @@ exports.recalcularCopa = onCall(
 
     const palpitesCopaSnap = await db.collection('palpites_copa').get();
 
+    // UIDs válidos: ignora palpites_copa órfãos (conta deletada). batch.update
+    // em doc inexistente derrubaria todo o batch com NOT_FOUND.
+    const usuariosSnap = await db.collection('usuarios').get();
+    const uidsValidos = new Set(usuariosSnap.docs.map((d) => d.id));
+
     const batch = db.batch();
     let atualizados = 0;
 
@@ -612,6 +628,8 @@ exports.recalcularCopa = onCall(
       const data = doc.data();
       const uid = data.uid;
       const grupos = data.grupos || {};
+
+      if (!uidsValidos.has(uid)) continue; // palpite órfão
 
       let totalPontos = 0;
       for (const [letra, real] of Object.entries(classificacaoReal)) {
@@ -679,6 +697,16 @@ exports.limparUsuariosOrfaos = onCall(
       await batch.commit();
     }
 
+    // palpites_copa (doc ID = UID): mesma limpeza de órfãos que `palpites`
+    const palpitesCopaSnap = await db.collection('palpites_copa').get();
+    const palpitesCopaOrfaos = palpitesCopaSnap.docs.filter((d) => !uidsValidos.has(d.id));
+
+    for (let i = 0; i < palpitesCopaOrfaos.length; i += 500) {
+      const batch = db.batch();
+      palpitesCopaOrfaos.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+
     for (let i = 0; i < usuariosOrfaos.length; i += 500) {
       const batch = db.batch();
       usuariosOrfaos.slice(i, i + 500).forEach((d) => batch.delete(d.ref));
@@ -711,6 +739,7 @@ exports.limparUsuariosOrfaos = onCall(
     return {
       usuariosRemovidos: usuariosOrfaos.length,
       palpitesRemovidos: palpitesOrfaos.length,
+      palpitesCopaRemovidos: palpitesCopaOrfaos.length,
       gruposAtualizados,
       gruposRemovidos,
     };

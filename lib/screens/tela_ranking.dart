@@ -1920,13 +1920,15 @@ class _DialogPalpitesUsuarioState extends State<_DialogPalpitesUsuario> {
         ),
     ];
 
-    // Bônus: todas as posições exatas
+    // Bônus "grupo perfeito": palpite idêntico à classificação real em TODAS as
+    // posições. Num grupo de só 2 classificados (terceiroReal == null), palpitar
+    // um 3º que não classificou quebra o bônus (palpitadoTerceiro deve ser null).
     int? bonus;
     if (temReal) {
       final todasExatas =
           palpitadoPrimeiro == primeiroReal &&
           palpitadoSegundo == segundoReal &&
-          (terceiroReal == null || palpitadoTerceiro == terceiroReal);
+          palpitadoTerceiro == terceiroReal;
       bonus = todasExatas ? 100 : 0;
     }
 

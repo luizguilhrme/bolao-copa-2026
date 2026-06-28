@@ -69,7 +69,7 @@ Phase multipliers: Fase de Grupos ×1.0 | 16 avos ×1.2 | Oitavas ×1.4 | Quarta
 
 Modo Copa — points per team in group classification:
 - Exact position: +200 | Qualified, wrong position: +100 | Did not qualify: 0
-- Bonus for all palpited positions exact (≥2 valid): +100
+- Bonus "grupo perfeito" — palpite identical to the real classification in **every** slot (incl. nulls): +100. A group with only 2 real qualifiers (terceiro null) requires the user to have left 3rd blank too; predicting a 3rd that did not qualify breaks the bonus.
 - "Qualified but wrong position" applies even when no real result exists for that specific slot (e.g., when a group's 3rd-place slot is null but the team qualified as 1st or 2nd).
 
 Special bets: Campeão do Mundo +500 | Chuteira de Ouro +300 | Bola de Ouro +300 | Luva de Ouro +300 | Melhor Jogador Jovem +200

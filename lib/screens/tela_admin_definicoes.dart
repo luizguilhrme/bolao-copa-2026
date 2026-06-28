@@ -417,12 +417,14 @@ class _TelaAdminDefinicoesState extends State<TelaAdminDefinicoes> {
           await fn.httpsCallable('limparUsuariosOrfaos').call();
       final usuarios = result.data['usuariosRemovidos'];
       final palpites = result.data['palpitesRemovidos'];
+      final palpitesCopa = result.data['palpitesCopaRemovidos'] ?? 0;
       final gruposAtualizados = result.data['gruposAtualizados'] ?? 0;
       final gruposRemovidos = result.data['gruposRemovidos'] ?? 0;
       if (mounted) {
         mostrarMensagem(
           context,
           'Limpeza concluída: $usuarios usuário(s), $palpites palpite(s), '
+          '$palpitesCopa palpite(s) Copa, '
           '$gruposAtualizados grupo(s) corrigido(s) e '
           '$gruposRemovidos grupo(s) removido(s).',
         );

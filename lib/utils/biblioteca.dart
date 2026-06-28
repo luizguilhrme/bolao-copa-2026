@@ -368,7 +368,7 @@ double multiplicadorFase(String round) {
 /// - Posição exata:               +200 pts por time
 /// - Classificou, posição errada: +100 pts por time
 /// - Não classificou:               +0 pts
-/// - Bônus (todas as posições palpitadas e exatas, min 2): +100 pts
+/// - Bônus "grupo perfeito" (palpite idêntico ao real em todas as posições): +100 pts
 int calcularPontosCopaGrupo(
   Map<String, String?> palpite,
   Map<String, String?> real,
@@ -378,19 +378,19 @@ int calcularPontosCopaGrupo(
       .toSet();
 
   int pontos = 0;
-  int exatos = 0;
-  int validos = 0;
+  int realCount = 0;     // nº de classificados reais (2 ou 3)
+  bool perfeito = true;  // palpite idêntico ao real em TODAS as posições
 
   for (final pos in ['primeiro', 'segundo', 'terceiro']) {
     final p = palpite[pos];
-    if (p == null) continue; // não palpitou esta posição
     final r = real[pos];
+    if (r != null) realCount++;
+    if (p != r) perfeito = false;
+
+    if (p == null) continue; // não palpitou esta posição
     if (r != null) {
-      // há resultado real para esta posição: conta como válido para o bônus
-      validos++;
       if (p == r) {
         pontos += 200;
-        exatos++;
       } else if (classificadosReais.contains(p)) {
         pontos += 100;
       }
@@ -400,8 +400,10 @@ int calcularPontosCopaGrupo(
     }
   }
 
-  // Bônus: todos os palpites válidos exatos e pelo menos 2 posições
-  if (validos >= 2 && exatos == validos) pontos += 100;
+  // Bônus "grupo perfeito": só quando o palpite reproduz exatamente a
+  // classificação real — todos os classificados na posição certa e nenhum
+  // palpite a mais (ex.: palpitar um 3º num grupo de apenas 2 classificados).
+  if (perfeito && realCount >= 2) pontos += 100;
 
   return pontos;
 }
