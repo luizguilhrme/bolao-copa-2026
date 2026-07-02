@@ -271,6 +271,11 @@ C:\bolao\
                                  usada no setup e no perfil);
                                  CardAvatar é StatefulWidget com flip 3D para avatares secretos
                                  (long-press revela foto *2.jpg)
+  test/
+    biblioteca_test.dart    ← testes de unidade das funções puras de pontuação
+                               (calcularPontos, multiplicadorFase, calcularPontosComFase,
+                               calcularPontosCopaGrupo, formatarPontos); substituiu o
+                               widget_test.dart boilerplate do flutter create (2026-07-02)
   web/
     index.html              ← meta tags PWA iOS (apple-mobile-web-app-capable etc)
     manifest.json           ← PWA manifest (nome "Bolão - Crava aí!", tema #006D32)
@@ -1089,6 +1094,8 @@ Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regene
 
 - **Internal Testing** — ✓ v1.0.0+2 publicada; testadores adicionados por e-mail e podem instalar via Play Store
 - **Closed Testing (Alpha)** — ✓ v1.0.0+10 em build (AAB gerado em 2026-06-03); corrige Google Sign-In Android e PERMISSION_DENIED no cadastro
+- **Acesso à produção** — ✓ aprovado pelo Google Play (2026-07-02)
+- **Produção** — v1.0.0+22 (AAB gerado em 2026-07-02) enviada para revisão; a primeira versão de produção passa por nova revisão mesmo com o acesso aprovado. Checklist do upload: notas da versão em pt-BR + selecionar os países/regiões da faixa de produção (lista separada da faixa de teste). Rollout 100% (base pequena, correções precisam chegar rápido durante a Copa)
 - **Política de privacidade** — ✓ publicada em `https://bolaodasoci2026.web.app/privacy`
 - **Exclusão de conta** — ✓ publicada em `https://bolaodasoci2026.web.app/delete`
 - **Segurança dos dados** — ✓ questionário completo enviado no Play Console
@@ -1114,4 +1121,7 @@ Para novo ambiente de desenvolvimento: rodar `flutterfire configure` para regene
 
 ## Próximos passos (na ordem recomendada)
 
-1. Publicar nova versão na Play Store quando o conjunto de features estiver estável.
+1. ~~Publicar nova versão na Play Store quando o conjunto de features estiver estável.~~ ✓ v1.0.0+22 enviada para revisão de produção (2026-07-02).
+2. Acompanhar a revisão no Play Console e, após aprovação, conferir o Pre-launch Report e avisar os testadores (quem instalou pela faixa de teste recebe a versão de produção automaticamente).
+3. Manter web/PWA em paridade: `firebase deploy --only hosting --project bolaodasoci2026` sempre que publicar versão nova no Android.
+4. Depois da final (19/07/2026): upgrade do `firebase-functions` (adiado de propósito) e avaliar Crashlytics/in-app updates.
